@@ -13,12 +13,14 @@ import unicodedata
 import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from pathlib import Path
 
 
 DEFAULT_TITLE = "Dungeon Crawler Carl Character Dictionary"
 DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors"
 LANGUAGE = "en-us"
+ALLOWED_INLINE_TAGS = {"b": "b", "strong": "b", "i": "i", "em": "i"}
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,77 @@ def normalize_text(text: str) -> str:
     return " ".join(text.split())
 
 
+def normalize_inline_html(fragment: str) -> str:
+    """Collapse whitespace in safe inline XHTML."""
+
+    return " ".join(fragment.replace("\xa0", " ").split())
+
+
+class SafeInlineHtmlParser(HTMLParser):
+    """Keep only Kindle-safe emphasis tags and escape everything else."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.chunks: list[str] = []
+        self._tag_stack: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag not in ALLOWED_INLINE_TAGS:
+            return
+        kindle_tag = ALLOWED_INLINE_TAGS[tag]
+        self.chunks.append(f"<{kindle_tag}>")
+        self._tag_stack.append(kindle_tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag not in ALLOWED_INLINE_TAGS:
+            return
+        kindle_tag = ALLOWED_INLINE_TAGS[tag]
+        if kindle_tag not in self._tag_stack:
+            return
+        while self._tag_stack:
+            open_tag = self._tag_stack.pop()
+            self.chunks.append(f"</{open_tag}>")
+            if open_tag == kindle_tag:
+                return
+
+    def handle_data(self, data: str) -> None:
+        self.chunks.append(html.escape(data, quote=False))
+
+    def close(self) -> None:
+        while self._tag_stack:
+            self.chunks.append(f"</{self._tag_stack.pop()}>")
+        super().close()
+
+
+class InlineTextParser(HTMLParser):
+    """Extract plain text from sanitized inline XHTML."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.chunks: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.chunks.append(data)
+
+
+def sanitize_inline_html(fragment: str) -> str:
+    """Return a safe inline XHTML fragment containing only bold/italic tags."""
+
+    parser = SafeInlineHtmlParser()
+    parser.feed(fragment)
+    parser.close()
+    return normalize_inline_html("".join(parser.chunks))
+
+
+def text_from_inline_html(fragment: str) -> str:
+    """Return plain text from a sanitized inline XHTML fragment."""
+
+    parser = InlineTextParser()
+    parser.feed(fragment)
+    parser.close()
+    return normalize_text("".join(parser.chunks))
+
+
 def ascii_fold(text: str) -> str:
     """Return an ASCII-only form for accent-insensitive lookup aliases."""
 
@@ -66,8 +139,8 @@ def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
     ).fetchall()
     entries = []
     for title, url, first_paragraph in rows:
-        definition = normalize_text(first_paragraph)
-        if len(definition) >= min_definition_length:
+        definition = sanitize_inline_html(first_paragraph)
+        if len(text_from_inline_html(definition)) >= min_definition_length:
             entries.append(Entry(title=normalize_text(title), url=url, definition=definition))
     return entries
 
@@ -99,7 +172,7 @@ def entry_to_xhtml(entry: Entry, aliases: list[str], entry_id: int) -> str:
     """Render one Kindle dictionary entry with idx lookup metadata."""
 
     title = html.escape(entry.title, quote=True)
-    definition = html.escape(entry.definition, quote=False)
+    definition = sanitize_inline_html(entry.definition)
     url = html.escape(entry.url, quote=True)
     infl = "\n".join(
         f'          <idx:iform value="{html.escape(alias, quote=True)}" />'

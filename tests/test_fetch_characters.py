@@ -29,21 +29,22 @@ class FetchCharacterExtractionTests(unittest.TestCase):
 
         self.assertEqual(
             first_paragraph_from_html(html),
-            "Agatha appears to be a homeless human woman pushing a cart.",
+            "<b>Agatha</b> appears to be a homeless human woman pushing a cart.",
         )
 
-    def test_summary_uses_loose_text_when_page_has_no_paragraph(self) -> None:
+    def test_summary_uses_loose_text_and_preserves_inline_emphasis(self) -> None:
         html = """
         <div class="mw-parser-output">
           <aside class="portable-infobox"></aside>
-          Not much is known about Chirag Ali. They appear once on the Leaderboard.
+          Not much is known about <strong>Chirag Ali</strong>.
+          They appear once on the <em>Leaderboard</em>.
           <table class="nav"><tr><td>Navigation</td></tr></table>
         </div>
         """
 
         self.assertEqual(
             summary_from_html("Chirag Ali", html),
-            "Not much is known about Chirag Ali. They appear once on the Leaderboard.",
+            "Not much is known about <b>Chirag Ali</b>. They appear once on the <i>Leaderboard</i>.",
         )
 
     def test_summary_falls_back_to_infobox_fields(self) -> None:
@@ -76,13 +77,13 @@ class FetchCharacterExtractionTests(unittest.TestCase):
                 page,
                 "https://example.fandom.com/wiki/Carl",
                 "ok",
-                raw_html="<p><b>Carl</b> is a crawler.</p>",
+                raw_html="<p><b>Carl</b> is a <i>crawler</i>.</p>",
                 first_paragraph="old text",
             )
 
             self.assertEqual(reextract_first_paragraphs(conn), 1)
             row = conn.execute("SELECT first_paragraph FROM pages WHERE pageid = 1").fetchone()
-            self.assertEqual(row[0], "Carl is a crawler.")
+            self.assertEqual(row[0], "<b>Carl</b> is a <i>crawler</i>.")
 
     def test_wiki_page_url_uses_api_origin_and_encoded_title(self) -> None:
         self.assertEqual(
@@ -93,4 +94,3 @@ class FetchCharacterExtractionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

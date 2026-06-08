@@ -64,6 +64,10 @@ Build Kindle dictionary source files:
 python3 -m dcdict.build_kindle_dictionary
 ```
 
+Definitions preserve safe inline emphasis from the wiki where possible:
+`<b>`/`<strong>` become bold text, and `<i>`/`<em>` become italic text. Other
+HTML is stripped or escaped during extraction/building.
+
 Try to compile with `kindlegen` if it is installed:
 
 ```sh

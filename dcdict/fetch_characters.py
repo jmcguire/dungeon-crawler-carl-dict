@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import html as html_lib
 import json
 import random
 import sqlite3
@@ -130,6 +131,7 @@ class MediaWikiClient:
 class FirstParagraphParser(HTMLParser):
     """Extract the first meaningful paragraph while ignoring common chrome."""
 
+    ALLOWED_INLINE_TAGS = {"b": "b", "strong": "b", "i": "i", "em": "i"}
     SKIP_TAGS = {"aside", "blockquote", "dl", "figure", "script", "style", "sup", "table"}
     VOID_TAGS = {
         "area",
@@ -163,6 +165,7 @@ class FirstParagraphParser(HTMLParser):
         self._paragraph_depth = 0
         self._chunks: list[str] = []
         self._loose_chunks: list[str] = []
+        self._inline_stack: list[str] = []
         self.first_paragraph = ""
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
@@ -191,6 +194,10 @@ class FirstParagraphParser(HTMLParser):
             self._chunks = []
         elif self._paragraph_depth and tag == "br":
             self._chunks.append(" ")
+        elif self._paragraph_depth and tag in self.ALLOWED_INLINE_TAGS:
+            self._open_inline_tag(tag, self._chunks)
+        elif not self._paragraph_depth and tag in self.ALLOWED_INLINE_TAGS:
+            self._open_inline_tag(tag, self._loose_chunks)
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if self._paragraph_depth and tag == "br":
@@ -201,18 +208,26 @@ class FirstParagraphParser(HTMLParser):
             if tag == self._skip_until[-1]:
                 self._skip_until.pop()
             return
+        if self._paragraph_depth and tag in self.ALLOWED_INLINE_TAGS:
+            self._close_inline_tag(tag, self._chunks)
+            return
+        if not self._paragraph_depth and tag in self.ALLOWED_INLINE_TAGS:
+            self._close_inline_tag(tag, self._loose_chunks)
+            return
         if tag == "p" and self._paragraph_depth:
-            text = normalize_text("".join(self._chunks))
+            self._close_open_inline_tags(self._chunks)
+            text = normalize_inline_html("".join(self._chunks))
+            plain_text = text_from_inline_html(text)
             self._paragraph_depth -= 1
             self._chunks = []
-            if text and not is_non_summary_paragraph(text):
+            if plain_text and not is_non_summary_paragraph(plain_text):
                 self.first_paragraph = text
 
     def handle_data(self, data: str) -> None:
         if not self._skip_until and self._paragraph_depth and not self.first_paragraph:
-            self._chunks.append(data)
+            self._chunks.append(html_lib.escape(data, quote=False))
         elif not self._skip_until and not self.first_paragraph:
-            self._loose_chunks.append(data)
+            self._loose_chunks.append(html_lib.escape(data, quote=False))
 
     def close(self) -> None:
         self._finalize_loose_text()
@@ -224,10 +239,31 @@ class FirstParagraphParser(HTMLParser):
         if self.first_paragraph or not self._loose_chunks:
             self._loose_chunks = []
             return
-        text = normalize_text("".join(self._loose_chunks))
+        self._close_open_inline_tags(self._loose_chunks)
+        text = normalize_inline_html("".join(self._loose_chunks))
+        plain_text = text_from_inline_html(text)
         self._loose_chunks = []
-        if len(text) >= 20 and not is_non_summary_paragraph(text):
+        if len(plain_text) >= 20 and not is_non_summary_paragraph(plain_text):
             self.first_paragraph = text
+
+    def _open_inline_tag(self, tag: str, chunks: list[str]) -> None:
+        kindle_tag = self.ALLOWED_INLINE_TAGS[tag]
+        chunks.append(f"<{kindle_tag}>")
+        self._inline_stack.append(kindle_tag)
+
+    def _close_inline_tag(self, tag: str, chunks: list[str]) -> None:
+        kindle_tag = self.ALLOWED_INLINE_TAGS[tag]
+        if kindle_tag not in self._inline_stack:
+            return
+        while self._inline_stack:
+            open_tag = self._inline_stack.pop()
+            chunks.append(f"</{open_tag}>")
+            if open_tag == kindle_tag:
+                return
+
+    def _close_open_inline_tags(self, chunks: list[str]) -> None:
+        while self._inline_stack:
+            chunks.append(f"</{self._inline_stack.pop()}>")
 
 
 class InfoboxSummaryParser(HTMLParser):
@@ -285,6 +321,32 @@ def normalize_text(text: str) -> str:
     return " ".join(text.replace("\xa0", " ").split())
 
 
+def normalize_inline_html(fragment: str) -> str:
+    """Collapse whitespace in safe inline XHTML while preserving emphasis tags."""
+
+    return " ".join(fragment.replace("\xa0", " ").split())
+
+
+class InlineTextParser(HTMLParser):
+    """Strip safe inline XHTML back to text for filtering and length checks."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.chunks: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.chunks.append(data)
+
+
+def text_from_inline_html(fragment: str) -> str:
+    """Return the plain text contained in a safe inline XHTML fragment."""
+
+    parser = InlineTextParser()
+    parser.feed(fragment)
+    parser.close()
+    return normalize_text("".join(parser.chunks))
+
+
 def is_non_summary_paragraph(text: str) -> bool:
     """Return true for wiki boilerplate paragraphs that are not page summaries."""
 
@@ -313,8 +375,11 @@ def summary_from_infobox(title: str, html: str) -> str:
     parser.close()
     if not parser.values:
         return ""
-    parts = [f"{label}: {value}" for label, value in parser.values.items()]
-    return f"{title}: {'; '.join(parts)}."
+    parts = [
+        f"{html_lib.escape(label, quote=False)}: {html_lib.escape(value, quote=False)}"
+        for label, value in parser.values.items()
+    ]
+    return f"{html_lib.escape(title, quote=False)}: {'; '.join(parts)}."
 
 
 def summary_from_html(title: str, html: str) -> str:

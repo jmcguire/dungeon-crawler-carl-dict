@@ -15,6 +15,7 @@ from dcdict.build_kindle_dictionary import (
     build_dictionary_sources,
     compile_with_kindlegen,
     load_entries,
+    sanitize_inline_html,
     write_opf,
     write_xhtml,
 )
@@ -38,7 +39,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             conn.executemany(
                 "INSERT INTO pages VALUES (?, ?, ?, ?)",
                 [
-                    ("Donut", "https://example/wiki/Donut", " Princess\u00a0Donut   is royalty. ", "ok"),
+                    ("Donut", "https://example/wiki/Donut", " <b>Princess\u00a0Donut</b>   is royalty. ", "ok"),
                     ("Bad", "https://example/wiki/Bad", "Ignored", "error"),
                     ("Tiny", "https://example/wiki/Tiny", "short", "ok"),
                     ("Carl", "https://example/wiki/Carl", "Carl is a crawler.", "ok"),
@@ -49,7 +50,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             entries = load_entries(db_path, min_definition_length=8)
 
         self.assertEqual([entry.title for entry in entries], ["Carl", "Donut"])
-        self.assertEqual(entries[1].definition, "Princess Donut is royalty.")
+        self.assertEqual(entries[1].definition, "<b>Princess Donut</b> is royalty.")
 
     def test_build_aliases_adds_unambiguous_first_names_and_ascii_forms(self) -> None:
         entries = [
@@ -67,14 +68,20 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertNotIn("Li", aliases["Li Jun"])
         self.assertNotIn("Li", aliases["Li Na"])
 
-    def test_write_xhtml_escapes_text_and_produces_valid_xml(self) -> None:
+    def test_sanitize_inline_html_preserves_only_safe_emphasis(self) -> None:
+        self.assertEqual(
+            sanitize_inline_html('<strong>Carl</strong> & <em>Donut</em> <script>bad()</script>'),
+            "<b>Carl</b> &amp; <i>Donut</i> bad()",
+        )
+
+    def test_write_xhtml_preserves_emphasis_escapes_text_and_produces_valid_xml(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             output = Path(tmp_dir) / "dictionary.xhtml"
             entries = [
                 Entry(
                     "Carl & Donut",
                     "https://example/wiki/Carl?x=1&y=2",
-                    'Carl says "hi" & keeps crawling.',
+                    '<b>Carl</b> says "hi" & <i>keeps crawling</i>.',
                 )
             ]
 
@@ -82,7 +89,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
 
             text = output.read_text(encoding="utf-8")
             self.assertIn("Carl &amp; Donut", text)
-            self.assertIn("Carl says \"hi\" &amp; keeps crawling.", text)
+            self.assertIn("<b>Carl</b> says \"hi\" &amp; <i>keeps crawling</i>.", text)
             self.assertIn("<idx:entry", text)
             ET.parse(output)
 
