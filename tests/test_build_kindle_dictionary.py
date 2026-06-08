@@ -17,6 +17,7 @@ from dcdict.build_kindle_dictionary import (
     link_definition_references,
     load_entries,
     sanitize_inline_html,
+    spoiler_notice_from_html,
     write_opf,
     write_xhtml,
     write_xhtml_with_options,
@@ -34,17 +35,24 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                     title TEXT,
                     url TEXT,
                     first_paragraph TEXT,
+                    raw_html TEXT,
                     status TEXT
                 )
                 """
             )
             conn.executemany(
-                "INSERT INTO pages VALUES (?, ?, ?, ?)",
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?)",
                 [
-                    ("Donut", "https://example/wiki/Donut", " <b>Princess\u00a0Donut</b>   is royalty. ", "ok"),
-                    ("Bad", "https://example/wiki/Bad", "Ignored", "error"),
-                    ("Tiny", "https://example/wiki/Tiny", "short", "ok"),
-                    ("Carl", "https://example/wiki/Carl", "Carl is a crawler.", "ok"),
+                    (
+                        "Donut",
+                        "https://example/wiki/Donut",
+                        " <b>Princess\u00a0Donut</b>   is royalty. ",
+                        '<div class="dcc-highlight"><b>This article contains unmarked spoilers for Book 2.</b></div>',
+                        "ok",
+                    ),
+                    ("Bad", "https://example/wiki/Bad", "Ignored", "", "error"),
+                    ("Tiny", "https://example/wiki/Tiny", "short", "", "ok"),
+                    ("Carl", "https://example/wiki/Carl", "Carl is a crawler.", "", "ok"),
                 ],
             )
             conn.commit()
@@ -53,6 +61,16 @@ class BuildKindleDictionaryTests(unittest.TestCase):
 
         self.assertEqual([entry.title for entry in entries], ["Carl", "Donut"])
         self.assertEqual(entries[1].definition, "<b>Princess Donut</b> is royalty.")
+        self.assertEqual(entries[1].spoiler_notice, "This article contains unmarked spoilers for Book 2.")
+
+    def test_spoiler_notice_from_html_extracts_page_warning(self) -> None:
+        self.assertEqual(
+            spoiler_notice_from_html(
+                '<big><div class="dcc-highlight"><b>This article contains unmarked spoilers for Book 6.</b></div></big>'
+            ),
+            "This article contains unmarked spoilers for Book 6.",
+        )
+        self.assertIsNone(spoiler_notice_from_html("<p>No warning here.</p>"))
 
     def test_build_aliases_adds_unambiguous_first_names_and_ascii_forms(self) -> None:
         entries = [
@@ -117,8 +135,31 @@ class BuildKindleDictionaryTests(unittest.TestCase):
 
             text = output.read_text(encoding="utf-8")
             self.assertIn("Carl &amp; Donut", text)
-            self.assertIn("<b>Carl</b> says \"hi\" &amp; <i>keeps crawling</i>.", text)
+            self.assertIn("<li><b>Carl</b> says \"hi\" &amp; <i>keeps crawling</i>.</li>", text)
             self.assertIn("<idx:entry", text)
+            ET.parse(output)
+
+    def test_write_xhtml_adds_spoiler_note_before_bulleted_definition(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry(
+                    "Agatha",
+                    "https://example/wiki/Agatha",
+                    "<b>Agatha</b> pushes a cart.",
+                    spoiler_notice="This article contains unmarked spoilers for Book 6.",
+                )
+            ]
+
+            write_xhtml(entries, output, "Test Dictionary")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertIn(
+                '<p class="spoiler-note"><b>Spoiler note:</b> This article contains unmarked spoilers for Book 6.</p>',
+                text,
+            )
+            self.assertIn("<ul>", text)
+            self.assertIn("<li><b>Agatha</b> pushes a cart.</li>", text)
             ET.parse(output)
 
     def test_write_xhtml_does_not_add_internal_cross_links_by_default(self) -> None:
@@ -132,7 +173,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             write_xhtml(entries, output, "Test Dictionary")
 
             text = output.read_text(encoding="utf-8")
-            self.assertIn("Carl knows Donut.", text)
+            self.assertIn("<li>Carl knows Donut.</li>", text)
             self.assertNotIn('href="#entry-2">Donut</a>', text)
             ET.parse(output)
 
@@ -147,8 +188,8 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             write_xhtml_with_options(entries, output, "Test Dictionary", link_entries=True)
 
             text = output.read_text(encoding="utf-8")
-            self.assertIn('Carl knows <a href="#entry-2">Donut</a>.', text)
-            self.assertIn('Donut knows <a href="#entry-1">Carl</a>.', text)
+            self.assertIn('<li>Carl knows <a href="#entry-2">Donut</a>.</li>', text)
+            self.assertIn('<li>Donut knows <a href="#entry-1">Carl</a>.</li>', text)
             ET.parse(output)
 
     def test_write_opf_contains_dictionary_metadata(self) -> None:

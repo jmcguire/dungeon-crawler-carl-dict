@@ -68,6 +68,12 @@ Definitions preserve safe inline emphasis from the wiki where possible:
 `<b>`/`<strong>` become bold text, and `<i>`/`<em>` become italic text. Other
 HTML is stripped or escaped during extraction/building.
 
+Definitions are rendered as a short bullet list. If the source wiki page has a
+page-level spoiler warning banner, the generated entry places a spoiler note
+above the bullet so a reader has a chance to stop before reading the summary.
+The warning is page-level; the wiki generally does not mark smaller spoiler
+phrases inside otherwise normal sentences.
+
 Optionally add internal cross-links between known dictionary entries:
 
 ```sh

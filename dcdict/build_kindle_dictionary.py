@@ -32,6 +32,7 @@ class Entry:
     title: str
     url: str
     definition: str
+    spoiler_notice: str | None = None
 
 
 @dataclass(frozen=True)
@@ -230,6 +231,47 @@ def text_from_inline_html(fragment: str) -> str:
     return normalize_text("".join(parser.chunks))
 
 
+class SpoilerNoticeParser(HTMLParser):
+    """Extract page-level spoiler notices from Fandom highlight banners."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._capture_depth = 0
+        self._chunks: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attrs_dict = {key: value or "" for key, value in attrs}
+        classes = attrs_dict.get("class", "")
+        if "dcc-highlight" in classes:
+            self._capture_depth += 1
+        elif self._capture_depth:
+            self._capture_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._capture_depth:
+            self._capture_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self._capture_depth:
+            self._chunks.append(data)
+
+    @property
+    def notice(self) -> str | None:
+        text = normalize_text("".join(self._chunks))
+        return text if "spoiler" in text.lower() else None
+
+
+def spoiler_notice_from_html(raw_html: str | None) -> str | None:
+    """Extract the source page's spoiler warning, if present."""
+
+    if not raw_html:
+        return None
+    parser = SpoilerNoticeParser()
+    parser.feed(raw_html)
+    parser.close()
+    return parser.notice
+
+
 def ascii_fold(text: str) -> str:
     """Return an ASCII-only form for accent-insensitive lookup aliases."""
 
@@ -242,17 +284,24 @@ def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
     conn = sqlite3.connect(db_path)
     rows = conn.execute(
         """
-        SELECT title, url, first_paragraph
+        SELECT title, url, first_paragraph, raw_html
         FROM pages
         WHERE status = 'ok' AND COALESCE(first_paragraph, '') != ''
         ORDER BY lower(title)
         """
     ).fetchall()
     entries = []
-    for title, url, first_paragraph in rows:
+    for title, url, first_paragraph, raw_html in rows:
         definition = sanitize_inline_html(first_paragraph)
         if len(text_from_inline_html(definition)) >= min_definition_length:
-            entries.append(Entry(title=normalize_text(title), url=url, definition=definition))
+            entries.append(
+                Entry(
+                    title=normalize_text(title),
+                    url=url,
+                    definition=definition,
+                    spoiler_notice=spoiler_notice_from_html(raw_html),
+                )
+            )
     return entries
 
 
@@ -294,6 +343,12 @@ def entry_to_xhtml(
         else sanitize_inline_html(entry.definition)
     )
     url = html.escape(entry.url, quote=True)
+    spoiler_note = ""
+    if entry.spoiler_notice:
+        spoiler_note = (
+            f'\n        <p class="spoiler-note"><b>Spoiler note:</b> '
+            f"{sanitize_inline_html(entry.spoiler_notice)}</p>"
+        )
     infl = "\n".join(
         f'          <idx:iform value="{html.escape(alias, quote=True)}" />'
         for alias in aliases
@@ -303,8 +358,10 @@ def entry_to_xhtml(
     return f"""      <idx:entry name="default" scriptable="yes" spell="yes" id="entry-{entry_id}">
         <a id="entry-{entry_id}"></a>
         <idx:orth value="{title}"><b>{title}</b>{infl_block}
-        </idx:orth>
-        <p>{definition}</p>
+        </idx:orth>{spoiler_note}
+        <ul>
+          <li>{definition}</li>
+        </ul>
         <p class="source">Source: <a href="{url}">{title} on Dungeon Crawler Carl Wiki</a></p>
       </idx:entry>"""
 
