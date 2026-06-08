@@ -83,6 +83,18 @@ Outputs:
 - `build/dictionary.opf`: Kindle package metadata
 - `build/dictionary.mobi`: compiled Kindle file, only when `kindlegen` is available
 
+## Tests
+
+Run the focused standard-library test suite:
+
+```sh
+python3 -m unittest discover -s tests
+```
+
+The tests cover the HTML summary extraction rules, infobox fallback summaries,
+SQLite entry loading, Kindle XHTML/OPF generation, alias generation, and the
+Kindle Previewer/`kindlegen` compile wrapper.
+
 ## Sideload To Kindle
 
 After building `build/dictionary.mobi`, connect the Kindle to the Mac with USB. It should mount under `/Volumes`, usually as:
