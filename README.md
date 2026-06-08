@@ -14,6 +14,16 @@ Optional:
 
 - Kindle Previewer 3 if you want the converter to compile a `.mobi` file automatically.
 
+## Licensing
+
+This repository uses a split-license model:
+
+- Code and documentation are licensed under the MIT License. See `LICENSE`.
+- Generated dictionary content that incorporates Fandom wiki text is licensed under CC BY-SA 3.0. See `CONTENT_LICENSE`.
+- Fan-project and rights-holder notices are in `NOTICE`.
+
+Generated dictionary entries are derived from community-contributed Dungeon Crawler Carl Wiki text on Fandom, with source page links included where practical.
+
 ## Install Kindle Previewer
 
 Amazon no longer offers `kindlegen` as a separate supported download. Install Kindle Previewer instead:
