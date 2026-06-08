@@ -27,16 +27,125 @@ RETRY_STATUS_CODES = {403, 408, 429, 500, 502, 503, 504}
 
 @dataclass(frozen=True)
 class PageRef:
+    """Minimal page identity returned by MediaWiki category listings."""
+
     pageid: int
     title: str
     ns: int
+
+
+@dataclass(frozen=True)
+class RequestConfig:
+    """Network and retry settings shared by all MediaWiki API requests."""
+
+    user_agent: str
+    timeout: float
+    max_retries: int
+    initial_backoff: float
+    max_backoff: float
+
+
+@dataclass(frozen=True)
+class CrawlConfig:
+    """Category traversal settings for a crawler run."""
+
+    category: str
+    delay: float
+    max_pages: int
+    category_batch_size: int
+    refresh: bool
+
+
+class MediaWikiClient:
+    """Small MediaWiki API client with retry/backoff behavior."""
+
+    def __init__(self, api_url: str, config: RequestConfig) -> None:
+        self.api_url = api_url
+        self.config = config
+
+    def request(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Call the configured MediaWiki API endpoint with retry/backoff behavior."""
+
+        return api_request(self.api_url, params, self.config)
+
+    def category_members(
+        self,
+        category: str,
+        batch_size: int,
+        max_pages: int,
+        delay: float,
+    ) -> list[PageRef]:
+        """Return namespace-0 pages from a category, following API continuation."""
+
+        pages: list[PageRef] = []
+        continuation: dict[str, Any] = {}
+
+        while True:
+            params: dict[str, Any] = {
+                "action": "query",
+                "format": "json",
+                "list": "categorymembers",
+                "cmtitle": category,
+                "cmnamespace": "0",
+                "cmtype": "page",
+                "cmprop": "ids|title|type",
+                "cmlimit": str(batch_size),
+            }
+            params.update(continuation)
+            data = self.request(params)
+            members = data.get("query", {}).get("categorymembers", [])
+            for item in members:
+                pages.append(
+                    PageRef(
+                        pageid=int(item["pageid"]),
+                        title=item["title"],
+                        ns=int(item["ns"]),
+                    )
+                )
+                if max_pages and len(pages) >= max_pages:
+                    return pages
+
+            continuation = data.get("continue") or {}
+            if not continuation:
+                return pages
+
+            time.sleep(jitter(delay))
+
+    def parse_page(self, page: PageRef) -> dict[str, Any]:
+        """Fetch parsed HTML and metadata for a single page."""
+
+        return self.request(
+            {
+                "action": "parse",
+                "format": "json",
+                "pageid": page.pageid,
+                "prop": "text|revid|displaytitle|categories",
+                "disableeditsection": "1",
+                "disabletoc": "1",
+                "redirects": "1",
+            }
+        )
 
 
 class FirstParagraphParser(HTMLParser):
     """Extract the first meaningful paragraph while ignoring common chrome."""
 
     SKIP_TAGS = {"aside", "blockquote", "dl", "figure", "script", "style", "sup", "table"}
-    VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+    VOID_TAGS = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "source",
+        "track",
+        "wbr",
+    }
     INLINE_TAGS = {"a", "b", "cite", "code", "em", "i", "small", "span", "strong"}
     SKIP_CLASSES = (
         "infobox",
@@ -57,6 +166,9 @@ class FirstParagraphParser(HTMLParser):
         self.first_paragraph = ""
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        # Fandom pages can contain malformed or loosely nested generated HTML.
+        # Tracking the tag that opened a skipped region is more tolerant than
+        # blindly counting every nested start/end tag.
         if self._skip_until:
             if tag == self._skip_until[-1] and tag not in self.VOID_TAGS:
                 self._skip_until.append(tag)
@@ -107,6 +219,8 @@ class FirstParagraphParser(HTMLParser):
         super().close()
 
     def _finalize_loose_text(self) -> None:
+        """Accept summary text that appears outside paragraph tags."""
+
         if self.first_paragraph or not self._loose_chunks:
             self._loose_chunks = []
             return
@@ -136,6 +250,8 @@ class InfoboxSummaryParser(HTMLParser):
         self.values: dict[str, str] = {}
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """Capture values from portable-infobox data blocks."""
+
         attrs_dict = {key: value or "" for key, value in attrs}
         classes = attrs_dict.get("class", "")
         source = attrs_dict.get("data-source", "")
@@ -164,10 +280,14 @@ class InfoboxSummaryParser(HTMLParser):
 
 
 def normalize_text(text: str) -> str:
+    """Collapse wiki whitespace and non-breaking spaces into plain text spacing."""
+
     return " ".join(text.replace("\xa0", " ").split())
 
 
 def is_non_summary_paragraph(text: str) -> bool:
+    """Return true for wiki boilerplate paragraphs that are not page summaries."""
+
     lowered = text.lower()
     return (
         lowered.startswith("system message.")
@@ -177,6 +297,8 @@ def is_non_summary_paragraph(text: str) -> bool:
 
 
 def first_paragraph_from_html(html: str) -> str:
+    """Extract the first useful article paragraph from parsed wiki HTML."""
+
     parser = FirstParagraphParser()
     parser.feed(html)
     parser.close()
@@ -184,6 +306,8 @@ def first_paragraph_from_html(html: str) -> str:
 
 
 def summary_from_infobox(title: str, html: str) -> str:
+    """Build a short fallback summary from portable-infobox fields."""
+
     parser = InfoboxSummaryParser()
     parser.feed(html)
     parser.close()
@@ -194,61 +318,67 @@ def summary_from_infobox(title: str, html: str) -> str:
 
 
 def summary_from_html(title: str, html: str) -> str:
+    """Extract a page summary, falling back to infobox fields when needed."""
+
     return first_paragraph_from_html(html) or summary_from_infobox(title, html)
 
 
 def api_base(api_url: str) -> str:
+    """Return the scheme and host portion of a MediaWiki API URL."""
+
     parsed = urllib.parse.urlparse(api_url)
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
 def wiki_page_url(api_url: str, title: str) -> str:
+    """Build a human-readable wiki page URL from an API URL and page title."""
+
     return f"{api_base(api_url)}/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
 
 
 def api_request(
     api_url: str,
     params: dict[str, Any],
-    user_agent: str,
-    timeout: float,
-    max_retries: int,
-    initial_backoff: float,
-    max_backoff: float,
+    config: RequestConfig,
 ) -> dict[str, Any]:
+    """Perform one JSON API request with bounded exponential backoff."""
+
     query = urllib.parse.urlencode(params, doseq=True)
     url = f"{api_url}?{query}"
-    delay = initial_backoff
+    delay = config.initial_backoff
 
-    for attempt in range(max_retries + 1):
+    for attempt in range(config.max_retries + 1):
         request = urllib.request.Request(
             url,
             headers={
                 "Accept": "application/json",
-                "User-Agent": user_agent,
+                "User-Agent": config.user_agent,
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with urllib.request.urlopen(request, timeout=config.timeout) as response:
                 encoding = response.headers.get_content_charset() or "utf-8"
                 return json.loads(response.read().decode(encoding))
         except urllib.error.HTTPError as exc:
-            if exc.code not in RETRY_STATUS_CODES or attempt == max_retries:
+            if exc.code not in RETRY_STATUS_CODES or attempt == config.max_retries:
                 raise
             retry_after = exc.headers.get("Retry-After")
             sleep_for = parse_retry_after(retry_after) or jitter(delay)
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
-            if attempt == max_retries:
+            if attempt == config.max_retries:
                 raise
             sleep_for = jitter(delay)
 
         print(f"request failed; retrying in {sleep_for:.1f}s: {url}", file=sys.stderr)
         time.sleep(sleep_for)
-        delay = min(delay * 2, max_backoff)
+        delay = min(delay * 2, config.max_backoff)
 
     raise RuntimeError("unreachable retry state")
 
 
 def parse_retry_after(value: str | None) -> float | None:
+    """Parse an HTTP Retry-After value when it is expressed as seconds."""
+
     if not value:
         return None
     try:
@@ -258,10 +388,14 @@ def parse_retry_after(value: str | None) -> float | None:
 
 
 def jitter(seconds: float) -> float:
+    """Return a randomized delay so repeated requests do not land mechanically."""
+
     return seconds * random.uniform(0.75, 1.25)
 
 
 def init_db(path: Path) -> sqlite3.Connection:
+    """Create or open the crawl database and ensure its tables exist."""
+
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
     conn.execute("PRAGMA journal_mode=WAL")
@@ -294,6 +428,8 @@ def init_db(path: Path) -> sqlite3.Connection:
 
 
 def save_meta(conn: sqlite3.Connection, values: dict[str, str]) -> None:
+    """Persist crawl metadata such as API URL, category, and user agent."""
+
     conn.executemany(
         "INSERT OR REPLACE INTO crawl_meta (key, value) VALUES (?, ?)",
         sorted(values.items()),
@@ -302,6 +438,8 @@ def save_meta(conn: sqlite3.Connection, values: dict[str, str]) -> None:
 
 
 def already_fetched(conn: sqlite3.Connection, pageid: int) -> bool:
+    """Return true when a page has already been fetched successfully."""
+
     row = conn.execute(
         "SELECT status FROM pages WHERE pageid = ? AND status = 'ok'",
         (pageid,),
@@ -319,6 +457,8 @@ def upsert_page(
     first_paragraph: str | None = None,
     error: str | None = None,
 ) -> None:
+    """Insert or update a fetched page row."""
+
     conn.execute(
         """
         INSERT INTO pages (
@@ -352,75 +492,105 @@ def upsert_page(
 
 
 def reextract_first_paragraphs(conn: sqlite3.Connection) -> int:
+    """Refresh derived summaries from stored raw HTML without network access."""
+
     rows = conn.execute(
-        "SELECT pageid, raw_html FROM pages WHERE status = 'ok' AND COALESCE(raw_html, '') != ''"
+        "SELECT pageid, title, raw_html FROM pages WHERE status = 'ok' AND COALESCE(raw_html, '') != ''"
     ).fetchall()
-    for pageid, raw_html in rows:
-        title = conn.execute("SELECT title FROM pages WHERE pageid = ?", (pageid,)).fetchone()[0]
-        conn.execute("UPDATE pages SET first_paragraph = ? WHERE pageid = ?", (summary_from_html(title, raw_html), pageid))
+    for pageid, title, raw_html in rows:
+        conn.execute(
+            "UPDATE pages SET first_paragraph = ? WHERE pageid = ?",
+            (summary_from_html(title, raw_html), pageid),
+        )
     conn.commit()
     return len(rows)
 
 
-def load_category_members(api_url: str, args: argparse.Namespace) -> list[PageRef]:
-    pages: list[PageRef] = []
-    continuation: dict[str, Any] = {}
+def load_category_members(client: MediaWikiClient, config: CrawlConfig) -> list[PageRef]:
+    """Load crawl targets from the configured wiki category."""
 
-    while True:
-        params: dict[str, Any] = {
-            "action": "query",
-            "format": "json",
-            "list": "categorymembers",
-            "cmtitle": args.category,
-            "cmnamespace": "0",
-            "cmtype": "page",
-            "cmprop": "ids|title|type",
-            "cmlimit": str(args.category_batch_size),
-        }
-        params.update(continuation)
-        data = api_request(
-            api_url,
-            params,
-            args.user_agent,
-            args.timeout,
-            args.max_retries,
-            args.initial_backoff,
-            args.max_backoff,
-        )
-        members = data.get("query", {}).get("categorymembers", [])
-        for item in members:
-            pages.append(PageRef(pageid=int(item["pageid"]), title=item["title"], ns=int(item["ns"])))
-            if args.max_pages and len(pages) >= args.max_pages:
-                return pages
-
-        continuation = data.get("continue") or {}
-        if not continuation:
-            return pages
-
-        time.sleep(jitter(args.delay))
-
-
-def fetch_page(api_url: str, page: PageRef, args: argparse.Namespace) -> dict[str, Any]:
-    return api_request(
-        api_url,
-        {
-            "action": "parse",
-            "format": "json",
-            "pageid": page.pageid,
-            "prop": "text|revid|displaytitle|categories",
-            "disableeditsection": "1",
-            "disabletoc": "1",
-            "redirects": "1",
-        },
-        args.user_agent,
-        args.timeout,
-        args.max_retries,
-        args.initial_backoff,
-        args.max_backoff,
+    return client.category_members(
+        config.category,
+        config.category_batch_size,
+        config.max_pages,
+        config.delay,
     )
 
 
+def fetch_page(client: MediaWikiClient, page: PageRef) -> dict[str, Any]:
+    """Fetch raw parsed page data for one crawl target."""
+
+    return client.parse_page(page)
+
+
+def request_config_from_args(args: argparse.Namespace) -> RequestConfig:
+    """Translate CLI arguments into request configuration."""
+
+    return RequestConfig(
+        user_agent=args.user_agent,
+        timeout=args.timeout,
+        max_retries=args.max_retries,
+        initial_backoff=args.initial_backoff,
+        max_backoff=args.max_backoff,
+    )
+
+
+def crawl_config_from_args(args: argparse.Namespace) -> CrawlConfig:
+    """Translate CLI arguments into crawl configuration."""
+
+    return CrawlConfig(
+        category=args.category,
+        delay=args.delay,
+        max_pages=args.max_pages,
+        category_batch_size=args.category_batch_size,
+        refresh=args.refresh,
+    )
+
+
+def crawl_pages(
+    conn: sqlite3.Connection,
+    client: MediaWikiClient,
+    pages: list[PageRef],
+    config: CrawlConfig,
+) -> None:
+    """Fetch and store each page, respecting resume and delay settings."""
+
+    for index, page in enumerate(pages, start=1):
+        if not config.refresh and already_fetched(conn, page.pageid):
+            print(f"[{index}/{len(pages)}] skip {page.title}")
+            continue
+
+        print(f"[{index}/{len(pages)}] fetch {page.title}")
+        fetch_and_store_page(conn, client, page)
+        time.sleep(jitter(config.delay))
+
+
+def fetch_and_store_page(conn: sqlite3.Connection, client: MediaWikiClient, page: PageRef) -> None:
+    """Fetch one page and record either the successful content or the error."""
+
+    url = wiki_page_url(client.api_url, page.title)
+    try:
+        data = fetch_page(client, page)
+        parsed = data.get("parse", {})
+        html = parsed.get("text", {}).get("*", "")
+        first_paragraph = summary_from_html(page.title, html)
+        upsert_page(conn, page, url, "ok", data, html, first_paragraph)
+    except Exception as exc:  # noqa: BLE001 - keep crawling and record failures.
+        upsert_page(conn, page, url, "error", error=repr(exc))
+        print(f"error fetching {page.title}: {exc!r}", file=sys.stderr)
+
+
+def print_crawl_summary(conn: sqlite3.Connection, output: Path) -> None:
+    """Print final counts for successful and failed page fetches."""
+
+    ok_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'ok'").fetchone()[0]
+    error_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'error'").fetchone()[0]
+    print(f"done: {ok_count} ok, {error_count} error; wrote {output}")
+
+
 def assert_robots_allowed(api_url: str, user_agent: str) -> None:
+    """Stop when robots.txt disallows fetching the API URL for this user agent."""
+
     robots_url = f"{api_base(api_url)}/robots.txt"
     parser = urllib.robotparser.RobotFileParser(robots_url)
     parser.read()
@@ -429,6 +599,8 @@ def assert_robots_allowed(api_url: str, user_agent: str) -> None:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments for the crawler."""
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api-url", default=DEFAULT_API_URL)
     parser.add_argument("--category", default=DEFAULT_CATEGORY)
@@ -452,6 +624,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the crawler command-line workflow."""
+
     args = parse_args(argv)
     conn = init_db(args.output)
     if args.reextract_only:
@@ -472,31 +646,12 @@ def main(argv: list[str] | None = None) -> int:
         },
     )
 
-    pages = load_category_members(args.api_url, args)
+    client = MediaWikiClient(args.api_url, request_config_from_args(args))
+    crawl_config = crawl_config_from_args(args)
+    pages = load_category_members(client, crawl_config)
     print(f"found {len(pages)} pages in {args.category}")
-
-    for index, page in enumerate(pages, start=1):
-        if not args.refresh and already_fetched(conn, page.pageid):
-            print(f"[{index}/{len(pages)}] skip {page.title}")
-            continue
-
-        url = wiki_page_url(args.api_url, page.title)
-        print(f"[{index}/{len(pages)}] fetch {page.title}")
-        try:
-            data = fetch_page(args.api_url, page, args)
-            parsed = data.get("parse", {})
-            html = parsed.get("text", {}).get("*", "")
-            first_paragraph = summary_from_html(page.title, html)
-            upsert_page(conn, page, url, "ok", data, html, first_paragraph)
-        except Exception as exc:  # noqa: BLE001 - keep crawling and record failures.
-            upsert_page(conn, page, url, "error", error=repr(exc))
-            print(f"error fetching {page.title}: {exc!r}", file=sys.stderr)
-
-        time.sleep(jitter(args.delay))
-
-    ok_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'ok'").fetchone()[0]
-    error_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'error'").fetchone()[0]
-    print(f"done: {ok_count} ok, {error_count} error; wrote {args.output}")
+    crawl_pages(conn, client, pages, crawl_config)
+    print_crawl_summary(conn, args.output)
     return 0
 
 

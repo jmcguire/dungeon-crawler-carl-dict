@@ -12,6 +12,7 @@ from unittest import mock
 from dcdict.build_kindle_dictionary import (
     Entry,
     build_aliases,
+    build_dictionary_sources,
     compile_with_kindlegen,
     load_entries,
     write_opf,
@@ -96,6 +97,21 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertIn("<DefaultLookupIndex>default</DefaultLookupIndex>", text)
             ET.parse(output)
 
+    def test_build_dictionary_sources_writes_and_validates_outputs(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            result = build_dictionary_sources(
+                [Entry("Carl", "https://example/wiki/Carl", "Carl is a crawler.")],
+                Path(tmp_dir),
+                "Test Dictionary",
+                "Test Author",
+            )
+
+            self.assertEqual(result.entry_count, 1)
+            self.assertTrue(result.xhtml_path.exists())
+            self.assertTrue(result.opf_path.exists())
+            ET.parse(result.xhtml_path)
+            ET.parse(result.opf_path)
+
     def test_compile_with_kindlegen_accepts_warning_exit_when_mobi_exists(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -130,4 +146,3 @@ class BuildKindleDictionaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

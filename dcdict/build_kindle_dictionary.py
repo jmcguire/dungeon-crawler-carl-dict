@@ -23,21 +23,38 @@ LANGUAGE = "en-us"
 
 @dataclass(frozen=True)
 class Entry:
+    """One dictionary headword and its definition."""
+
     title: str
     url: str
     definition: str
 
 
+@dataclass(frozen=True)
+class BuildResult:
+    """Paths and counts produced by source generation."""
+
+    xhtml_path: Path
+    opf_path: Path
+    entry_count: int
+
+
 def normalize_text(text: str) -> str:
+    """Normalize Unicode and collapse whitespace for Kindle definitions."""
+
     text = unicodedata.normalize("NFKC", text.replace("\xa0", " "))
     return " ".join(text.split())
 
 
 def ascii_fold(text: str) -> str:
+    """Return an ASCII-only form for accent-insensitive lookup aliases."""
+
     return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
 
 
 def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
+    """Load usable dictionary entries from the crawler SQLite database."""
+
     conn = sqlite3.connect(db_path)
     rows = conn.execute(
         """
@@ -56,6 +73,8 @@ def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
 
 
 def build_aliases(entries: list[Entry]) -> dict[str, list[str]]:
+    """Build conservative lookup aliases for each entry."""
+
     titles = {entry.title for entry in entries}
     first_names: dict[str, int] = {}
     for title in titles:
@@ -77,6 +96,8 @@ def build_aliases(entries: list[Entry]) -> dict[str, list[str]]:
 
 
 def entry_to_xhtml(entry: Entry, aliases: list[str], entry_id: int) -> str:
+    """Render one Kindle dictionary entry with idx lookup metadata."""
+
     title = html.escape(entry.title, quote=True)
     definition = html.escape(entry.definition, quote=False)
     url = html.escape(entry.url, quote=True)
@@ -96,6 +117,8 @@ def entry_to_xhtml(entry: Entry, aliases: list[str], entry_id: int) -> str:
 
 
 def write_xhtml(entries: list[Entry], output: Path, title: str) -> None:
+    """Write the Kindle dictionary XHTML source file."""
+
     aliases = build_aliases(entries)
     body = "\n\n".join(entry_to_xhtml(entry, aliases[entry.title], index) for index, entry in enumerate(entries, 1))
     output.write_text(
@@ -125,6 +148,8 @@ def write_xhtml(entries: list[Entry], output: Path, title: str) -> None:
 
 
 def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier: str) -> None:
+    """Write the OPF package file Kindle tooling compiles."""
+
     output.write_text(
         f"""<?xml version="1.0" encoding="utf-8"?>
 <package unique-identifier="uid">
@@ -157,10 +182,35 @@ def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier
 
 
 def validate_xml(path: Path) -> None:
+    """Raise if a generated XML/XHTML file is not well-formed."""
+
     ET.parse(path)
 
 
+def build_dictionary_sources(
+    entries: list[Entry],
+    output_dir: Path,
+    title: str,
+    author: str,
+) -> BuildResult:
+    """Generate and validate Kindle dictionary source files."""
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    xhtml_path = output_dir / "dictionary.xhtml"
+    opf_path = output_dir / "dictionary.opf"
+    identifier = f"urn:uuid:{uuid.uuid4()}"
+
+    write_xhtml(entries, xhtml_path, title)
+    write_opf(opf_path, title, author, xhtml_path.name, identifier)
+    validate_xml(xhtml_path)
+    validate_xml(opf_path)
+
+    return BuildResult(xhtml_path=xhtml_path, opf_path=opf_path, entry_count=len(entries))
+
+
 def compile_with_kindlegen(opf_path: Path) -> Path | None:
+    """Compile OPF/XHTML sources into MOBI when kindlegen is available."""
+
     kindlegen = find_kindlegen()
     if not kindlegen:
         return None
@@ -169,6 +219,8 @@ def compile_with_kindlegen(opf_path: Path) -> Path | None:
         cwd=opf_path.parent,
     )
     mobi_path = opf_path.with_suffix(".mobi")
+    # Legacy kindlegen exits non-zero when it builds with warnings, including
+    # expected dictionary warnings. Treat the output file as the success signal.
     if mobi_path.exists():
         return mobi_path
     result.check_returncode()
@@ -176,6 +228,8 @@ def compile_with_kindlegen(opf_path: Path) -> Path | None:
 
 
 def find_kindlegen() -> str | None:
+    """Find kindlegen on PATH or bundled inside Kindle Previewer on macOS."""
+
     if path := shutil.which("kindlegen"):
         return path
 
@@ -189,6 +243,8 @@ def find_kindlegen() -> str | None:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments for the dictionary builder."""
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=Path("data/characters.sqlite"))
     parser.add_argument("--output-dir", type=Path, default=Path("build"))
@@ -200,27 +256,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the dictionary build command-line workflow."""
+
     args = parse_args(argv)
-    args.output_dir.mkdir(parents=True, exist_ok=True)
     entries = load_entries(args.input, args.min_definition_length)
     if not entries:
         raise SystemExit(f"no usable entries found in {args.input}")
 
-    xhtml_path = args.output_dir / "dictionary.xhtml"
-    opf_path = args.output_dir / "dictionary.opf"
-    identifier = f"urn:uuid:{uuid.uuid4()}"
+    result = build_dictionary_sources(entries, args.output_dir, args.title, args.author)
 
-    write_xhtml(entries, xhtml_path, args.title)
-    write_opf(opf_path, args.title, args.author, xhtml_path.name, identifier)
-    validate_xml(xhtml_path)
-    validate_xml(opf_path)
-
-    print(f"wrote {xhtml_path}")
-    print(f"wrote {opf_path}")
-    print(f"entries: {len(entries)}")
+    print(f"wrote {result.xhtml_path}")
+    print(f"wrote {result.opf_path}")
+    print(f"entries: {result.entry_count}")
 
     if args.compile:
-        mobi_path = compile_with_kindlegen(opf_path)
+        mobi_path = compile_with_kindlegen(result.opf_path)
         if mobi_path:
             print(f"compiled {mobi_path}")
         else:
