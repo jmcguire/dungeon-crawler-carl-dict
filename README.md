@@ -74,6 +74,11 @@ above the bullet so a reader has a chance to stop before reading the summary.
 The warning is page-level; the wiki generally does not mark smaller spoiler
 phrases inside otherwise normal sentences.
 
+When present in the page sidebar's BIOGRAPHICAL INFO section, the dictionary
+adds a few conservative detail bullets below the summary: aliases, origin, race,
+and first scene. Noisy or more spoilery sidebar fields such as class, crawler
+number, crawler ID, and occupation are intentionally omitted.
+
 Optionally add internal cross-links between known dictionary entries:
 
 ```sh

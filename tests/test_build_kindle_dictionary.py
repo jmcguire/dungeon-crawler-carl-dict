@@ -11,6 +11,7 @@ from unittest import mock
 
 from dcdict.build_kindle_dictionary import (
     Entry,
+    biographical_details_from_html,
     build_aliases,
     build_dictionary_sources,
     compile_with_kindlegen,
@@ -47,7 +48,24 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                         "Donut",
                         "https://example/wiki/Donut",
                         " <b>Princess\u00a0Donut</b>   is royalty. ",
-                        '<div class="dcc-highlight"><b>This article contains unmarked spoilers for Book 2.</b></div>',
+                        """
+                        <div class="dcc-highlight"><b>This article contains unmarked spoilers for Book 2.</b></div>
+                        <aside class="portable-infobox">
+                          <h2 class="pi-header" data-source="crawler_info">BIOGRAPHICAL INFO</h2>
+                          <div class="pi-data" data-source="aliases">
+                            <h3 class="pi-data-label">ALIASES</h3>
+                            <div class="pi-data-value">GC, BWR, NW Princess Donut</div>
+                          </div>
+                          <div class="pi-data" data-source="origin">
+                            <h3 class="pi-data-label">ORIGIN</h3>
+                            <div class="pi-data-value">Earth: Seattle, WA</div>
+                          </div>
+                          <div class="pi-data" data-source="class">
+                            <h3 class="pi-data-label">CLASS</h3>
+                            <div class="pi-data-value">Legendary Diva</div>
+                          </div>
+                        </aside>
+                        """,
                         "ok",
                     ),
                     ("Bad", "https://example/wiki/Bad", "Ignored", "", "error"),
@@ -62,6 +80,10 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertEqual([entry.title for entry in entries], ["Carl", "Donut"])
         self.assertEqual(entries[1].definition, "<b>Princess Donut</b> is royalty.")
         self.assertEqual(entries[1].spoiler_notice, "This article contains unmarked spoilers for Book 2.")
+        self.assertEqual(
+            entries[1].details,
+            (("Aliases", "GC, BWR, NW Princess Donut"), ("Origin", "Earth: Seattle, WA")),
+        )
 
     def test_spoiler_notice_from_html_extracts_page_warning(self) -> None:
         self.assertEqual(
@@ -71,6 +93,43 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             "This article contains unmarked spoilers for Book 6.",
         )
         self.assertIsNone(spoiler_notice_from_html("<p>No warning here.</p>"))
+
+    def test_biographical_details_from_html_extracts_approved_sidebar_fields(self) -> None:
+        raw_html = """
+        <aside class="portable-infobox">
+          <h2 class="pi-header" data-source="crawler_info">BIOGRAPHICAL INFO</h2>
+          <div class="pi-data" data-source="aliases">
+            <h3 class="pi-data-label">ALIASES</h3>
+            <div class="pi-data-value">Morty, Uncle Morty</div>
+          </div>
+          <div class="pi-data" data-source="origin">
+            <h3 class="pi-data-label">ORIGIN</h3>
+            <div class="pi-data-value">Dungeon</div>
+          </div>
+          <div class="pi-data" data-source="species">
+            <h3 class="pi-data-label">RACE</h3>
+            <div class="pi-data-value">Skyfowl</div>
+          </div>
+          <div class="pi-data" data-source="first_appearance">
+            <h3 class="pi-data-label">FIRST SCENE</h3>
+            <div class="pi-data-value">Book 1, Chapter 18</div>
+          </div>
+          <div class="pi-data" data-source="occupation">
+            <h3 class="pi-data-label">OCCUPATION</h3>
+            <div class="pi-data-value">Trainer</div>
+          </div>
+        </aside>
+        """
+
+        self.assertEqual(
+            biographical_details_from_html(raw_html),
+            (
+                ("Aliases", "Morty, Uncle Morty"),
+                ("Origin", "Dungeon"),
+                ("Race", "Skyfowl"),
+                ("First scene", "Book 1, Chapter 18"),
+            ),
+        )
 
     def test_build_aliases_adds_unambiguous_first_names_and_ascii_forms(self) -> None:
         entries = [
@@ -148,6 +207,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                     "https://example/wiki/Agatha",
                     "<b>Agatha</b> pushes a cart.",
                     spoiler_notice="This article contains unmarked spoilers for Book 6.",
+                    details=(("Origin", "Earth: Wenatchee, WA"), ("Race", "Human")),
                 )
             ]
 
@@ -160,6 +220,8 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             )
             self.assertIn("<ul>", text)
             self.assertIn("<li><b>Agatha</b> pushes a cart.</li>", text)
+            self.assertIn("<li><b>Origin:</b> Earth: Wenatchee, WA</li>", text)
+            self.assertIn("<li><b>Race:</b> Human</li>", text)
             ET.parse(output)
 
     def test_write_xhtml_does_not_add_internal_cross_links_by_default(self) -> None:

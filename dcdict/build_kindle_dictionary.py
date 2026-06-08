@@ -23,6 +23,13 @@ DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors"
 LANGUAGE = "en-us"
 ALLOWED_INLINE_TAGS = {"b": "b", "strong": "b", "i": "i", "em": "i"}
 LINKABLE_INLINE_TAGS = {"a": "a", **ALLOWED_INLINE_TAGS}
+BIOGRAPHICAL_FIELD_LABELS = {
+    "aliases": "Aliases",
+    "origin": "Origin",
+    "species": "Race",
+    "race": "Race",
+    "first_appearance": "First scene",
+}
 
 
 @dataclass(frozen=True)
@@ -33,6 +40,7 @@ class Entry:
     url: str
     definition: str
     spoiler_notice: str | None = None
+    details: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -272,6 +280,101 @@ def spoiler_notice_from_html(raw_html: str | None) -> str | None:
     return parser.notice
 
 
+class BiographicalInfoParser(HTMLParser):
+    """Extract selected BIOGRAPHICAL INFO fields from Fandom infoboxes."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.in_infobox = False
+        self.in_bio_section = False
+        self.current_source: str | None = None
+        self._label_depth = 0
+        self._value_depth = 0
+        self._label_chunks: list[str] = []
+        self._value_chunks: list[str] = []
+        self.fields: dict[str, str] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attrs_dict = {key: value or "" for key, value in attrs}
+        classes = attrs_dict.get("class", "")
+        source = attrs_dict.get("data-source", "")
+        if tag == "aside" and has_class(classes, "portable-infobox"):
+            self.in_infobox = True
+            return
+        if not self.in_infobox:
+            return
+        if tag == "h2" and has_class(classes, "pi-header"):
+            self.in_bio_section = source == "crawler_info"
+            return
+        if not self.in_bio_section:
+            return
+        if tag == "div" and has_class(classes, "pi-data"):
+            self.current_source = source or None
+            return
+        if self.current_source and tag == "h3" and has_class(classes, "pi-data-label"):
+            self._label_depth = 1
+            self._label_chunks = []
+            return
+        if self.current_source and tag == "div" and has_class(classes, "pi-data-value"):
+            self._value_depth = 1
+            self._value_chunks = []
+            return
+        if self._label_depth:
+            self._label_depth += 1
+        if self._value_depth:
+            self._value_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "aside" and self.in_infobox:
+            self.in_infobox = False
+            self.in_bio_section = False
+            return
+        if self._label_depth:
+            self._label_depth -= 1
+            return
+        if self._value_depth:
+            self._value_depth -= 1
+            if self._value_depth == 0:
+                self._save_current_field()
+            return
+
+    def handle_data(self, data: str) -> None:
+        if self._label_depth:
+            self._label_chunks.append(data)
+        if self._value_depth:
+            self._value_chunks.append(data)
+
+    def _save_current_field(self) -> None:
+        if self.current_source in BIOGRAPHICAL_FIELD_LABELS:
+            value = normalize_text("".join(self._value_chunks))
+            if value:
+                self.fields.setdefault(self.current_source, value)
+        self.current_source = None
+        self._label_chunks = []
+        self._value_chunks = []
+
+
+def has_class(classes: str, class_name: str) -> bool:
+    """Return true when an HTML class attribute contains a full class token."""
+
+    return class_name in classes.split()
+
+
+def biographical_details_from_html(raw_html: str | None) -> tuple[tuple[str, str], ...]:
+    """Extract approved non-spoilery biographical sidebar fields."""
+
+    if not raw_html:
+        return ()
+    parser = BiographicalInfoParser()
+    parser.feed(raw_html)
+    parser.close()
+    details = []
+    for source in ("aliases", "origin", "species", "race", "first_appearance"):
+        if source in parser.fields:
+            details.append((BIOGRAPHICAL_FIELD_LABELS[source], parser.fields[source]))
+    return tuple(details)
+
+
 def ascii_fold(text: str) -> str:
     """Return an ASCII-only form for accent-insensitive lookup aliases."""
 
@@ -300,6 +403,7 @@ def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
                     url=url,
                     definition=definition,
                     spoiler_notice=spoiler_notice_from_html(raw_html),
+                    details=biographical_details_from_html(raw_html),
                 )
             )
     return entries
@@ -349,6 +453,11 @@ def entry_to_xhtml(
             f'\n        <p class="spoiler-note"><b>Spoiler note:</b> '
             f"{sanitize_inline_html(entry.spoiler_notice)}</p>"
         )
+    detail_items = "\n".join(
+        f"          <li><b>{html.escape(label, quote=False)}:</b> {sanitize_inline_html(value)}</li>"
+        for label, value in entry.details
+    )
+    details_block = f"\n{detail_items}" if detail_items else ""
     infl = "\n".join(
         f'          <idx:iform value="{html.escape(alias, quote=True)}" />'
         for alias in aliases
@@ -361,6 +470,7 @@ def entry_to_xhtml(
         </idx:orth>{spoiler_note}
         <ul>
           <li>{definition}</li>
+{details_block}
         </ul>
         <p class="source">Source: <a href="{url}">{title} on Dungeon Crawler Carl Wiki</a></p>
       </idx:entry>"""
