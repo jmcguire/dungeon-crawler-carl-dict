@@ -68,6 +68,21 @@ Definitions preserve safe inline emphasis from the wiki where possible:
 `<b>`/`<strong>` become bold text, and `<i>`/`<em>` become italic text. Other
 HTML is stripped or escaped during extraction/building.
 
+Optionally add internal cross-links between known dictionary entries:
+
+```sh
+python3 -m dcdict.build_kindle_dictionary --link-entries
+```
+
+For example, if the `Carl` definition mentions `Donut`, the generated XHTML
+links `Donut` to Donut's dictionary entry with an internal anchor. The linker
+only touches text nodes, preserves bold/italic markup, skips self-links, and
+avoids very short single-word titles to reduce noisy false positives.
+
+Kindle caveat: these links work when opening the dictionary directly as a book,
+but may not work inside the Kindle lookup popup/card UI. That appears to be a
+Kindle interface limitation rather than a dictionary build error.
+
 Try to compile with `kindlegen` if it is installed:
 
 ```sh

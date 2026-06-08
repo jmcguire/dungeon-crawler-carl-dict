@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -21,6 +22,7 @@ DEFAULT_TITLE = "Dungeon Crawler Carl Character Dictionary"
 DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors"
 LANGUAGE = "en-us"
 ALLOWED_INLINE_TAGS = {"b": "b", "strong": "b", "i": "i", "em": "i"}
+LINKABLE_INLINE_TAGS = {"a": "a", **ALLOWED_INLINE_TAGS}
 
 
 @dataclass(frozen=True)
@@ -101,6 +103,86 @@ class InlineTextParser(HTMLParser):
         self.chunks.append(data)
 
 
+class LinkedDefinitionParser(HTMLParser):
+    """Add internal links to known entry names in safe inline XHTML."""
+
+    def __init__(self, linker: "EntryReferenceLinker") -> None:
+        super().__init__(convert_charrefs=True)
+        self.linker = linker
+        self.chunks: list[str] = []
+        self._tag_stack: list[str] = []
+        self._inside_link = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag not in LINKABLE_INLINE_TAGS:
+            return
+        if tag == "a":
+            href = next((value for key, value in attrs if key == "href"), None)
+            if href and href.startswith("#entry-"):
+                self.chunks.append(f'<a href="{html.escape(href, quote=True)}">')
+                self._tag_stack.append("a")
+                self._inside_link = True
+            return
+        kindle_tag = LINKABLE_INLINE_TAGS[tag]
+        self.chunks.append(f"<{kindle_tag}>")
+        self._tag_stack.append(kindle_tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag not in LINKABLE_INLINE_TAGS:
+            return
+        kindle_tag = LINKABLE_INLINE_TAGS[tag]
+        if kindle_tag not in self._tag_stack:
+            return
+        while self._tag_stack:
+            open_tag = self._tag_stack.pop()
+            self.chunks.append(f"</{open_tag}>")
+            if open_tag == "a":
+                self._inside_link = False
+            if open_tag == kindle_tag:
+                return
+
+    def handle_data(self, data: str) -> None:
+        if self._inside_link:
+            self.chunks.append(html.escape(data, quote=False))
+        else:
+            self.chunks.append(self.linker.link_text(data))
+
+    def close(self) -> None:
+        while self._tag_stack:
+            self.chunks.append(f"</{self._tag_stack.pop()}>")
+        super().close()
+
+
+class EntryReferenceLinker:
+    """Link known entry names to their anchors inside definition text."""
+
+    def __init__(self, title_to_id: dict[str, int], current_title: str) -> None:
+        self.title_to_id = {
+            title: entry_id
+            for title, entry_id in title_to_id.items()
+            if title != current_title and is_linkable_title(title)
+        }
+        self._linked_titles: set[str] = set()
+        self._pattern = compile_title_pattern(self.title_to_id)
+
+    def link_text(self, text: str) -> str:
+        """Link the first occurrence of each known target title in a text node."""
+
+        if not self._pattern:
+            return html.escape(text, quote=False)
+
+        def replace(match: re.Match[str]) -> str:
+            title = match.group(0)
+            if title in self._linked_titles:
+                return html.escape(title, quote=False)
+            self._linked_titles.add(title)
+            entry_id = self.title_to_id[title]
+            escaped_title = html.escape(title, quote=False)
+            return f'<a href="#entry-{entry_id}">{escaped_title}</a>'
+
+        return self._pattern.sub(replace, text)
+
+
 def sanitize_inline_html(fragment: str) -> str:
     """Return a safe inline XHTML fragment containing only bold/italic tags."""
 
@@ -108,6 +190,35 @@ def sanitize_inline_html(fragment: str) -> str:
     parser.feed(fragment)
     parser.close()
     return normalize_inline_html("".join(parser.chunks))
+
+
+def link_definition_references(
+    fragment: str,
+    title_to_id: dict[str, int],
+    current_title: str,
+) -> str:
+    """Link entry-title references in a sanitized definition fragment."""
+
+    linker = EntryReferenceLinker(title_to_id, current_title)
+    parser = LinkedDefinitionParser(linker)
+    parser.feed(sanitize_inline_html(fragment))
+    parser.close()
+    return normalize_inline_html("".join(parser.chunks))
+
+
+def is_linkable_title(title: str) -> bool:
+    """Return true for titles unlikely to create noisy accidental links."""
+
+    return len(title) >= 4 or any(char in title for char in " -'")
+
+
+def compile_title_pattern(title_to_id: dict[str, int]) -> re.Pattern[str] | None:
+    """Compile a longest-first matcher for known entry titles."""
+
+    if not title_to_id:
+        return None
+    alternatives = sorted((re.escape(title) for title in title_to_id), key=len, reverse=True)
+    return re.compile(r"(?<![\w])(" + "|".join(alternatives) + r")(?![\w])")
 
 
 def text_from_inline_html(fragment: str) -> str:
@@ -168,11 +279,20 @@ def build_aliases(entries: list[Entry]) -> dict[str, list[str]]:
     return aliases
 
 
-def entry_to_xhtml(entry: Entry, aliases: list[str], entry_id: int) -> str:
+def entry_to_xhtml(
+    entry: Entry,
+    aliases: list[str],
+    entry_id: int,
+    title_to_id: dict[str, int] | None = None,
+) -> str:
     """Render one Kindle dictionary entry with idx lookup metadata."""
 
     title = html.escape(entry.title, quote=True)
-    definition = sanitize_inline_html(entry.definition)
+    definition = (
+        link_definition_references(entry.definition, title_to_id, entry.title)
+        if title_to_id
+        else sanitize_inline_html(entry.definition)
+    )
     url = html.escape(entry.url, quote=True)
     infl = "\n".join(
         f'          <idx:iform value="{html.escape(alias, quote=True)}" />'
@@ -192,8 +312,23 @@ def entry_to_xhtml(entry: Entry, aliases: list[str], entry_id: int) -> str:
 def write_xhtml(entries: list[Entry], output: Path, title: str) -> None:
     """Write the Kindle dictionary XHTML source file."""
 
+    write_xhtml_with_options(entries, output, title, link_entries=False)
+
+
+def write_xhtml_with_options(
+    entries: list[Entry],
+    output: Path,
+    title: str,
+    link_entries: bool,
+) -> None:
+    """Write the Kindle dictionary XHTML source file with build options."""
+
     aliases = build_aliases(entries)
-    body = "\n\n".join(entry_to_xhtml(entry, aliases[entry.title], index) for index, entry in enumerate(entries, 1))
+    title_to_id = {entry.title: index for index, entry in enumerate(entries, 1)} if link_entries else None
+    body = "\n\n".join(
+        entry_to_xhtml(entry, aliases[entry.title], index, title_to_id)
+        for index, entry in enumerate(entries, 1)
+    )
     output.write_text(
         f"""<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
@@ -265,6 +400,7 @@ def build_dictionary_sources(
     output_dir: Path,
     title: str,
     author: str,
+    link_entries: bool = False,
 ) -> BuildResult:
     """Generate and validate Kindle dictionary source files."""
 
@@ -273,7 +409,7 @@ def build_dictionary_sources(
     opf_path = output_dir / "dictionary.opf"
     identifier = f"urn:uuid:{uuid.uuid4()}"
 
-    write_xhtml(entries, xhtml_path, title)
+    write_xhtml_with_options(entries, xhtml_path, title, link_entries)
     write_opf(opf_path, title, author, xhtml_path.name, identifier)
     validate_xml(xhtml_path)
     validate_xml(opf_path)
@@ -325,6 +461,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--author", default=DEFAULT_AUTHOR)
     parser.add_argument("--min-definition-length", type=int, default=8)
     parser.add_argument("--compile", action="store_true", help="Run kindlegen if it is installed.")
+    parser.add_argument(
+        "--link-entries",
+        action="store_true",
+        help="Add internal links between dictionary entries. These work when opening the dictionary directly, but may not work in Kindle lookup popups.",
+    )
     return parser.parse_args(argv)
 
 
@@ -336,7 +477,13 @@ def main(argv: list[str] | None = None) -> int:
     if not entries:
         raise SystemExit(f"no usable entries found in {args.input}")
 
-    result = build_dictionary_sources(entries, args.output_dir, args.title, args.author)
+    result = build_dictionary_sources(
+        entries,
+        args.output_dir,
+        args.title,
+        args.author,
+        link_entries=args.link_entries,
+    )
 
     print(f"wrote {result.xhtml_path}")
     print(f"wrote {result.opf_path}")

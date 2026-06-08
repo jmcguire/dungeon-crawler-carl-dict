@@ -14,10 +14,12 @@ from dcdict.build_kindle_dictionary import (
     build_aliases,
     build_dictionary_sources,
     compile_with_kindlegen,
+    link_definition_references,
     load_entries,
     sanitize_inline_html,
     write_opf,
     write_xhtml,
+    write_xhtml_with_options,
 )
 
 
@@ -74,6 +76,32 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             "<b>Carl</b> &amp; <i>Donut</i> bad()",
         )
 
+    def test_link_definition_references_links_known_entry_names(self) -> None:
+        title_to_id = {"Carl": 1, "Donut": 2, "Mordecai": 3}
+
+        linked = link_definition_references(
+            "Carl talks to <b>Donut</b> and Mordecai. Carl stays calm.",
+            title_to_id,
+            current_title="Mordecai",
+        )
+
+        self.assertEqual(
+            linked,
+            '<a href="#entry-1">Carl</a> talks to <b><a href="#entry-2">Donut</a></b> '
+            "and Mordecai. Carl stays calm.",
+        )
+
+    def test_link_definition_references_skips_short_single_word_titles(self) -> None:
+        title_to_id = {"Tin": 1, "Li Na": 2}
+
+        linked = link_definition_references(
+            "Tin appears near Li Na.",
+            title_to_id,
+            current_title="Carl",
+        )
+
+        self.assertEqual(linked, 'Tin appears near <a href="#entry-2">Li Na</a>.')
+
     def test_write_xhtml_preserves_emphasis_escapes_text_and_produces_valid_xml(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             output = Path(tmp_dir) / "dictionary.xhtml"
@@ -91,6 +119,36 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertIn("Carl &amp; Donut", text)
             self.assertIn("<b>Carl</b> says \"hi\" &amp; <i>keeps crawling</i>.", text)
             self.assertIn("<idx:entry", text)
+            ET.parse(output)
+
+    def test_write_xhtml_does_not_add_internal_cross_links_by_default(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry("Carl", "https://example/wiki/Carl", "Carl knows Donut."),
+                Entry("Donut", "https://example/wiki/Donut", "Donut knows Carl."),
+            ]
+
+            write_xhtml(entries, output, "Test Dictionary")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertIn("Carl knows Donut.", text)
+            self.assertNotIn('href="#entry-2">Donut</a>', text)
+            ET.parse(output)
+
+    def test_write_xhtml_can_add_internal_cross_links(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry("Carl", "https://example/wiki/Carl", "Carl knows Donut."),
+                Entry("Donut", "https://example/wiki/Donut", "Donut knows Carl."),
+            ]
+
+            write_xhtml_with_options(entries, output, "Test Dictionary", link_entries=True)
+
+            text = output.read_text(encoding="utf-8")
+            self.assertIn('Carl knows <a href="#entry-2">Donut</a>.', text)
+            self.assertIn('Donut knows <a href="#entry-1">Carl</a>.', text)
             ET.parse(output)
 
     def test_write_opf_contains_dictionary_metadata(self) -> None:
