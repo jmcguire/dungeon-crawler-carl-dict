@@ -64,20 +64,11 @@ Build Kindle dictionary source files:
 python3 -m dcdict.build_kindle_dictionary
 ```
 
-Definitions preserve safe inline emphasis from the wiki where possible:
-`<b>`/`<strong>` become bold text, and `<i>`/`<em>` become italic text. Other
-HTML is stripped or escaped during extraction/building.
+Definitions preserve safe inline emphasis from the wiki where possible: `<b>`/`<strong>` become bold text, and `<i>`/`<em>` become italic text. Other HTML is stripped or escaped during extraction/building.
 
-Definitions are rendered as a short bullet list. If the source wiki page has a
-page-level spoiler warning banner, the generated entry places a spoiler note
-above the bullet so a reader has a chance to stop before reading the summary.
-The warning is page-level; the wiki generally does not mark smaller spoiler
-phrases inside otherwise normal sentences.
+Definitions are rendered as a short bullet list. If the source wiki page has a page-level spoiler warning banner, the generated entry places a spoiler note above the bullet so a reader has a chance to stop before reading the summary.  The warning is page-level; the wiki generally does not mark smaller spoiler phrases inside otherwise normal sentences.
 
-When present in the page sidebar's BIOGRAPHICAL INFO section, the dictionary
-adds a few conservative detail bullets below the summary: aliases, origin, race,
-and first scene. Noisy or more spoilery sidebar fields such as class, crawler
-number, crawler ID, and occupation are intentionally omitted.
+When present in the page sidebar's BIOGRAPHICAL INFO section, the dictionary adds a few conservative detail bullets below the summary: aliases, origin, race, and first scene. Noisy or more spoilery sidebar fields such as class, crawler number, crawler ID, and occupation are intentionally omitted.
 
 Optionally add internal cross-links between known dictionary entries:
 
@@ -85,14 +76,9 @@ Optionally add internal cross-links between known dictionary entries:
 python3 -m dcdict.build_kindle_dictionary --link-entries
 ```
 
-For example, if the `Carl` definition mentions `Donut`, the generated XHTML
-links `Donut` to Donut's dictionary entry with an internal anchor. The linker
-only touches text nodes, preserves bold/italic markup, skips self-links, and
-avoids very short single-word titles to reduce noisy false positives.
+For example, if the `Carl` definition mentions `Donut`, the generated XHTML links `Donut` to Donut's dictionary entry with an internal anchor. The linker only touches text nodes, preserves bold/italic markup, skips self-links, and avoids very short single-word titles to reduce noisy false positives.
 
-Kindle caveat: these links work when opening the dictionary directly as a book,
-but may not work inside the Kindle lookup popup/card UI. That appears to be a
-Kindle interface limitation rather than a dictionary build error.
+Kindle caveat: these links work when opening the dictionary directly as a book, but may not work inside the Kindle lookup popup/card UI. That appears to be a Kindle interface limitation rather than a dictionary build error.
 
 Try to compile with `kindlegen` if it is installed:
 
@@ -121,9 +107,7 @@ Run the focused standard-library test suite:
 python3 -m unittest discover -s tests
 ```
 
-The tests cover the HTML summary extraction rules, infobox fallback summaries,
-SQLite entry loading, Kindle XHTML/OPF generation, alias generation, and the
-Kindle Previewer/`kindlegen` compile wrapper.
+The tests cover the HTML summary extraction rules, infobox fallback summaries, SQLite entry loading, Kindle XHTML/OPF generation, alias generation, and the Kindle Previewer/`kindlegen` compile wrapper.
 
 ## Sideload To Kindle
 
@@ -170,6 +154,8 @@ The default crawler target is:
 The crawler:
 
 - Uses the MediaWiki API instead of scraping rendered category pages.
+- Accepts a Fandom wiki slug with `--fandom`, such as `dungeon-crawler-carl`.
+- Accepts one or more categories with repeated `--category` flags.
 - Restricts category members to namespace `0`, which skips subcategory pages.
 - Checks `robots.txt` before crawling unless `--ignore-robots` is passed.
 - Sleeps between requests with jitter.
@@ -187,8 +173,9 @@ Example for a different Fandom wiki:
 
 ```sh
 python3 -m dcdict.fetch_characters \
-  --api-url "https://example.fandom.com/api.php" \
-  --category "Category:Characters" \
+  --fandom example \
+  --category Characters \
+  --category Groups \
   --output data/example.sqlite
 ```
 

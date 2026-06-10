@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_API_URL = "https://dungeon-crawler-carl.fandom.com/api.php"
-DEFAULT_CATEGORY = "Category:Characters"
+DEFAULT_FANDOM = "dungeon-crawler-carl"
+DEFAULT_CATEGORY = "Characters"
 DEFAULT_USER_AGENT = "KindleDictionaryCreationCrawler/0.1"
 RETRY_STATUS_CODES = {403, 408, 429, 500, 502, 503, 504}
 
@@ -50,24 +50,50 @@ class RequestConfig:
 class CrawlConfig:
     """Category traversal settings for a crawler run."""
 
-    category: str
+    categories: tuple[str, ...]
     delay: float
     max_pages: int
     category_batch_size: int
     refresh: bool
 
 
+@dataclass(frozen=True)
+class CrawlTarget:
+    """A page to fetch plus the categories that led us to it."""
+
+    pageid: int
+    title: str
+    ns: int
+    source_categories: tuple[str, ...]
+
+
 class MediaWikiClient:
     """Small MediaWiki API client with retry/backoff behavior."""
 
-    def __init__(self, api_url: str, config: RequestConfig) -> None:
-        self.api_url = api_url
+    def __init__(self, fandom_slug: str, config: RequestConfig) -> None:
+        self.fandom_slug = fandom_slug
         self.config = config
 
     def request(self, params: dict[str, Any]) -> dict[str, Any]:
         """Call the configured MediaWiki API endpoint with retry/backoff behavior."""
 
         return api_request(self.api_url, params, self.config)
+
+    @property
+    def api_url(self) -> str:
+        """Return the MediaWiki API URL for the configured Fandom wiki."""
+
+        return fandom_api_url(self.fandom_slug)
+
+    def page_url(self, title: str) -> str:
+        """Return the canonical wiki page URL for a title."""
+
+        return wiki_page_url(self.fandom_slug, title)
+
+    def category_title(self, category: str) -> str:
+        """Return the canonical MediaWiki category title for a category name."""
+
+        return wiki_category_title(category)
 
     def category_members(
         self,
@@ -86,7 +112,7 @@ class MediaWikiClient:
                 "action": "query",
                 "format": "json",
                 "list": "categorymembers",
-                "cmtitle": category,
+                "cmtitle": self.category_title(category),
                 "cmnamespace": "0",
                 "cmtype": "page",
                 "cmprop": "ids|title|type",
@@ -395,10 +421,28 @@ def api_base(api_url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
-def wiki_page_url(api_url: str, title: str) -> str:
-    """Build a human-readable wiki page URL from an API URL and page title."""
+def fandom_api_url(fandom_slug: str) -> str:
+    """Return the API endpoint for a Fandom wiki slug."""
 
-    return f"{api_base(api_url)}/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
+    return f"https://{fandom_slug}.fandom.com/api.php"
+
+
+def fandom_page_base_url(fandom_slug: str) -> str:
+    """Return the wiki base URL for a Fandom wiki slug."""
+
+    return f"https://{fandom_slug}.fandom.com/wiki/"
+
+
+def wiki_category_title(category: str) -> str:
+    """Return the canonical MediaWiki category title for a category name."""
+
+    return category if category.startswith("Category:") else f"Category:{category}"
+
+
+def wiki_page_url(fandom_slug: str, title: str) -> str:
+    """Build a human-readable wiki page URL from a Fandom wiki slug and page title."""
+
+    return f"{fandom_page_base_url(fandom_slug)}{urllib.parse.quote(title.replace(' ', '_'))}"
 
 
 def api_request(
@@ -471,6 +515,7 @@ def init_db(path: Path) -> sqlite3.Connection:
             title TEXT NOT NULL UNIQUE,
             ns INTEGER NOT NULL,
             url TEXT NOT NULL,
+            source_category TEXT,
             raw_json TEXT,
             raw_html TEXT,
             first_paragraph TEXT,
@@ -488,6 +533,12 @@ def init_db(path: Path) -> sqlite3.Connection:
         )
         """
     )
+    columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(pages)").fetchall()
+    }
+    if "source_category" not in columns:
+        conn.execute("ALTER TABLE pages ADD COLUMN source_category TEXT")
     conn.commit()
     return conn
 
@@ -516,6 +567,7 @@ def upsert_page(
     conn: sqlite3.Connection,
     page: PageRef,
     url: str,
+    source_category: str,
     status: str,
     raw_json: dict[str, Any] | None = None,
     raw_html: str | None = None,
@@ -527,13 +579,14 @@ def upsert_page(
     conn.execute(
         """
         INSERT INTO pages (
-            pageid, title, ns, url, raw_json, raw_html, first_paragraph, status, error, fetched_at
+            pageid, title, ns, url, source_category, raw_json, raw_html, first_paragraph, status, error, fetched_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(pageid) DO UPDATE SET
             title = excluded.title,
             ns = excluded.ns,
             url = excluded.url,
+            source_category = excluded.source_category,
             raw_json = excluded.raw_json,
             raw_html = excluded.raw_html,
             first_paragraph = excluded.first_paragraph,
@@ -546,6 +599,7 @@ def upsert_page(
             page.title,
             page.ns,
             url,
+            source_category,
             json.dumps(raw_json, ensure_ascii=False, sort_keys=True) if raw_json else None,
             raw_html,
             first_paragraph,
@@ -571,18 +625,40 @@ def reextract_first_paragraphs(conn: sqlite3.Connection) -> int:
     return len(rows)
 
 
-def load_category_members(client: MediaWikiClient, config: CrawlConfig) -> list[PageRef]:
-    """Load crawl targets from the configured wiki category."""
+def load_category_members(client: MediaWikiClient, config: CrawlConfig) -> list[CrawlTarget]:
+    """Load and deduplicate crawl targets from the configured wiki categories."""
 
-    return client.category_members(
-        config.category,
-        config.category_batch_size,
-        config.max_pages,
-        config.delay,
-    )
+    targets: dict[int, CrawlTarget] = {}
+    order: list[int] = []
+    for category in config.categories:
+        pages = client.category_members(
+            category,
+            config.category_batch_size,
+            config.max_pages,
+            config.delay,
+        )
+        for page in pages:
+            if page.pageid not in targets:
+                targets[page.pageid] = CrawlTarget(
+                    pageid=page.pageid,
+                    title=page.title,
+                    ns=page.ns,
+                    source_categories=(category,),
+                )
+                order.append(page.pageid)
+            else:
+                existing = targets[page.pageid]
+                if category not in existing.source_categories:
+                    targets[page.pageid] = CrawlTarget(
+                        pageid=existing.pageid,
+                        title=existing.title,
+                        ns=existing.ns,
+                        source_categories=existing.source_categories + (category,),
+                    )
+    return [targets[pageid] for pageid in order]
 
 
-def fetch_page(client: MediaWikiClient, page: PageRef) -> dict[str, Any]:
+def fetch_page(client: MediaWikiClient, page: CrawlTarget) -> dict[str, Any]:
     """Fetch raw parsed page data for one crawl target."""
 
     return client.parse_page(page)
@@ -604,7 +680,7 @@ def crawl_config_from_args(args: argparse.Namespace) -> CrawlConfig:
     """Translate CLI arguments into crawl configuration."""
 
     return CrawlConfig(
-        category=args.category,
+        categories=tuple(args.categories or [DEFAULT_CATEGORY]),
         delay=args.delay,
         max_pages=args.max_pages,
         category_batch_size=args.category_batch_size,
@@ -615,7 +691,7 @@ def crawl_config_from_args(args: argparse.Namespace) -> CrawlConfig:
 def crawl_pages(
     conn: sqlite3.Connection,
     client: MediaWikiClient,
-    pages: list[PageRef],
+    pages: list[CrawlTarget],
     config: CrawlConfig,
 ) -> None:
     """Fetch and store each page, respecting resume and delay settings."""
@@ -630,18 +706,19 @@ def crawl_pages(
         time.sleep(jitter(config.delay))
 
 
-def fetch_and_store_page(conn: sqlite3.Connection, client: MediaWikiClient, page: PageRef) -> None:
+def fetch_and_store_page(conn: sqlite3.Connection, client: MediaWikiClient, page: CrawlTarget) -> None:
     """Fetch one page and record either the successful content or the error."""
 
-    url = wiki_page_url(client.api_url, page.title)
+    url = client.page_url(page.title)
+    source_category = ", ".join(page.source_categories)
     try:
         data = fetch_page(client, page)
         parsed = data.get("parse", {})
         html = parsed.get("text", {}).get("*", "")
         first_paragraph = summary_from_html(page.title, html)
-        upsert_page(conn, page, url, "ok", data, html, first_paragraph)
+        upsert_page(conn, page, url, source_category, "ok", data, html, first_paragraph)
     except Exception as exc:  # noqa: BLE001 - keep crawling and record failures.
-        upsert_page(conn, page, url, "error", error=repr(exc))
+        upsert_page(conn, page, url, source_category, "error", error=repr(exc))
         print(f"error fetching {page.title}: {exc!r}", file=sys.stderr)
 
 
@@ -667,8 +744,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments for the crawler."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--api-url", default=DEFAULT_API_URL)
-    parser.add_argument("--category", default=DEFAULT_CATEGORY)
+    parser.add_argument("--fandom", default=DEFAULT_FANDOM, help="Fandom wiki slug, like dungeon-crawler-carl.")
+    parser.add_argument(
+        "--category",
+        dest="categories",
+        action="append",
+        default=None,
+        help="Category name without the Category: prefix. May be repeated. Defaults to Characters.",
+    )
     parser.add_argument("--output", type=Path, default=Path("data/characters.sqlite"))
     parser.add_argument("--user-agent", default=DEFAULT_USER_AGENT)
     parser.add_argument("--delay", type=float, default=1.5, help="Base delay between page requests.")
@@ -699,22 +782,26 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if not args.ignore_robots:
-        assert_robots_allowed(args.api_url, args.user_agent)
+        assert_robots_allowed(fandom_api_url(args.fandom), args.user_agent)
+
+    args.categories = args.categories or [DEFAULT_CATEGORY]
+    api_url = fandom_api_url(args.fandom)
 
     save_meta(
         conn,
         {
-            "api_url": args.api_url,
-            "category": args.category,
+            "api_url": api_url,
+            "fandom": args.fandom,
+            "categories": ",".join(args.categories),
             "user_agent": args.user_agent,
             "fetched_by": "fetch_characters.py",
         },
     )
 
-    client = MediaWikiClient(args.api_url, request_config_from_args(args))
+    client = MediaWikiClient(args.fandom, request_config_from_args(args))
     crawl_config = crawl_config_from_args(args)
     pages = load_category_members(client, crawl_config)
-    print(f"found {len(pages)} pages in {args.category}")
+    print(f"found {len(pages)} pages across {', '.join(args.categories)}")
     crawl_pages(conn, client, pages, crawl_config)
     print_crawl_summary(conn, args.output)
     return 0

@@ -35,6 +35,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                 CREATE TABLE pages (
                     title TEXT,
                     url TEXT,
+                    source_category TEXT,
                     first_paragraph TEXT,
                     raw_html TEXT,
                     status TEXT
@@ -42,11 +43,12 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                 """
             )
             conn.executemany(
-                "INSERT INTO pages VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?)",
                 [
                     (
                         "Donut",
                         "https://example/wiki/Donut",
+                        "Characters, Groups",
                         " <b>Princess\u00a0Donut</b>   is royalty. ",
                         """
                         <div class="dcc-highlight"><b>This article contains unmarked spoilers for Book 2.</b></div>
@@ -68,9 +70,9 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                         """,
                         "ok",
                     ),
-                    ("Bad", "https://example/wiki/Bad", "Ignored", "", "error"),
-                    ("Tiny", "https://example/wiki/Tiny", "short", "", "ok"),
-                    ("Carl", "https://example/wiki/Carl", "Carl is a crawler.", "", "ok"),
+                    ("Bad", "https://example/wiki/Bad", "", "Ignored", "", "error"),
+                    ("Tiny", "https://example/wiki/Tiny", "Characters", "short", "", "ok"),
+                    ("Carl", "https://example/wiki/Carl", "Characters", "Carl is a crawler.", "", "ok"),
                 ],
             )
             conn.commit()
