@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 from dcdict.fetch_characters import (
     CrawlConfig,
     PageRef,
+    extract_summary_status,
     fandom_api_url,
     first_paragraph_from_html,
     init_db,
@@ -35,6 +36,16 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             first_paragraph_from_html(html),
             "<b>Agatha</b> appears to be a homeless human woman pushing a cart.",
         )
+
+    def test_first_paragraph_skips_stub_notice_and_uses_real_description(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <div style="overflow:hidden; margin:auto;">This article or section is a <b>stub</b>. You can help by expanding it.</div>
+          <p>Veeka is a hunter.</p>
+        </div>
+        """
+
+        self.assertEqual(first_paragraph_from_html(html), "Veeka is a hunter.")
 
     def test_summary_uses_loose_text_and_preserves_inline_emphasis(self) -> None:
         html = """
@@ -71,6 +82,44 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             "Walter: race/species: Sai; occupation: Firefighter; first scene: Chapter 32, Book 6.",
         )
 
+    def test_summary_skips_stub_and_candidate_for_deletion_without_fallback(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <div>This article or section is a <b>stub</b>. You can help by expanding it.</div>
+          <div>This article or section is a candidate for deletion.</div>
+        </div>
+        """
+
+        self.assertEqual(summary_from_html("Ronaldo Qu", html), "")
+        self.assertEqual(extract_summary_status("Ronaldo Qu", html), ("empty", ""))
+
+    def test_summary_falls_back_to_infobox_when_stub_is_only_body_text(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <div>This article or section is a <b>stub</b>. You can help by expanding it.</div>
+          <aside class="portable-infobox">
+            <div class="pi-item pi-data" data-source="origin">
+              <h3>ORIGIN</h3><div class="pi-data-value pi-font">Japan</div>
+            </div>
+            <div class="pi-item pi-data" data-source="race">
+              <h3>RACE</h3><div class="pi-data-value pi-font">Human</div>
+            </div>
+            <div class="pi-item pi-data" data-source="first_appearance">
+              <h3>FIRST SCENE</h3><div class="pi-data-value pi-font">Chapter 14, Book 3</div>
+            </div>
+          </aside>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Koki", html),
+            "Koki: origin: Japan; race/species: Human; first scene: Chapter 14, Book 3.",
+        )
+        self.assertEqual(
+            extract_summary_status("Koki", html),
+            ("ok", "Koki: origin: Japan; race/species: Human; first scene: Chapter 14, Book 3."),
+        )
+
     def test_reextract_updates_existing_rows_without_network(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             db_path = Path(tmp_dir) / "characters.sqlite"
@@ -89,6 +138,28 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             self.assertEqual(reextract_first_paragraphs(conn), 1)
             row = conn.execute("SELECT first_paragraph FROM pages WHERE pageid = 1").fetchone()
             self.assertEqual(row[0], "<b>Carl</b> is a <i>crawler</i>.")
+
+    def test_reextract_marks_stub_only_entries_as_empty(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = init_db(db_path)
+            page = PageRef(pageid=2, title="Ronaldo Qu", ns=0)
+            upsert_page(
+                conn,
+                page,
+                "https://example.fandom.com/wiki/Ronaldo_Qu",
+                "Characters",
+                "ok",
+                raw_html=(
+                    "<div>This article or section is a <b>stub</b>. You can help by expanding it.</div>"
+                    "<div>This article or section is a candidate for deletion.</div>"
+                ),
+                first_paragraph="old text",
+            )
+
+            self.assertEqual(reextract_first_paragraphs(conn), 1)
+            row = conn.execute("SELECT status, first_paragraph FROM pages WHERE pageid = 2").fetchone()
+            self.assertEqual(row, ("empty", ""))
 
     def test_init_db_adds_source_category_to_older_databases(self) -> None:
         with TemporaryDirectory() as tmp_dir:

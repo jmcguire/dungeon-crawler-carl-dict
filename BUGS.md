@@ -1,7 +1,5 @@
 Bugs:
 
- - Some things have this: "This article or section is a stub. You can help by expanding it." that should be removed. in fact that paragraph should be skipped when looking at paragraphs to load.
- - If an entry only contains that, then skip it (but log that it was skipped in whatever log you have)
  - categories and subcategories can contain a loop. make sure we don't get caught in a loop
  - there are a lot of entries that are like "ABC is." and when you click on the link to look at the original page, it's an unfinished entry with a giant AI section that has the actual description. We should do something with that. Can we identify them and grab the first paragraph of the AI section if it exists (but only if the description is that sub-like thing)
     - Dwight
@@ -11,6 +9,8 @@ Bugs:
  - another sidebar attribute to look for "Source", these appear for Loot Boxes, and sometimes for spells.
  - I don't know if the spoilers thing is really necessary. lets keep it for now, but i think major spoilers are located below the table of contents, not in the upper intro description.
  - should we remove " Spell" and " Box" from the end of entries? would people normally select those when looking up a word?
+ - some articles are nothing more than a forwarding message to another article, the text is just "See: ABC". In that case this definition should be identical to that one.
+    - Kimaris
 
 Entries that aren't good:
  - Sugar Cube, it's missing a description, which does exist in the entry itself.

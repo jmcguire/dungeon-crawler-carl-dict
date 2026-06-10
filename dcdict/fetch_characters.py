@@ -382,6 +382,8 @@ def is_non_summary_paragraph(text: str) -> bool:
         lowered.startswith("system message.")
         or "posting book 9 spoilers" in lowered
         or lowered.startswith("spoilers for book")
+        or lowered == "this article or section is a stub. you can help by expanding it."
+        or lowered == "this article or section is a candidate for deletion."
     )
 
 
@@ -413,6 +415,15 @@ def summary_from_html(title: str, html: str) -> str:
     """Extract a page summary, falling back to infobox fields when needed."""
 
     return first_paragraph_from_html(html) or summary_from_infobox(title, html)
+
+
+def extract_summary_status(title: str, html: str) -> tuple[str, str]:
+    """Classify a page as usable or empty based on extracted summary content."""
+
+    summary = summary_from_html(title, html)
+    if summary:
+        return "ok", summary
+    return "empty", ""
 
 
 def api_base(api_url: str) -> str:
@@ -615,12 +626,15 @@ def reextract_first_paragraphs(conn: sqlite3.Connection) -> int:
     """Refresh derived summaries from stored raw HTML without network access."""
 
     rows = conn.execute(
-        "SELECT pageid, title, raw_html FROM pages WHERE status = 'ok' AND COALESCE(raw_html, '') != ''"
+        "SELECT pageid, title, raw_html FROM pages WHERE status != 'error' AND COALESCE(raw_html, '') != ''"
     ).fetchall()
     for pageid, title, raw_html in rows:
+        status, first_paragraph = extract_summary_status(title, raw_html)
+        if status == "empty":
+            LOGGER.info("empty entry %s", title)
         conn.execute(
-            "UPDATE pages SET first_paragraph = ? WHERE pageid = ?",
-            (summary_from_html(title, raw_html), pageid),
+            "UPDATE pages SET first_paragraph = ?, status = ? WHERE pageid = ?",
+            (first_paragraph, status, pageid),
         )
     conn.commit()
     return len(rows)
@@ -720,8 +734,10 @@ def fetch_and_store_page(conn: sqlite3.Connection, client: MediaWikiClient, page
         data = fetch_page(client, page)
         parsed = data.get("parse", {})
         html = parsed.get("text", {}).get("*", "")
-        first_paragraph = summary_from_html(page.title, html)
-        upsert_page(conn, page, url, source_category, "ok", data, html, first_paragraph)
+        status, first_paragraph = extract_summary_status(page.title, html)
+        upsert_page(conn, page, url, source_category, status, data, html, first_paragraph or None)
+        if status == "empty":
+            LOGGER.info("empty entry %s", page.title)
     except Exception as exc:  # noqa: BLE001 - keep crawling and record failures.
         upsert_page(conn, page, url, source_category, "error", error=repr(exc))
         LOGGER.error("error fetching %s: %r", page.title, exc)
@@ -731,8 +747,9 @@ def print_crawl_summary(conn: sqlite3.Connection, output: Path) -> None:
     """Print final counts for successful and failed page fetches."""
 
     ok_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'ok'").fetchone()[0]
+    empty_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'empty'").fetchone()[0]
     error_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'error'").fetchone()[0]
-    LOGGER.info("done: %s ok, %s error; wrote %s", ok_count, error_count, output)
+    LOGGER.info("done: %s ok, %s empty, %s error; wrote %s", ok_count, empty_count, error_count, output)
 
 
 def assert_robots_allowed(api_url: str, user_agent: str) -> None:
