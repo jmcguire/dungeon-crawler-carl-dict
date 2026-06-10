@@ -87,6 +87,125 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             (("Aliases", "GC, BWR, NW Princess Donut"), ("Origin", "Earth: Seattle, WA")),
         )
 
+    def test_load_entries_resolves_simple_forwarding_entry(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    ("ABC", "https://example/wiki/ABC", "Characters", "ABC is real.", "", "ok"),
+                    ("Kimaris", "https://example/wiki/Kimaris", "Characters", "See: ABC", "", "ok"),
+                ],
+            )
+            conn.commit()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        definitions = {entry.title: entry.definition for entry in entries}
+        self.assertEqual(definitions["Kimaris"], "ABC is real.")
+
+    def test_load_entries_resolves_forwarding_chain(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    ("Final", "https://example/wiki/Final", "Characters", "Final has the answer.", "", "ok"),
+                    ("Middle", "https://example/wiki/Middle", "Characters", "See: Final", "", "ok"),
+                    ("Start", "https://example/wiki/Start", "Characters", "See: Middle", "", "ok"),
+                ],
+            )
+            conn.commit()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        definitions = {entry.title: entry.definition for entry in entries}
+        self.assertEqual(definitions["Start"], "Final has the answer.")
+        self.assertEqual(definitions["Middle"], "Final has the answer.")
+
+    def test_load_entries_leaves_forwarding_entry_when_target_is_missing(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?)",
+                ("Kimaris", "https://example/wiki/Kimaris", "Characters", "See: Missing Target", "", "ok"),
+            )
+            conn.commit()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        self.assertEqual(entries[0].definition, "See: Missing Target")
+
+    def test_load_entries_leaves_forwarding_cycle_unresolved(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    ("Recursion", "https://example/wiki/Recursion", "Characters", "See: Loop", "", "ok"),
+                    ("Loop", "https://example/wiki/Loop", "Characters", "See: Recursion", "", "ok"),
+                ],
+            )
+            conn.commit()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        definitions = {entry.title: entry.definition for entry in entries}
+        self.assertEqual(definitions["Recursion"], "See: Loop")
+        self.assertEqual(definitions["Loop"], "See: Recursion")
+
     def test_spoiler_notice_from_html_extracts_page_warning(self) -> None:
         self.assertEqual(
             spoiler_notice_from_html(

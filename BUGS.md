@@ -7,8 +7,6 @@ Bugs:
  - if the paragraph is small, look at the next paragraph if there's another one before the table of contents. add it.
  - I don't know if the spoilers thing is really necessary. lets keep it for now, but i think major spoilers are located below the table of contents, not in the upper intro description.
  - should we remove " Spell" and " Box" from the end of entries? would people normally select those when looking up a word?
- - some articles are nothing more than a forwarding message to another article, the text is just "See: ABC". In that case this definition should be identical to that one.
-    - Kimaris
 
 Entries that aren't good:
  - Sugar Cube, it's missing a description, which does exist in the entry itself.

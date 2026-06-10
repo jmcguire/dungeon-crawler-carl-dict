@@ -241,6 +241,16 @@ def text_from_inline_html(fragment: str) -> str:
     return normalize_text("".join(parser.chunks))
 
 
+def forwarding_target_from_definition(definition: str) -> str | None:
+    """Return the target title for forwarding-only definitions like ``See: ABC``."""
+
+    plain_text = text_from_inline_html(definition)
+    match = re.fullmatch(r"See:\s+(.+)", plain_text)
+    if not match:
+        return None
+    return normalize_text(match.group(1))
+
+
 class SpoilerNoticeParser(HTMLParser):
     """Extract page-level spoiler notices from Fandom highlight banners."""
 
@@ -393,7 +403,7 @@ def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
     entries = []
     for title, url, first_paragraph, raw_html in rows:
         definition = sanitize_inline_html(strip_wiki_reference_markers(first_paragraph))
-        if len(text_from_inline_html(definition)) >= min_definition_length:
+        if len(text_from_inline_html(definition)) >= min_definition_length or forwarding_target_from_definition(definition):
             entries.append(
                 Entry(
                     title=normalize_text(title),
@@ -403,7 +413,58 @@ def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
                     details=biographical_details_from_html(raw_html),
                 )
             )
-    return entries
+    return resolve_forwarding_entries(entries)
+
+
+def resolve_forwarding_entries(entries: list[Entry]) -> list[Entry]:
+    """Copy target definitions into forwarding-only entries when possible."""
+
+    entries_by_title = {entry.title: entry for entry in entries}
+    cache: dict[str, Entry | None] = {}
+
+    def lookup_target(title: str) -> Entry | None:
+        if title in entries_by_title:
+            return entries_by_title[title]
+        if title.endswith("."):
+            return entries_by_title.get(title[:-1])
+        return None
+
+    def resolve_entry(entry: Entry, resolving: set[str]) -> Entry | None:
+        if entry.title in cache:
+            return cache[entry.title]
+        if entry.title in resolving:
+            cache[entry.title] = None
+            return None
+
+        target_title = forwarding_target_from_definition(entry.definition)
+        if not target_title:
+            cache[entry.title] = entry
+            return entry
+
+        target_entry = lookup_target(target_title)
+        if not target_entry:
+            cache[entry.title] = entry
+            return entry
+
+        resolving.add(entry.title)
+        resolved_target = resolve_entry(target_entry, resolving)
+        resolving.remove(entry.title)
+
+        if resolved_target is None or forwarding_target_from_definition(resolved_target.definition):
+            cache[entry.title] = entry
+            return entry
+
+        resolved_entry = Entry(
+            title=entry.title,
+            url=entry.url,
+            definition=resolved_target.definition,
+            spoiler_notice=resolved_target.spoiler_notice,
+            details=resolved_target.details,
+        )
+        cache[entry.title] = resolved_entry
+        return resolved_entry
+
+    return [resolve_entry(entry, set()) or entry for entry in entries]
 
 
 def build_aliases(entries: list[Entry]) -> dict[str, list[str]]:
