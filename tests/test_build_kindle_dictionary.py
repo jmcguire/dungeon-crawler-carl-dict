@@ -15,6 +15,7 @@ from dcdict.build_kindle_dictionary import (
     build_aliases,
     build_dictionary_sources,
     compile_with_kindlegen,
+    forwarding_target_from_definition,
     link_definition_references,
     load_entries,
     sanitize_inline_html,
@@ -205,6 +206,98 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         definitions = {entry.title: entry.definition for entry in entries}
         self.assertEqual(definitions["Recursion"], "See: Loop")
         self.assertEqual(definitions["Loop"], "See: Recursion")
+
+    def test_load_entries_resolves_duplicate_page_forwarding_case_insensitively(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    ("That's the Spirit Box", "https://example/wiki/Spirit", "Loot_Boxes", "A useful box.", "", "ok"),
+                    (
+                        "That's the Spirit! Box",
+                        "https://example/wiki/Spirit_Duplicate",
+                        "Loot_Boxes",
+                        "duplicate page - please see That's the Spirit box.",
+                        "",
+                        "ok",
+                    ),
+                ],
+            )
+            conn.commit()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        definitions = {entry.title: entry.definition for entry in entries}
+        self.assertEqual(definitions["That's the Spirit! Box"], "A useful box.")
+
+    def test_forwarding_target_from_definition_supports_maintenance_forms(self) -> None:
+        self.assertEqual(
+            forwarding_target_from_definition("duplicate page - please see That's the Spirit box."),
+            "That's the Spirit box",
+        )
+        self.assertEqual(
+            forwarding_target_from_definition("System Message: For the Princess Donut Fan Club, please see Princess Posse Fan Club"),
+            "Princess Posse Fan Club",
+        )
+
+    def test_load_entries_cleans_stale_source_artifacts(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        "Annie",
+                        "https://example/wiki/Annie",
+                        "Characters",
+                        "Annie is the child Katia tried to adopt. Art by Rebecca Dorr, ArtStation",
+                        "",
+                        "ok",
+                    ),
+                    (
+                        "Leon",
+                        "https://example/wiki/Leon",
+                        "Characters",
+                        "Leon isa Dirigible Gnome NPC from the Fifth Floor. For more information: Magic & Spells",
+                        "",
+                        "ok",
+                    ),
+                ],
+            )
+            conn.commit()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        definitions = {entry.title: entry.definition for entry in entries}
+        self.assertEqual(definitions["Annie"], "Annie is the child Katia tried to adopt.")
+        self.assertEqual(definitions["Leon"], "Leon is a Dirigible Gnome NPC from the Fifth Floor.")
 
     def test_load_entries_skips_low_quality_incomplete_definition_and_logs(self) -> None:
         with TemporaryDirectory() as tmp_dir:

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 
-from dcdict.text_utils import strip_wiki_reference_markers
+from dcdict.text_utils import clean_wiki_text_artifacts
 
 DEFAULT_TITLE = "Dungeon Crawler Carl Character Dictionary"
 DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors"
@@ -244,13 +244,20 @@ def text_from_inline_html(fragment: str) -> str:
 
 
 def forwarding_target_from_definition(definition: str) -> str | None:
-    """Return the target title for forwarding-only definitions like ``See: ABC``."""
+    """Return the target title for forwarding-only definitions."""
 
     plain_text = text_from_inline_html(definition)
-    match = re.fullmatch(r"See:\s+(.+)", plain_text)
-    if not match:
-        return None
-    return normalize_text(match.group(1))
+    patterns = (
+        r"See:\s+(.+)",
+        r"duplicate page\s*-\s*please see\s+(.+)",
+        r"(?:System Message:\s*)?For .+?,\s*please see\s+(.+)",
+        r"please see\s+(.+)",
+    )
+    for pattern in patterns:
+        match = re.fullmatch(pattern, plain_text, flags=re.I)
+        if match:
+            return normalize_text(match.group(1)).rstrip(".")
+    return None
 
 
 class SpoilerNoticeParser(HTMLParser):
@@ -404,7 +411,7 @@ def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
     ).fetchall()
     entries = []
     for title, url, first_paragraph, raw_html in rows:
-        definition = sanitize_inline_html(strip_wiki_reference_markers(first_paragraph))
+        definition = sanitize_inline_html(clean_wiki_text_artifacts(first_paragraph))
         details = biographical_details_from_html(raw_html)
         if len(text_from_inline_html(definition)) >= min_definition_length or forwarding_target_from_definition(definition) or details:
             entries.append(
@@ -449,13 +456,18 @@ def resolve_forwarding_entries(entries: list[Entry]) -> list[Entry]:
     """Copy target definitions into forwarding-only entries when possible."""
 
     entries_by_title = {entry.title: entry for entry in entries}
+    entries_by_casefold_title = {entry.title.casefold(): entry for entry in entries}
     cache: dict[str, Entry | None] = {}
 
     def lookup_target(title: str) -> Entry | None:
-        if title in entries_by_title:
-            return entries_by_title[title]
+        candidates = [title]
         if title.endswith("."):
-            return entries_by_title.get(title[:-1])
+            candidates.append(title[:-1])
+        for candidate in candidates:
+            if candidate in entries_by_title:
+                return entries_by_title[candidate]
+            if candidate.casefold() in entries_by_casefold_title:
+                return entries_by_casefold_title[candidate.casefold()]
         return None
 
     def resolve_entry(entry: Entry, resolving: set[str]) -> Entry | None:

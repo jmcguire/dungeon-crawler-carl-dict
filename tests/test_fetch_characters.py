@@ -12,8 +12,10 @@ from dcdict.fetch_characters import (
     fandom_api_url,
     first_paragraph_from_html,
     init_db,
+    is_generic_small_description,
     is_small_description,
     is_stub_like_description,
+    is_truncated_description,
     load_category_members,
     reextract_first_paragraphs,
     summary_blocks_from_html,
@@ -51,6 +53,33 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         """
 
         self.assertEqual(first_paragraph_from_html(html), "Veeka is a hunter.")
+
+    def test_first_paragraph_skips_pre_maintenance_message(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <pre>System Message: For the Princess Donut Fan Club, please see Princess Posse Fan Club</pre>
+          <aside class="portable-infobox"></aside>
+          <p><b>The Princess Posse</b> is Team #3 in the Ninth Floor Faction Wars.</p>
+        </div>
+        """
+
+        self.assertEqual(
+            first_paragraph_from_html(html),
+            "<b>The Princess Posse</b> is Team #3 in the Ninth Floor Faction Wars.",
+        )
+
+    def test_summary_skips_gallery_caption_pages(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p>Collection of Fan Art for the <a href="/wiki/System_AI">System AI</a></p>
+          <h2><span class="mw-headline" id="Gallery">Gallery</span></h2>
+          <ul class="gallery mw-gallery-traditional">
+            <li class="gallerybox"><div class="gallerytext">Art by u/Mashermello, Reddit</div></li>
+          </ul>
+        </div>
+        """
+
+        self.assertEqual(summary_from_html("Fan Art for System AI", html), "")
 
     def test_is_stub_like_description_detects_broken_intro(self) -> None:
         self.assertTrue(is_stub_like_description("Dwight", "<b>Dwight</b> is"))
@@ -90,6 +119,23 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             "One of three from team The Wild Hunt.",
         )
 
+    def test_ai_description_paragraph_skips_spell_statlines(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <h2><span class="mw-headline" id="AI_Description">AI Description</span></h2>
+          <blockquote>
+            <p><b>Ping</b></p>
+            <p><b>Cost</b>: 5 Mana</p>
+            <p>Also known as, "Here piggy, piggy," Ping is a hunting tool.</p>
+          </blockquote>
+        </div>
+        """
+
+        self.assertEqual(
+            ai_description_paragraph_from_html(html),
+            'Also known as, "Here piggy, piggy," Ping is a hunting tool.',
+        )
+
     def test_summary_uses_loose_text_and_preserves_inline_emphasis(self) -> None:
         html = """
         <div class="mw-parser-output">
@@ -112,6 +158,14 @@ class FetchCharacterExtractionTests(unittest.TestCase):
                 "This is a deliberately longer sentence that clearly crosses the small-description threshold and keeps going long enough to remove any doubt."
             )
         )
+
+    def test_is_truncated_description_detects_trailing_conjunction(self) -> None:
+        self.assertTrue(is_truncated_description("They worship the goddess Apito, and"))
+        self.assertFalse(is_truncated_description("They worship the goddess Apito."))
+
+    def test_is_generic_small_description_detects_tiny_spell_intro(self) -> None:
+        self.assertTrue(is_generic_small_description("Ping Spell", "<b>Ping Spell</b> is a spell"))
+        self.assertFalse(is_generic_small_description("Ping Spell", "<b>Ping Spell</b> is a useful targeting spell."))
 
     def test_summary_blocks_include_next_paragraph_before_table(self) -> None:
         html = """
@@ -144,6 +198,34 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         self.assertEqual(
             summary_from_html("Bear Witness Spell", html),
             "<b>Bear Witness Spell</b> is a spell. Spell can be negated by a high enough Mind Balance Skill.",
+        )
+
+    def test_summary_expands_truncated_description_with_description_block(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p><b>The 201st Security Group</b> is a cult of City Elves. They worship Apito, and</p>
+          <h2><span class="mw-headline" id="Description">Description</span></h2>
+          <p>They believe they must protect Skyfowl from flightless creatures.</p>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("201st Security Group Militia", html),
+            "<b>The 201st Security Group</b> is a cult of City Elves. They worship Apito, and they believe they must protect Skyfowl from flightless creatures.",
+        )
+
+    def test_summary_does_not_expand_from_story_section(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p>The <b>Sapper's Box</b> is a Loot Box that gives various trap supplies.</p>
+          <h2><span class="mw-headline" id="Story">Story</span></h2>
+          <p><b>Gold Mechanic's Box</b><br />For an achievement.<br /><i>Loot:</i> Carl gets supplies.</p>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Sapper's Box", html),
+            "The <b>Sapper's Box</b> is a Loot Box that gives various trap supplies.",
         )
 
     def test_summary_leaves_normal_length_description_unchanged(self) -> None:
@@ -180,6 +262,25 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             "<b>Dwight. Sparkling Unicorn.</b> He is one of Team Sparkles.",
         )
 
+    def test_summary_uses_ai_description_when_intro_is_generic_and_tiny(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p><b>Ping Spell</b> is a spell</p>
+          <h2><span class="mw-headline" id="AI_Description">AI Description</span></h2>
+          <blockquote>
+            <p><b>Ping</b></p>
+            <p><b>Cost</b>: 5 Mana</p>
+            <p>Also known as, "Here piggy, piggy," Ping is a hunting tool.</p>
+            <p>A later paragraph should stay out of the dictionary summary.</p>
+          </blockquote>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Ping Spell", html),
+            'Also known as, "Here piggy, piggy," Ping is a hunting tool.',
+        )
+
     def test_summary_leaves_normal_description_unchanged_even_with_ai_section(self) -> None:
         html = """
         <div class="mw-parser-output">
@@ -206,6 +307,18 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         self.assertEqual(
             summary_from_html("Cascadia", html),
             "Cascadia was founded in 2012. Some text more text. Not [abc] this.",
+        )
+
+    def test_summary_cleans_source_artifacts(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p><b>Leon</b> isa Dirigible Gnome NPC from the Fifth Floor. For more information: Magic &amp; Spells</p>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Leon", html),
+            "<b>Leon</b> is a Dirigible Gnome NPC from the Fifth Floor.",
         )
 
     def test_summary_falls_back_to_infobox_fields(self) -> None:

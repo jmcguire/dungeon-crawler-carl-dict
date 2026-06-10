@@ -20,7 +20,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
-from dcdict.text_utils import strip_wiki_reference_markers
+from dcdict.text_utils import clean_wiki_text_artifacts, collapse_whitespace
 
 DEFAULT_FANDOM = "dungeon-crawler-carl"
 DEFAULT_CATEGORY = "Characters"
@@ -162,6 +162,7 @@ class FirstParagraphParser(HTMLParser):
     """Extract the first meaningful paragraph while ignoring common chrome."""
 
     ALLOWED_INLINE_TAGS = {"b": "b", "strong": "b", "i": "i", "em": "i"}
+    SUMMARY_SECTIONS = {"intro", "description"}
     SKIP_TAGS = {
         "aside",
         "blockquote",
@@ -173,10 +174,13 @@ class FirstParagraphParser(HTMLParser):
         "h4",
         "h5",
         "h6",
+        "ol",
+        "pre",
         "script",
         "style",
         "sup",
         "table",
+        "ul",
     }
     VOID_TAGS = {
         "area",
@@ -202,11 +206,17 @@ class FirstParagraphParser(HTMLParser):
         "reference",
         "noprint",
         "dcc-highlight",
+        "gallery",
+        "gallerybox",
+        "gallerytext",
+        "pi-caption",
     )
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self._skip_until: list[str] = []
+        self._heading_depth = 0
+        self._current_section = "intro"
         self._paragraph_depth = 0
         self._chunks: list[str] = []
         self._loose_chunks: list[str] = []
@@ -217,15 +227,19 @@ class FirstParagraphParser(HTMLParser):
         # Fandom pages can contain malformed or loosely nested generated HTML.
         # Tracking the tag that opened a skipped region is more tolerant than
         # blindly counting every nested start/end tag.
+        attrs_dict = {key: value or "" for key, value in attrs}
         if self._skip_until:
+            if self._heading_depth and tag == "span" and attrs_dict.get("id"):
+                self._current_section = attrs_dict["id"].replace("_", " ").lower()
             if tag == self._skip_until[-1] and tag not in self.VOID_TAGS:
                 self._skip_until.append(tag)
             return
 
-        attrs_dict = {key: value or "" for key, value in attrs}
         classes = attrs_dict.get("class", "")
         if not self._paragraph_depth and tag not in self.INLINE_TAGS:
             self._finalize_loose_text()
+        if tag in {"h2", "h3"}:
+            self._heading_depth += 1
         if (
             tag in self.SKIP_TAGS
             or "mw-empty-elt" in classes
@@ -251,6 +265,8 @@ class FirstParagraphParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if self._skip_until:
             if tag == self._skip_until[-1]:
+                if tag in {"h2", "h3"} and self._heading_depth:
+                    self._heading_depth -= 1
                 self._skip_until.pop()
             return
         if self._paragraph_depth and tag in self.ALLOWED_INLINE_TAGS:
@@ -265,7 +281,7 @@ class FirstParagraphParser(HTMLParser):
             plain_text = text_from_inline_html(text)
             self._paragraph_depth -= 1
             self._chunks = []
-            if plain_text and not is_non_summary_paragraph(plain_text):
+            if self._accept_summary_block(plain_text):
                 self.blocks.append(text)
 
     def handle_data(self, data: str) -> None:
@@ -288,7 +304,7 @@ class FirstParagraphParser(HTMLParser):
         text = normalize_inline_html("".join(self._loose_chunks))
         plain_text = text_from_inline_html(text)
         self._loose_chunks = []
-        if len(plain_text) >= 20 and not is_non_summary_paragraph(plain_text):
+        if len(plain_text) >= 20 and self._accept_summary_block(plain_text):
             self.blocks.append(text)
 
     def _open_inline_tag(self, tag: str, chunks: list[str]) -> None:
@@ -309,6 +325,15 @@ class FirstParagraphParser(HTMLParser):
     def _close_open_inline_tags(self, chunks: list[str]) -> None:
         while self._inline_stack:
             chunks.append(f"</{self._inline_stack.pop()}>")
+
+    def _accept_summary_block(self, plain_text: str) -> bool:
+        """Return true when a block belongs to an intro/description summary."""
+
+        return (
+            self._current_section in self.SUMMARY_SECTIONS
+            and bool(plain_text)
+            and not is_non_summary_paragraph(plain_text)
+        )
 
 
 class InfoboxSummaryParser(HTMLParser):
@@ -363,7 +388,7 @@ class InfoboxSummaryParser(HTMLParser):
 def normalize_text(text: str) -> str:
     """Collapse wiki whitespace and non-breaking spaces into plain text spacing."""
 
-    return " ".join(text.replace("\xa0", " ").split())
+    return collapse_whitespace(text)
 
 
 def normalize_inline_html(fragment: str) -> str:
@@ -414,10 +439,23 @@ def ai_description_paragraph_from_html(html: str) -> str:
         paragraph = first_paragraph_from_html(match.group(0))
         if not paragraph:
             continue
+        plain_text = text_from_inline_html(paragraph)
+        if is_ai_statline_paragraph(plain_text):
+            continue
         if re.fullmatch(r"<b>[^<]+</b>", paragraph):
             continue
         return paragraph
     return ""
+
+
+def is_ai_statline_paragraph(text: str) -> bool:
+    """Return true for AI Description stat lines rather than prose."""
+
+    lowered = normalize_text(text).lower()
+    return bool(
+        re.fullmatch(r"(cost|target|duration|range|cooldown|type|source)\s*:.*", lowered)
+        or lowered.startswith("environmental factors")
+    )
 
 
 def is_non_summary_paragraph(text: str) -> bool:
@@ -425,7 +463,12 @@ def is_non_summary_paragraph(text: str) -> bool:
 
     lowered = text.lower()
     return (
-        lowered.startswith("system message.")
+        lowered.startswith("system message")
+        or lowered.startswith("collection of fan art")
+        or lowered.startswith("art by ")
+        or lowered.startswith("official art by ")
+        or lowered.startswith("for more information:")
+        or bool(re.match(r"^[\w '&-]+ effect:", lowered))
         or "posting book 9 spoilers" in lowered
         or lowered.startswith("spoilers for book")
         or lowered == "this article or section is a stub. you can help by expanding it."
@@ -457,12 +500,45 @@ def is_small_description(description: str) -> bool:
     return len(text_from_inline_html(description)) < SHORT_DESCRIPTION_THRESHOLD
 
 
+def is_truncated_description(description: str) -> bool:
+    """Return true when a summary appears to end mid-sentence."""
+
+    return bool(re.search(r"\b(and|or|but|because|with|of|to)\s*$", text_from_inline_html(description), re.I))
+
+
+def is_generic_small_description(title: str, description: str) -> bool:
+    """Return true for tiny boilerplate summaries that AI prose can improve."""
+
+    plain_title = normalize_text(title).lower()
+    plain_description = normalize_text(text_from_inline_html(description)).lower().rstrip(".")
+    generic_forms = {
+        f"{plain_title} is a spell",
+        f"{plain_title} is an item",
+        f"{plain_title} is a loot box",
+        f"{plain_title} is a box",
+        f"{plain_title} are loot boxes",
+    }
+    return len(plain_description) < SHORT_DESCRIPTION_THRESHOLD and plain_description in generic_forms
+
+
+def lowercase_first_text_character(fragment: str) -> str:
+    """Lowercase the first visible character in a safe inline HTML fragment."""
+
+    return re.sub(
+        r"^((?:<[^>]+>|\s)*)([A-Z])",
+        lambda match: f"{match.group(1)}{match.group(2).lower()}",
+        fragment,
+        count=1,
+    )
+
+
 def expand_small_description(summary: str, blocks: list[str]) -> str:
     """Append one more useful text block when the initial summary is very short."""
 
-    if not summary or not is_small_description(summary) or len(blocks) < 2:
+    if not summary or not (is_small_description(summary) or is_truncated_description(summary)) or len(blocks) < 2:
         return summary
-    return normalize_inline_html(f"{summary} {blocks[1]}")
+    next_block = lowercase_first_text_character(blocks[1]) if is_truncated_description(summary) else blocks[1]
+    return normalize_inline_html(f"{summary} {next_block}")
 
 
 def summary_from_infobox(title: str, html: str) -> str:
@@ -485,15 +561,14 @@ def summary_from_html(title: str, html: str) -> str:
 
     blocks = summary_blocks_from_html(html)
     summary = blocks[0] if blocks else ""
-    if summary and is_stub_like_description(title, summary):
-        ai_summary = ai_description_paragraph_from_html(html)
-        if ai_summary:
-            summary = ai_summary
-    elif summary:
-        summary = expand_small_description(summary, blocks)
+    if summary:
+        ai_summary = ""
+        if is_stub_like_description(title, summary) or is_generic_small_description(title, summary):
+            ai_summary = ai_description_paragraph_from_html(html)
+        summary = ai_summary or expand_small_description(summary, blocks)
     if not summary:
         summary = summary_from_infobox(title, html)
-    return strip_wiki_reference_markers(summary)
+    return clean_wiki_text_artifacts(summary)
 
 
 def extract_summary_status(title: str, html: str) -> tuple[str, str]:
