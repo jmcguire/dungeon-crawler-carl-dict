@@ -467,6 +467,18 @@ def resolve_forwarding_entries(entries: list[Entry]) -> list[Entry]:
     return [resolve_entry(entry, set()) or entry for entry in entries]
 
 
+def suffix_stripped_alias(title: str, titles: set[str]) -> str | None:
+    """Return a lookup alias with a generic suffix removed, when safe."""
+
+    for suffix in (" Spell", " Box"):
+        if not title.endswith(suffix):
+            continue
+        alias = title[: -len(suffix)].strip()
+        if alias and alias not in titles:
+            return alias
+    return None
+
+
 def build_aliases(entries: list[Entry]) -> dict[str, list[str]]:
     """Build conservative lookup aliases for each entry."""
 
@@ -483,6 +495,9 @@ def build_aliases(entries: list[Entry]) -> dict[str, list[str]]:
         folded = ascii_fold(entry.title)
         if folded and folded != entry.title:
             forms.add(folded)
+        stripped = suffix_stripped_alias(entry.title, titles)
+        if stripped:
+            forms.add(stripped)
         first = entry.title.split()[0]
         if first_names.get(first) == 1:
             forms.add(first)

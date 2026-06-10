@@ -322,6 +322,41 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertNotIn("Li", aliases["Li Jun"])
         self.assertNotIn("Li", aliases["Li Na"])
 
+    def test_build_aliases_adds_suffix_stripped_lookup_aliases(self) -> None:
+        entries = [
+            Entry("Fireball Spell", "https://example/wiki/Fireball_Spell", "A spell."),
+            Entry("Goblin Box", "https://example/wiki/Goblin_Box", "A box."),
+        ]
+
+        aliases = build_aliases(entries)
+
+        self.assertIn("Fireball", aliases["Fireball Spell"])
+        self.assertIn("Goblin", aliases["Goblin Box"])
+
+    def test_build_aliases_skips_suffix_stripped_alias_when_title_already_exists(self) -> None:
+        entries = [
+            Entry("Fireball", "https://example/wiki/Fireball", "A thing."),
+            Entry("Fireball Spell", "https://example/wiki/Fireball_Spell", "A spell."),
+        ]
+
+        aliases = build_aliases(entries)
+
+        self.assertNotIn("Fireball", aliases["Fireball Spell"])
+
+    def test_write_xhtml_keeps_displayed_title_unchanged_when_suffix_alias_exists(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry("Fireball Spell", "https://example/wiki/Fireball_Spell", "A spell."),
+            ]
+
+            write_xhtml(entries, output, "Test Dictionary")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertIn('<idx:orth value="Fireball Spell"><b>Fireball Spell</b>', text)
+            self.assertIn('<idx:iform value="Fireball" />', text)
+            self.assertNotIn("<b>Fireball</b></idx:orth>", text)
+
     def test_sanitize_inline_html_preserves_only_safe_emphasis(self) -> None:
         self.assertEqual(
             sanitize_inline_html('<strong>Carl</strong> & <em>Donut</em> <script>bad()</script>'),
