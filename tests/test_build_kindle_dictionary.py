@@ -133,6 +133,60 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             ),
         )
 
+    def test_biographical_details_from_html_extracts_source_for_loot_box(self) -> None:
+        raw_html = """
+        <aside class="portable-infobox">
+          <div class="pi-data" data-source="type">
+            <h3 class="pi-data-label">TYPE</h3>
+            <div class="pi-data-value">Loot Box</div>
+          </div>
+          <div class="pi-data" data-source="source">
+            <h3 class="pi-data-label">SOURCE</h3>
+            <div class="pi-data-value">Achievements</div>
+          </div>
+        </aside>
+        """
+
+        self.assertEqual(
+            biographical_details_from_html(raw_html),
+            (("Source", "Achievements"),),
+        )
+
+    def test_biographical_details_from_html_extracts_source_for_spell(self) -> None:
+        raw_html = """
+        <aside class="portable-infobox">
+          <div class="pi-data" data-source="mana">
+            <h3 class="pi-data-label">MANA</h3>
+            <div class="pi-data-value">40</div>
+          </div>
+          <div class="pi-data" data-source="source">
+            <h3 class="pi-data-label">SOURCE</h3>
+            <div class="pi-data-value">Scroll, Loot Box</div>
+          </div>
+        </aside>
+        """
+
+        self.assertEqual(
+            biographical_details_from_html(raw_html),
+            (("Source", "Scroll, Loot Box"),),
+        )
+
+    def test_biographical_details_from_html_omits_source_when_missing(self) -> None:
+        raw_html = """
+        <aside class="portable-infobox">
+          <h2 class="pi-header" data-source="crawler_info">BIOGRAPHICAL INFO</h2>
+          <div class="pi-data" data-source="origin">
+            <h3 class="pi-data-label">ORIGIN</h3>
+            <div class="pi-data-value">Dungeon</div>
+          </div>
+        </aside>
+        """
+
+        self.assertEqual(
+            biographical_details_from_html(raw_html),
+            (("Origin", "Dungeon"),),
+        )
+
     def test_build_aliases_adds_unambiguous_first_names_and_ascii_forms(self) -> None:
         entries = [
             Entry("Li Jun", "https://example/wiki/Li_Jun", "A crawler."),

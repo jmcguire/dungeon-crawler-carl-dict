@@ -30,6 +30,7 @@ BIOGRAPHICAL_FIELD_LABELS = {
     "species": "Race",
     "race": "Race",
     "first_appearance": "First scene",
+    "source": "Source",
 }
 
 
@@ -282,12 +283,11 @@ def spoiler_notice_from_html(raw_html: str | None) -> str | None:
 
 
 class BiographicalInfoParser(HTMLParser):
-    """Extract selected BIOGRAPHICAL INFO fields from Fandom infoboxes."""
+    """Extract selected approved fields from Fandom infoboxes."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.in_infobox = False
-        self.in_bio_section = False
         self.current_source: str | None = None
         self._label_depth = 0
         self._value_depth = 0
@@ -304,12 +304,9 @@ class BiographicalInfoParser(HTMLParser):
             return
         if not self.in_infobox:
             return
-        if tag == "h2" and has_class(classes, "pi-header"):
-            self.in_bio_section = source == "crawler_info"
-            return
-        if not self.in_bio_section:
-            return
         if tag == "div" and has_class(classes, "pi-data"):
+            if source not in BIOGRAPHICAL_FIELD_LABELS:
+                return
             self.current_source = source or None
             return
         if self.current_source and tag == "h3" and has_class(classes, "pi-data-label"):
@@ -328,7 +325,6 @@ class BiographicalInfoParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag == "aside" and self.in_infobox:
             self.in_infobox = False
-            self.in_bio_section = False
             return
         if self._label_depth:
             self._label_depth -= 1
@@ -362,7 +358,7 @@ def has_class(classes: str, class_name: str) -> bool:
 
 
 def biographical_details_from_html(raw_html: str | None) -> tuple[tuple[str, str], ...]:
-    """Extract approved non-spoilery biographical sidebar fields."""
+    """Extract approved non-spoilery sidebar fields."""
 
     if not raw_html:
         return ()
@@ -370,7 +366,7 @@ def biographical_details_from_html(raw_html: str | None) -> tuple[tuple[str, str
     parser.feed(raw_html)
     parser.close()
     details = []
-    for source in ("aliases", "origin", "species", "race", "first_appearance"):
+    for source in ("aliases", "origin", "species", "race", "first_appearance", "source"):
         if source in parser.fields:
             details.append((BIOGRAPHICAL_FIELD_LABELS[source], parser.fields[source]))
     return tuple(details)
