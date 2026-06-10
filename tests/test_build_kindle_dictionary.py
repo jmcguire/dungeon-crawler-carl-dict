@@ -9,9 +9,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from dcdict.build_kindle_dictionary import (
+from dcdict.kindle import (
     Entry,
-    biographical_details_from_html,
     build_aliases,
     build_dictionary_sources,
     compile_with_kindlegen,
@@ -19,6 +18,7 @@ from dcdict.build_kindle_dictionary import (
     link_definition_references,
     load_entries,
     sanitize_inline_html,
+    sidebar_details_from_html,
     spoiler_notice_from_html,
     write_opf,
     write_xhtml,
@@ -331,7 +331,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             )
             conn.commit()
 
-            with self.assertLogs("dcdict.build_kindle_dictionary", level="INFO") as logs:
+            with self.assertLogs("dcdict.kindle", level="INFO") as logs:
                 entries = load_entries(db_path, min_definition_length=8)
 
             self.assertEqual([entry.title for entry in entries], ["Carl"])
@@ -387,7 +387,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         )
         self.assertIsNone(spoiler_notice_from_html("<p>No warning here.</p>"))
 
-    def test_biographical_details_from_html_extracts_approved_sidebar_fields(self) -> None:
+    def test_sidebar_details_from_html_extracts_approved_sidebar_fields(self) -> None:
         raw_html = """
         <aside class="portable-infobox">
           <h2 class="pi-header" data-source="crawler_info">BIOGRAPHICAL INFO</h2>
@@ -415,7 +415,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         """
 
         self.assertEqual(
-            biographical_details_from_html(raw_html),
+            sidebar_details_from_html(raw_html),
             (
                 ("Aliases", "Morty, Uncle Morty"),
                 ("Origin", "Dungeon"),
@@ -424,7 +424,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             ),
         )
 
-    def test_biographical_details_from_html_extracts_source_for_loot_box(self) -> None:
+    def test_sidebar_details_from_html_extracts_source_for_loot_box(self) -> None:
         raw_html = """
         <aside class="portable-infobox">
           <div class="pi-data" data-source="type">
@@ -439,11 +439,11 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         """
 
         self.assertEqual(
-            biographical_details_from_html(raw_html),
+            sidebar_details_from_html(raw_html),
             (("Source", "Achievements"),),
         )
 
-    def test_biographical_details_from_html_extracts_source_for_spell(self) -> None:
+    def test_sidebar_details_from_html_extracts_source_for_spell(self) -> None:
         raw_html = """
         <aside class="portable-infobox">
           <div class="pi-data" data-source="mana">
@@ -458,11 +458,11 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         """
 
         self.assertEqual(
-            biographical_details_from_html(raw_html),
+            sidebar_details_from_html(raw_html),
             (("Source", "Scroll, Loot Box"),),
         )
 
-    def test_biographical_details_from_html_omits_source_when_missing(self) -> None:
+    def test_sidebar_details_from_html_omits_source_when_missing(self) -> None:
         raw_html = """
         <aside class="portable-infobox">
           <h2 class="pi-header" data-source="crawler_info">BIOGRAPHICAL INFO</h2>
@@ -474,7 +474,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         """
 
         self.assertEqual(
-            biographical_details_from_html(raw_html),
+            sidebar_details_from_html(raw_html),
             (("Origin", "Dungeon"),),
         )
 
@@ -710,7 +710,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             opf_path = Path(tmp_dir) / "dictionary.opf"
             opf_path.write_text("<package />", encoding="utf-8")
-            with mock.patch("dcdict.build_kindle_dictionary.find_kindlegen", return_value=None):
+            with mock.patch("dcdict.kindle.find_kindlegen", return_value=None):
                 self.assertIsNone(compile_with_kindlegen(opf_path))
 
 

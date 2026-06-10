@@ -1,7 +1,7 @@
 import unittest
 
 from dcdict.audit_entries import audit_entries
-from dcdict.build_kindle_dictionary import Entry
+from dcdict.kindle import Entry
 
 
 class AuditEntriesTests(unittest.TestCase):

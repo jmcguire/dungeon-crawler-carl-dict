@@ -3,25 +3,29 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from dcdict.fetch_characters import (
-    CrawlConfig,
-    PageRef,
+from dcdict.extraction import (
     ai_description_paragraph_from_html,
     expand_small_description,
     extract_summary_status,
-    fandom_api_url,
     first_paragraph_from_html,
-    init_db,
     is_generic_small_description,
     is_small_description,
     is_stub_like_description,
     is_truncated_description,
-    load_category_members,
-    reextract_first_paragraphs,
     summary_blocks_from_html,
     summary_from_html,
     summary_from_infobox,
+)
+from dcdict.fetch_characters import (
+    CrawlConfig,
+    init_db,
+    load_category_members,
+    reextract_first_paragraphs,
     upsert_page,
+)
+from dcdict.mediawiki import (
+    PageRef,
+    fandom_api_url,
     wiki_category_title,
     wiki_page_url,
 )
