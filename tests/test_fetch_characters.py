@@ -62,6 +62,18 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             "Not much is known about <b>Chirag Ali</b>. They appear once on the <i>Leaderboard</i>.",
         )
 
+    def test_summary_strips_numeric_wiki_reference_markers(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p>Cascadia was founded in 2012.[1] Some text [2] more text. Not [abc] this.</p>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Cascadia", html),
+            "Cascadia was founded in 2012. Some text more text. Not [abc] this.",
+        )
+
     def test_summary_falls_back_to_infobox_fields(self) -> None:
         html = """
         <aside class="portable-infobox">

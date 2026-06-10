@@ -19,6 +19,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
+from dcdict.text_utils import strip_wiki_reference_markers
 
 DEFAULT_FANDOM = "dungeon-crawler-carl"
 DEFAULT_CATEGORY = "Characters"
@@ -414,7 +415,8 @@ def summary_from_infobox(title: str, html: str) -> str:
 def summary_from_html(title: str, html: str) -> str:
     """Extract a page summary, falling back to infobox fields when needed."""
 
-    return first_paragraph_from_html(html) or summary_from_infobox(title, html)
+    summary = first_paragraph_from_html(html) or summary_from_infobox(title, html)
+    return strip_wiki_reference_markers(summary)
 
 
 def extract_summary_status(title: str, html: str) -> tuple[str, str]:

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 
+from dcdict.text_utils import strip_wiki_reference_markers
 
 DEFAULT_TITLE = "Dungeon Crawler Carl Character Dictionary"
 DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors"
@@ -395,7 +396,7 @@ def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
     ).fetchall()
     entries = []
     for title, url, first_paragraph, raw_html in rows:
-        definition = sanitize_inline_html(first_paragraph)
+        definition = sanitize_inline_html(strip_wiki_reference_markers(first_paragraph))
         if len(text_from_inline_html(definition)) >= min_definition_length:
             entries.append(
                 Entry(

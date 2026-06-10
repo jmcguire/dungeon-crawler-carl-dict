@@ -49,7 +49,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                         "Donut",
                         "https://example/wiki/Donut",
                         "Characters, Groups",
-                        " <b>Princess\u00a0Donut</b>   is royalty. ",
+                        " <b>Princess\u00a0Donut</b>   is royalty.[1] ",
                         """
                         <div class="dcc-highlight"><b>This article contains unmarked spoilers for Book 2.</b></div>
                         <aside class="portable-infobox">
