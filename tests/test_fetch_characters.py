@@ -7,13 +7,16 @@ from dcdict.fetch_characters import (
     CrawlConfig,
     PageRef,
     ai_description_paragraph_from_html,
+    expand_small_description,
     extract_summary_status,
     fandom_api_url,
     first_paragraph_from_html,
     init_db,
+    is_small_description,
     is_stub_like_description,
     load_category_members,
     reextract_first_paragraphs,
+    summary_blocks_from_html,
     summary_from_html,
     summary_from_infobox,
     upsert_page,
@@ -101,6 +104,63 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             summary_from_html("Chirag Ali", html),
             "Not much is known about <b>Chirag Ali</b>. They appear once on the <i>Leaderboard</i>.",
         )
+
+    def test_is_small_description_uses_under_100_character_threshold(self) -> None:
+        self.assertTrue(is_small_description("A group of crawlers."))
+        self.assertFalse(
+            is_small_description(
+                "This is a deliberately longer sentence that clearly crosses the small-description threshold and keeps going long enough to remove any doubt."
+            )
+        )
+
+    def test_summary_blocks_include_next_paragraph_before_table(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p>A group of crawlers.</p>
+          <h2><span class="mw-headline" id="Description">Description</span></h2>
+          <p>They are named after Polish special forces despite none of them being from Poland.</p>
+          <table class="nav"><tr><td>Navigation</td></tr></table>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_blocks_from_html(html),
+            [
+                "A group of crawlers.",
+                "They are named after Polish special forces despite none of them being from Poland.",
+            ],
+        )
+
+    def test_summary_expands_small_description_with_next_block(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p><b>Bear Witness Spell</b> is a spell.</p>
+          <h2><span class="mw-headline" id="Description">Description</span></h2>
+          <p>Spell can be negated by a high enough Mind Balance Skill.</p>
+          <table class="nav"><tr><td>Navigation</td></tr></table>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Bear Witness Spell", html),
+            "<b>Bear Witness Spell</b> is a spell. Spell can be negated by a high enough Mind Balance Skill.",
+        )
+
+    def test_summary_leaves_normal_length_description_unchanged(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p><b>Adventurer Boxes</b> are common Loot Boxes containing standard adventuring gear. Bronze and Silver Adventurer Boxes are liberally distributed on the first two floors, and typically contain potions and bandages.</p>
+          <p>Beginning on the Third or Fourth Floor, they also include coins.</p>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Adventurer Box", html),
+            "<b>Adventurer Boxes</b> are common Loot Boxes containing standard adventuring gear. Bronze and Silver Adventurer Boxes are liberally distributed on the first two floors, and typically contain potions and bandages.",
+        )
+
+    def test_expand_small_description_requires_another_block(self) -> None:
+        self.assertEqual(expand_small_description("A group of crawlers.", ["A group of crawlers."]), "A group of crawlers.")
 
     def test_summary_uses_ai_description_when_stub_like_intro_exists(self) -> None:
         html = """

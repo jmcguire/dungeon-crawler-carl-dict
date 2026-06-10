@@ -25,6 +25,7 @@ from dcdict.text_utils import strip_wiki_reference_markers
 DEFAULT_FANDOM = "dungeon-crawler-carl"
 DEFAULT_CATEGORY = "Characters"
 DEFAULT_USER_AGENT = "KindleDictionaryCreationCrawler/0.1"
+SHORT_DESCRIPTION_THRESHOLD = 100
 RETRY_STATUS_CODES = {403, 408, 429, 500, 502, 503, 504}
 LOGGER = logging.getLogger(__name__)
 
@@ -161,7 +162,22 @@ class FirstParagraphParser(HTMLParser):
     """Extract the first meaningful paragraph while ignoring common chrome."""
 
     ALLOWED_INLINE_TAGS = {"b": "b", "strong": "b", "i": "i", "em": "i"}
-    SKIP_TAGS = {"aside", "blockquote", "dl", "figure", "script", "style", "sup", "table"}
+    SKIP_TAGS = {
+        "aside",
+        "blockquote",
+        "dl",
+        "figure",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "script",
+        "style",
+        "sup",
+        "table",
+    }
     VOID_TAGS = {
         "area",
         "base",
@@ -195,7 +211,7 @@ class FirstParagraphParser(HTMLParser):
         self._chunks: list[str] = []
         self._loose_chunks: list[str] = []
         self._inline_stack: list[str] = []
-        self.first_paragraph = ""
+        self.blocks: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         # Fandom pages can contain malformed or loosely nested generated HTML.
@@ -218,7 +234,7 @@ class FirstParagraphParser(HTMLParser):
             if tag not in self.VOID_TAGS:
                 self._skip_until.append(tag)
             return
-        if tag == "p" and not self.first_paragraph:
+        if tag == "p" and len(self.blocks) < 2:
             self._paragraph_depth += 1
             self._chunks = []
         elif self._paragraph_depth and tag == "br":
@@ -250,12 +266,12 @@ class FirstParagraphParser(HTMLParser):
             self._paragraph_depth -= 1
             self._chunks = []
             if plain_text and not is_non_summary_paragraph(plain_text):
-                self.first_paragraph = text
+                self.blocks.append(text)
 
     def handle_data(self, data: str) -> None:
-        if not self._skip_until and self._paragraph_depth and not self.first_paragraph:
+        if not self._skip_until and self._paragraph_depth and len(self.blocks) < 2:
             self._chunks.append(html_lib.escape(data, quote=False))
-        elif not self._skip_until and not self.first_paragraph:
+        elif not self._skip_until and len(self.blocks) < 2:
             self._loose_chunks.append(html_lib.escape(data, quote=False))
 
     def close(self) -> None:
@@ -265,7 +281,7 @@ class FirstParagraphParser(HTMLParser):
     def _finalize_loose_text(self) -> None:
         """Accept summary text that appears outside paragraph tags."""
 
-        if self.first_paragraph or not self._loose_chunks:
+        if len(self.blocks) >= 2 or not self._loose_chunks:
             self._loose_chunks = []
             return
         self._close_open_inline_tags(self._loose_chunks)
@@ -273,7 +289,7 @@ class FirstParagraphParser(HTMLParser):
         plain_text = text_from_inline_html(text)
         self._loose_chunks = []
         if len(plain_text) >= 20 and not is_non_summary_paragraph(plain_text):
-            self.first_paragraph = text
+            self.blocks.append(text)
 
     def _open_inline_tag(self, tag: str, chunks: list[str]) -> None:
         kindle_tag = self.ALLOWED_INLINE_TAGS[tag]
@@ -423,7 +439,30 @@ def first_paragraph_from_html(html: str) -> str:
     parser = FirstParagraphParser()
     parser.feed(html)
     parser.close()
-    return parser.first_paragraph
+    return parser.blocks[0] if parser.blocks else ""
+
+
+def summary_blocks_from_html(html: str) -> list[str]:
+    """Extract up to two useful summary blocks from article HTML."""
+
+    parser = FirstParagraphParser()
+    parser.feed(html)
+    parser.close()
+    return parser.blocks
+
+
+def is_small_description(description: str) -> bool:
+    """Return true when a summary is short enough to benefit from expansion."""
+
+    return len(text_from_inline_html(description)) < SHORT_DESCRIPTION_THRESHOLD
+
+
+def expand_small_description(summary: str, blocks: list[str]) -> str:
+    """Append one more useful text block when the initial summary is very short."""
+
+    if not summary or not is_small_description(summary) or len(blocks) < 2:
+        return summary
+    return normalize_inline_html(f"{summary} {blocks[1]}")
 
 
 def summary_from_infobox(title: str, html: str) -> str:
@@ -444,11 +483,14 @@ def summary_from_infobox(title: str, html: str) -> str:
 def summary_from_html(title: str, html: str) -> str:
     """Extract a page summary, falling back to infobox fields when needed."""
 
-    summary = first_paragraph_from_html(html)
+    blocks = summary_blocks_from_html(html)
+    summary = blocks[0] if blocks else ""
     if summary and is_stub_like_description(title, summary):
         ai_summary = ai_description_paragraph_from_html(html)
         if ai_summary:
             summary = ai_summary
+    elif summary:
+        summary = expand_small_description(summary, blocks)
     if not summary:
         summary = summary_from_infobox(title, html)
     return strip_wiki_reference_markers(summary)
