@@ -206,6 +206,85 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertEqual(definitions["Recursion"], "See: Loop")
         self.assertEqual(definitions["Loop"], "See: Recursion")
 
+    def test_load_entries_skips_low_quality_incomplete_definition_and_logs(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    ("Carl", "https://example/wiki/Carl", "Characters", "Carl is a crawler.", "", "ok"),
+                    (
+                        "Commander Stockade",
+                        "https://example/wiki/Commander_Stockade",
+                        "Characters",
+                        "<b>Commander Stockade</b> is",
+                        "<aside class=\"portable-infobox\"></aside>",
+                        "ok",
+                    ),
+                ],
+            )
+            conn.commit()
+
+            with self.assertLogs("dcdict.build_kindle_dictionary", level="INFO") as logs:
+                entries = load_entries(db_path, min_definition_length=8)
+
+            self.assertEqual([entry.title for entry in entries], ["Carl"])
+            self.assertIn("skipped low-quality dictionary entry Commander Stockade", "\n".join(logs.output))
+
+    def test_load_entries_keeps_incomplete_definition_when_sidebar_details_exist(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    "Koki",
+                    "https://example/wiki/Koki",
+                    "Characters",
+                    "<b>Koki</b> is",
+                    """
+                    <aside class="portable-infobox">
+                      <div class="pi-data" data-source="origin">
+                        <h3 class="pi-data-label">ORIGIN</h3>
+                        <div class="pi-data-value">Japan</div>
+                      </div>
+                    </aside>
+                    """,
+                    "ok",
+                ),
+            )
+            conn.commit()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        self.assertEqual([entry.title for entry in entries], ["Koki"])
+        self.assertEqual(entries[0].details, (("Origin", "Japan"),))
+
     def test_spoiler_notice_from_html_extracts_page_warning(self) -> None:
         self.assertEqual(
             spoiler_notice_from_html(

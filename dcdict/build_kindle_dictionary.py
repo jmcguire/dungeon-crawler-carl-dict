@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import logging
 import re
 import shutil
 import sqlite3
@@ -24,6 +25,7 @@ DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors"
 LANGUAGE = "en-us"
 ALLOWED_INLINE_TAGS = {"b": "b", "strong": "b", "i": "i", "em": "i"}
 LINKABLE_INLINE_TAGS = {"a": "a", **ALLOWED_INLINE_TAGS}
+LOGGER = logging.getLogger(__name__)
 BIOGRAPHICAL_FIELD_LABELS = {
     "aliases": "Aliases",
     "origin": "Origin",
@@ -403,17 +405,44 @@ def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
     entries = []
     for title, url, first_paragraph, raw_html in rows:
         definition = sanitize_inline_html(strip_wiki_reference_markers(first_paragraph))
-        if len(text_from_inline_html(definition)) >= min_definition_length or forwarding_target_from_definition(definition):
+        details = biographical_details_from_html(raw_html)
+        if len(text_from_inline_html(definition)) >= min_definition_length or forwarding_target_from_definition(definition) or details:
             entries.append(
                 Entry(
                     title=normalize_text(title),
                     url=url,
                     definition=definition,
                     spoiler_notice=spoiler_notice_from_html(raw_html),
-                    details=biographical_details_from_html(raw_html),
+                    details=details,
                 )
             )
-    return resolve_forwarding_entries(entries)
+    return filter_low_quality_entries(resolve_forwarding_entries(entries))
+
+
+def is_low_quality_definition(entry: Entry) -> bool:
+    """Return true for unusable leftover fragments such as ``Title is``."""
+
+    if entry.details or forwarding_target_from_definition(entry.definition):
+        return False
+    plain_title = normalize_text(entry.title).lower()
+    plain_definition = normalize_text(text_from_inline_html(entry.definition)).lower().rstrip(".")
+    return plain_definition in {
+        f"{plain_title} is",
+        f"{plain_title} was",
+        f"{plain_title} are",
+    }
+
+
+def filter_low_quality_entries(entries: list[Entry]) -> list[Entry]:
+    """Drop entries that still have no useful dictionary definition."""
+
+    usable_entries = []
+    for entry in entries:
+        if is_low_quality_definition(entry):
+            LOGGER.info("skipped low-quality dictionary entry %s", entry.title)
+            continue
+        usable_entries.append(entry)
+    return usable_entries
 
 
 def resolve_forwarding_entries(entries: list[Entry]) -> list[Entry]:
@@ -713,6 +742,7 @@ def main(argv: list[str] | None = None) -> int:
     """Run the dictionary build command-line workflow."""
 
     args = parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     entries = load_entries(args.input, args.min_definition_length)
     if not entries:
         raise SystemExit(f"no usable entries found in {args.input}")
