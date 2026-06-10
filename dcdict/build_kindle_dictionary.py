@@ -581,13 +581,55 @@ def entry_to_xhtml(
     return f"""      <idx:entry name="default" scriptable="yes" spell="yes" id="entry-{entry_id}">
         <a id="entry-{entry_id}"></a>
         <idx:orth value="{title}"><b>{title}</b>{infl_block}
-        </idx:orth>{spoiler_note}
-        <ul>
+        </idx:orth>
+        <idx:short>{spoiler_note}
+        <ul class="definition">
           <li>{definition}</li>
 {details_block}
         </ul>
         <p class="source">Source: <a href="{url}">{title} on Dungeon Crawler Carl Wiki</a></p>
+        </idx:short>
       </idx:entry>"""
+
+
+def alphabet_section_label(title: str) -> str:
+    """Return the alphabetic section label for a dictionary entry title."""
+
+    for char in title:
+        if char.isalpha():
+            return ascii_fold(char).upper()[:1] or char.upper()
+        if char.isdigit():
+            return "#"
+    return "#"
+
+
+def alphabet_section_to_xhtml(label: str) -> str:
+    """Render a simple alphabet section break for Kindle navigation."""
+
+    heading = "0-9" if label == "#" else label
+    section_id = "letter-number" if label == "#" else f"letter-{html.escape(label, quote=True)}"
+    return f"""      <mbp:pagebreak />
+      <h1 class="letter-heading" id="{section_id}">{heading}</h1>"""
+
+
+def entries_to_xhtml(
+    entries: list[Entry],
+    aliases: dict[str, list[str]],
+    title_to_id: dict[str, int] | None = None,
+) -> str:
+    """Render entries with alphabet page breaks and separators."""
+
+    parts: list[str] = []
+    current_label: str | None = None
+    for index, entry in enumerate(entries, 1):
+        label = alphabet_section_label(entry.title)
+        if label != current_label:
+            current_label = label
+            parts.append(alphabet_section_to_xhtml(label))
+        parts.append(entry_to_xhtml(entry, aliases[entry.title], index, title_to_id))
+        if index < len(entries):
+            parts.append("      <hr />")
+    return "\n\n".join(parts)
 
 
 def write_xhtml(entries: list[Entry], output: Path, title: str) -> None:
@@ -606,10 +648,7 @@ def write_xhtml_with_options(
 
     aliases = build_aliases(entries)
     title_to_id = {entry.title: index for index, entry in enumerate(entries, 1)} if link_entries else None
-    body = "\n\n".join(
-        entry_to_xhtml(entry, aliases[entry.title], index, title_to_id)
-        for index, entry in enumerate(entries, 1)
-    )
+    body = entries_to_xhtml(entries, aliases, title_to_id)
     output.write_text(
         f"""<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
@@ -622,6 +661,9 @@ def write_xhtml_with_options(
     <style type="text/css">
       body {{ font-family: serif; }}
       idx\\:orth b {{ font-size: 1.15em; }}
+      ul.definition {{ margin-top: 0.35em; }}
+      .letter-heading {{ font-size: 1.1em; }}
+      .spoiler-note {{ margin-bottom: 0.35em; }}
       .source {{ font-size: 0.8em; }}
     </style>
   </head>

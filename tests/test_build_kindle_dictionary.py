@@ -578,6 +578,26 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertIn("Carl &amp; Donut", text)
             self.assertIn("<li><b>Carl</b> says \"hi\" &amp; <i>keeps crawling</i>.</li>", text)
             self.assertIn("<idx:entry", text)
+            self.assertIn("<idx:short>", text)
+            ET.parse(output)
+
+    def test_write_xhtml_adds_entry_separators_and_alphabet_pagebreaks(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry("1914 Box", "https://example/wiki/1914_Box", "A box."),
+                Entry("Agatha", "https://example/wiki/Agatha", "A crawler."),
+                Entry("Bomo", "https://example/wiki/Bomo", "A character."),
+            ]
+
+            write_xhtml(entries, output, "Test Dictionary")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertIn("<mbp:pagebreak />", text)
+            self.assertIn('<h1 class="letter-heading" id="letter-number">0-9</h1>', text)
+            self.assertIn('<h1 class="letter-heading" id="letter-A">A</h1>', text)
+            self.assertIn('<h1 class="letter-heading" id="letter-B">B</h1>', text)
+            self.assertEqual(text.count("<hr />"), 2)
             ET.parse(output)
 
     def test_write_xhtml_adds_spoiler_note_before_bulleted_definition(self) -> None:
@@ -600,7 +620,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                 '<p class="spoiler-note"><b>Spoiler note:</b> This article contains unmarked spoilers for Book 6.</p>',
                 text,
             )
-            self.assertIn("<ul>", text)
+            self.assertIn('<ul class="definition">', text)
             self.assertIn("<li><b>Agatha</b> pushes a cart.</li>", text)
             self.assertIn("<li><b>Origin:</b> Earth: Wenatchee, WA</li>", text)
             self.assertIn("<li><b>Race:</b> Human</li>", text)
