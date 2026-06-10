@@ -1,9 +1,6 @@
 Bugs:
 
  - categories and subcategories can contain a loop. make sure we don't get caught in a loop
- - there are a lot of entries that are like "ABC is." and when you click on the link to look at the original page, it's an unfinished entry with a giant AI section that has the actual description. We should do something with that. Can we identify them and grab the first paragraph of the AI section if it exists (but only if the description is that sub-like thing)
-    - Dwight
-    - Chiyome
  - if the paragraph is small, look at the next paragraph if there's another one before the table of contents. add it.
  - I don't know if the spoilers thing is really necessary. lets keep it for now, but i think major spoilers are located below the table of contents, not in the upper intro description.
  - should we remove " Spell" and " Box" from the end of entries? would people normally select those when looking up a word?

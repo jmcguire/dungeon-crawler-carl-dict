@@ -8,6 +8,7 @@ import html as html_lib
 import json
 import logging
 import random
+import re
 import sqlite3
 import time
 import urllib.error
@@ -375,6 +376,34 @@ def text_from_inline_html(fragment: str) -> str:
     return normalize_text("".join(parser.chunks))
 
 
+def is_stub_like_description(title: str, description: str) -> bool:
+    """Return true for broken one-line intros like ``Dwight is``."""
+
+    plain_title = normalize_text(title).lower()
+    plain_description = normalize_text(text_from_inline_html(description)).lower().rstrip(".")
+    return plain_description == f"{plain_title} is" or plain_description == f"{plain_title} was" or plain_description == f"{plain_title} are"
+
+
+def ai_description_paragraph_from_html(html: str) -> str:
+    """Extract the first paragraph from an ``AI Description`` section, if present."""
+
+    heading = re.search(r"<h2[^>]*>\s*<span[^>]*id=\"AI_Description\"[^>]*>AI Description</span>\s*</h2>", html, re.I)
+    if not heading:
+        return ""
+    section_start = heading.end()
+    next_heading = re.search(r"<h2\b", html[section_start:], re.I)
+    section_end = section_start + next_heading.start() if next_heading else len(html)
+    section_html = re.sub(r"</?blockquote[^>]*>", "", html[section_start:section_end], flags=re.I)
+    for match in re.finditer(r"<p\b[^>]*>.*?</p>", section_html, re.I | re.S):
+        paragraph = first_paragraph_from_html(match.group(0))
+        if not paragraph:
+            continue
+        if re.fullmatch(r"<b>[^<]+</b>", paragraph):
+            continue
+        return paragraph
+    return ""
+
+
 def is_non_summary_paragraph(text: str) -> bool:
     """Return true for wiki boilerplate paragraphs that are not page summaries."""
 
@@ -415,7 +444,13 @@ def summary_from_infobox(title: str, html: str) -> str:
 def summary_from_html(title: str, html: str) -> str:
     """Extract a page summary, falling back to infobox fields when needed."""
 
-    summary = first_paragraph_from_html(html) or summary_from_infobox(title, html)
+    summary = first_paragraph_from_html(html)
+    if summary and is_stub_like_description(title, summary):
+        ai_summary = ai_description_paragraph_from_html(html)
+        if ai_summary:
+            summary = ai_summary
+    if not summary:
+        summary = summary_from_infobox(title, html)
     return strip_wiki_reference_markers(summary)
 
 

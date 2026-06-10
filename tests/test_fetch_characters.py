@@ -6,10 +6,12 @@ from tempfile import TemporaryDirectory
 from dcdict.fetch_characters import (
     CrawlConfig,
     PageRef,
+    ai_description_paragraph_from_html,
     extract_summary_status,
     fandom_api_url,
     first_paragraph_from_html,
     init_db,
+    is_stub_like_description,
     load_category_members,
     reextract_first_paragraphs,
     summary_from_html,
@@ -47,6 +49,44 @@ class FetchCharacterExtractionTests(unittest.TestCase):
 
         self.assertEqual(first_paragraph_from_html(html), "Veeka is a hunter.")
 
+    def test_is_stub_like_description_detects_broken_intro(self) -> None:
+        self.assertTrue(is_stub_like_description("Dwight", "<b>Dwight</b> is"))
+        self.assertTrue(is_stub_like_description("Chiyome", "<b>Chiyome</b> was."))
+        self.assertFalse(is_stub_like_description("Carl", "<b>Carl</b> is a crawler."))
+
+    def test_ai_description_paragraph_extracts_first_real_paragraph(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <h2><span class="mw-headline" id="AI_Description">AI Description</span></h2>
+          <blockquote>
+            <p class="mw-empty-elt"></p>
+            <p><b>Dwight. Sparkling Unicorn.</b><br />A real paragraph.</p>
+          </blockquote>
+          <h2><span class="mw-headline" id="Appearance">Appearance</span></h2>
+        </div>
+        """
+
+        self.assertEqual(
+            ai_description_paragraph_from_html(html),
+            "<b>Dwight. Sparkling Unicorn.</b> A real paragraph.",
+        )
+
+    def test_ai_description_paragraph_skips_statline_only_paragraph(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <h2><span class="mw-headline" id="AI_Description">AI Description</span></h2>
+          <blockquote>
+            <p><b>Chiyome. Razor Fox. Level 80 Mistress of Nunchaku.</b></p>
+            <p>One of three from team The Wild Hunt.</p>
+          </blockquote>
+        </div>
+        """
+
+        self.assertEqual(
+            ai_description_paragraph_from_html(html),
+            "One of three from team The Wild Hunt.",
+        )
+
     def test_summary_uses_loose_text_and_preserves_inline_emphasis(self) -> None:
         html = """
         <div class="mw-parser-output">
@@ -60,6 +100,40 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         self.assertEqual(
             summary_from_html("Chirag Ali", html),
             "Not much is known about <b>Chirag Ali</b>. They appear once on the <i>Leaderboard</i>.",
+        )
+
+    def test_summary_uses_ai_description_when_stub_like_intro_exists(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <aside class="portable-infobox"></aside>
+          <p><b>Dwight</b> is</p>
+          <h2><span class="mw-headline" id="AI_Description">AI Description</span></h2>
+          <blockquote>
+            <p><b>Dwight. Sparkling Unicorn.</b><br />He is one of Team Sparkles.[1]</p>
+          </blockquote>
+          <h2><span class="mw-headline" id="References">References</span></h2>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Dwight", html),
+            "<b>Dwight. Sparkling Unicorn.</b> He is one of Team Sparkles.",
+        )
+
+    def test_summary_leaves_normal_description_unchanged_even_with_ai_section(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p><b>Carl</b> is a crawler.</p>
+          <h2><span class="mw-headline" id="AI_Description">AI Description</span></h2>
+          <blockquote>
+            <p><b>Carl. Human.</b> Backup text.</p>
+          </blockquote>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Carl", html),
+            "<b>Carl</b> is a crawler.",
         )
 
     def test_summary_strips_numeric_wiki_reference_markers(self) -> None:
