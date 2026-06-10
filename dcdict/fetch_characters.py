@@ -6,9 +6,9 @@ from __future__ import annotations
 import argparse
 import html as html_lib
 import json
+import logging
 import random
 import sqlite3
-import sys
 import time
 import urllib.error
 import urllib.parse
@@ -24,6 +24,7 @@ DEFAULT_FANDOM = "dungeon-crawler-carl"
 DEFAULT_CATEGORY = "Characters"
 DEFAULT_USER_AGENT = "KindleDictionaryCreationCrawler/0.1"
 RETRY_STATUS_CODES = {403, 408, 429, 500, 502, 503, 504}
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -478,7 +479,7 @@ def api_request(
                 raise
             sleep_for = jitter(delay)
 
-        print(f"request failed; retrying in {sleep_for:.1f}s: {url}", file=sys.stderr)
+        LOGGER.warning("request failed; retrying in %.1fs: %s", sleep_for, url)
         time.sleep(sleep_for)
         delay = min(delay * 2, config.max_backoff)
 
@@ -631,12 +632,16 @@ def load_category_members(client: MediaWikiClient, config: CrawlConfig) -> list[
     targets: dict[int, CrawlTarget] = {}
     order: list[int] = []
     for category in config.categories:
-        pages = client.category_members(
-            category,
-            config.category_batch_size,
-            config.max_pages,
-            config.delay,
-        )
+        try:
+            pages = client.category_members(
+                category,
+                config.category_batch_size,
+                config.max_pages,
+                config.delay,
+            )
+        except Exception as exc:  # noqa: BLE001 - keep later categories moving.
+            LOGGER.error("error listing category %s: %r", category, exc)
+            continue
         for page in pages:
             if page.pageid not in targets:
                 targets[page.pageid] = CrawlTarget(
@@ -698,10 +703,10 @@ def crawl_pages(
 
     for index, page in enumerate(pages, start=1):
         if not config.refresh and already_fetched(conn, page.pageid):
-            print(f"[{index}/{len(pages)}] skip {page.title}")
+            LOGGER.info("[%s/%s] skip %s", index, len(pages), page.title)
             continue
 
-        print(f"[{index}/{len(pages)}] fetch {page.title}")
+        LOGGER.info("[%s/%s] fetch %s", index, len(pages), page.title)
         fetch_and_store_page(conn, client, page)
         time.sleep(jitter(config.delay))
 
@@ -719,7 +724,7 @@ def fetch_and_store_page(conn: sqlite3.Connection, client: MediaWikiClient, page
         upsert_page(conn, page, url, source_category, "ok", data, html, first_paragraph)
     except Exception as exc:  # noqa: BLE001 - keep crawling and record failures.
         upsert_page(conn, page, url, source_category, "error", error=repr(exc))
-        print(f"error fetching {page.title}: {exc!r}", file=sys.stderr)
+        LOGGER.error("error fetching %s: %r", page.title, exc)
 
 
 def print_crawl_summary(conn: sqlite3.Connection, output: Path) -> None:
@@ -727,7 +732,7 @@ def print_crawl_summary(conn: sqlite3.Connection, output: Path) -> None:
 
     ok_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'ok'").fetchone()[0]
     error_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'error'").fetchone()[0]
-    print(f"done: {ok_count} ok, {error_count} error; wrote {output}")
+    LOGGER.info("done: %s ok, %s error; wrote %s", ok_count, error_count, output)
 
 
 def assert_robots_allowed(api_url: str, user_agent: str) -> None:
@@ -775,10 +780,11 @@ def main(argv: list[str] | None = None) -> int:
     """Run the crawler command-line workflow."""
 
     args = parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     conn = init_db(args.output)
     if args.reextract_only:
         count = reextract_first_paragraphs(conn)
-        print(f"re-extracted first paragraphs for {count} stored pages in {args.output}")
+        LOGGER.info("re-extracted first paragraphs for %s stored pages in %s", count, args.output)
         return 0
 
     if not args.ignore_robots:
@@ -801,7 +807,7 @@ def main(argv: list[str] | None = None) -> int:
     client = MediaWikiClient(args.fandom, request_config_from_args(args))
     crawl_config = crawl_config_from_args(args)
     pages = load_category_members(client, crawl_config)
-    print(f"found {len(pages)} pages across {', '.join(args.categories)}")
+    LOGGER.info("found %s pages across %s", len(pages), ", ".join(args.categories))
     crawl_pages(conn, client, pages, crawl_config)
     print_crawl_summary(conn, args.output)
     return 0

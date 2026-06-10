@@ -144,6 +144,21 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         self.assertEqual(targets[1].source_categories, ("Characters", "Groups"))
         self.assertEqual(targets[2].source_categories, ("Groups",))
 
+    def test_load_category_members_skips_failed_category_and_continues(self) -> None:
+        class StubClient:
+            def category_members(self, category, batch_size, max_pages, delay):
+                if category == "Characters":
+                    raise RuntimeError("boom")
+                return [PageRef(pageid=2, title="Donut", ns=0)]
+
+        client = StubClient()
+        config = CrawlConfig(categories=("Characters", "Groups"), delay=0.0, max_pages=0, category_batch_size=50, refresh=False)
+
+        targets = load_category_members(client, config)
+
+        self.assertEqual([target.pageid for target in targets], [2])
+        self.assertEqual(targets[0].source_categories, ("Groups",))
+
     def test_fandom_url_helpers_use_slug_and_canonical_category_title(self) -> None:
         self.assertEqual(fandom_api_url("dungeon-crawler-carl"), "https://dungeon-crawler-carl.fandom.com/api.php")
         self.assertEqual(wiki_category_title("Characters"), "Category:Characters")

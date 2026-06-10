@@ -1,6 +1,5 @@
 Bugs:
 
- - identify logging and see if it have good coverage and if it could be improved or simplified
  - Some things have this: "This article or section is a stub. You can help by expanding it." that should be removed. in fact that paragraph should be skipped when looking at paragraphs to load.
  - If an entry only contains that, then skip it (but log that it was skipped in whatever log you have)
  - categories and subcategories can contain a loop. make sure we don't get caught in a loop
