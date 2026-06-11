@@ -120,13 +120,13 @@ After building `build/dictionary.mobi`, connect the Kindle to the Mac with USB. 
 Copy the dictionary into the Kindle dictionaries folder:
 
 ```sh
-cp build/dictionary.mobi "/Volumes/Kindle/documents/dictionaries/Dungeon_Crawler_Carl_Character_Dictionary.mobi"
+cp build/dictionary.mobi "/Volumes/Kindle/documents/dictionaries/Dungeon_Crawler_Carl_Dictionary.mobi"
 ```
 
 Verify the copy:
 
 ```sh
-cmp -s build/dictionary.mobi "/Volumes/Kindle/documents/dictionaries/Dungeon_Crawler_Carl_Character_Dictionary.mobi"
+cmp -s build/dictionary.mobi "/Volumes/Kindle/documents/dictionaries/Dungeon_Crawler_Carl_Dictionary.mobi"
 ```
 
 Safely eject the Kindle:
@@ -141,7 +141,7 @@ Unplug the Kindle and give it a moment to index the new file. Then check:
 Settings -> Language & Dictionaries -> Dictionaries
 ```
 
-Look for `Dungeon Crawler Carl Character Dictionary` under English. Select it as the English dictionary, then try looking up names such as `Carl`, `Donut`, or `Mordecai` inside a book.
+Look for `Dungeon Crawler Carl Dictionary` under English. Select it as the English dictionary, then try looking up names such as `Carl`, `Donut`, or `Mordecai` inside a book.
 
 ## Crawler Defaults
 

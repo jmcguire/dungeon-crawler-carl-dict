@@ -19,7 +19,7 @@ from pathlib import Path
 from dcdict.text import clean_wiki_text_artifacts
 
 
-DEFAULT_TITLE = "Dungeon Crawler Carl Character Dictionary"
+DEFAULT_TITLE = "Dungeon Crawler Carl Dictionary"
 DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors"
 LANGUAGE = "en-us"
 ALLOWED_INLINE_TAGS = {"b": "b", "strong": "b", "i": "i", "em": "i"}
