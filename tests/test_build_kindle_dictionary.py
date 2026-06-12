@@ -478,30 +478,31 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             (("Origin", "Dungeon"),),
         )
 
-    def test_build_aliases_adds_unambiguous_first_names_and_ascii_forms(self) -> None:
+    def test_build_aliases_does_not_add_unrelated_alias_forms(self) -> None:
         entries = [
-            Entry("Li Jun", "https://example/wiki/Li_Jun", "A crawler."),
-            Entry("Li Na", "https://example/wiki/Li_Na", "A crawler."),
-            Entry("Mordecai", "https://example/wiki/Mordecai", "A guide."),
+            Entry("Red Beret", "https://example/wiki/Red_Beret", "An item."),
+            Entry("Reaper Spider Minion Patch", "https://example/wiki/Reaper", "A patch."),
             Entry("José Sanchez", "https://example/wiki/Jose", "A crawler."),
+            Entry("Under_score", "https://example/wiki/Under_score", "A thing."),
         ]
 
         aliases = build_aliases(entries)
 
-        self.assertIn("Mordecai", aliases["Mordecai"])
-        self.assertIn("Jose Sanchez", aliases["José Sanchez"])
-        self.assertIn("José", aliases["José Sanchez"])
-        self.assertNotIn("Li", aliases["Li Jun"])
-        self.assertNotIn("Li", aliases["Li Na"])
+        self.assertEqual(aliases["Red Beret"], ["Red Beret"])
+        self.assertEqual(aliases["Reaper Spider Minion Patch"], ["Reaper Spider Minion Patch"])
+        self.assertEqual(aliases["José Sanchez"], ["José Sanchez"])
+        self.assertEqual(aliases["Under_score"], ["Under_score"])
 
     def test_build_aliases_adds_suffix_stripped_lookup_aliases(self) -> None:
         entries = [
+            Entry("1914 Box", "https://example/wiki/1914_Box", "A box."),
             Entry("Fireball Spell", "https://example/wiki/Fireball_Spell", "A spell."),
             Entry("Goblin Box", "https://example/wiki/Goblin_Box", "A box."),
         ]
 
         aliases = build_aliases(entries)
 
+        self.assertIn("1914", aliases["1914 Box"])
         self.assertIn("Fireball", aliases["Fireball Spell"])
         self.assertIn("Goblin", aliases["Goblin Box"])
 
@@ -515,7 +516,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
 
         self.assertNotIn("Fireball", aliases["Fireball Spell"])
 
-    def test_build_aliases_skips_case_insensitive_and_generated_collisions(self) -> None:
+    def test_build_aliases_skips_case_insensitive_canonical_and_generated_collisions(self) -> None:
         entries = [
             Entry("Fireball", "https://example/wiki/Fireball", "A thing."),
             Entry("FIREBALL Spell", "https://example/wiki/Fireball_Spell", "A spell."),
@@ -544,6 +545,9 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertNotIn("idx:iform", text)
             self.assertNotIn("<b>Fireball</b></idx:orth>", text)
             self.assertEqual(text.count('<idx:entry name="default"'), 2)
+            canonical_end = text.index("</idx:entry>")
+            alias_start = text.index('<idx:entry name="default"', canonical_end)
+            self.assertIn("<hr />", text[canonical_end:alias_start])
 
     def test_sanitize_inline_html_preserves_only_safe_emphasis(self) -> None:
         self.assertEqual(
@@ -613,7 +617,10 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertIn('<h1 class="letter-heading" id="letter-number">0-9</h1>', text)
             self.assertIn('<h1 class="letter-heading" id="letter-A">A</h1>', text)
             self.assertIn('<h1 class="letter-heading" id="letter-B">B</h1>', text)
-            self.assertEqual(text.count("<hr />"), 2)
+            self.assertEqual(
+                text.count("<hr />"),
+                text.count('<idx:entry name="default"') - 1,
+            )
             ET.parse(output)
 
     def test_write_xhtml_adds_spoiler_note_before_bulleted_definition(self) -> None:

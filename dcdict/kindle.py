@@ -528,59 +528,37 @@ def resolve_forwarding_entries(entries: list[Entry]) -> list[Entry]:
     return [resolve_entry(entry, set()) or entry for entry in entries]
 
 
-def suffix_stripped_alias(title: str, titles: set[str]) -> str | None:
+def suffix_stripped_alias(title: str, folded_titles: set[str]) -> str | None:
     """Return a lookup alias with a generic suffix removed, when safe."""
 
     for suffix in (" Spell", " Box"):
         if not title.endswith(suffix):
             continue
         alias = title[: -len(suffix)].strip()
-        if alias and alias not in titles:
+        if alias and alias.casefold() not in folded_titles:
             return alias
     return None
 
 
 def build_aliases(entries: list[Entry]) -> dict[str, list[str]]:
-    """Build unique direct lookup headwords for each entry."""
+    """Build unique direct aliases for titles ending in Box or Spell."""
 
-    titles = {entry.title for entry in entries}
-    folded_titles = {title.casefold() for title in titles}
-    first_names: dict[str, int] = {}
-    for title in titles:
-        first = title.split()[0]
-        if len(first) > 2:
-            first_names[first] = first_names.get(first, 0) + 1
-
-    candidates: dict[str, set[str]] = {}
-    for entry in entries:
-        forms = {entry.title.replace("_", " ")}
-        folded = ascii_fold(entry.title)
-        if folded and folded != entry.title:
-            forms.add(folded)
-        stripped = suffix_stripped_alias(entry.title, titles)
-        if stripped:
-            forms.add(stripped)
-        first = entry.title.split()[0]
-        if first_names.get(first) == 1:
-            forms.add(first)
-        candidates[entry.title] = {
-            form
-            for form in forms
-            if form == entry.title or form.casefold() not in folded_titles
-        }
-
+    folded_titles = {entry.title.casefold() for entry in entries}
+    candidates: dict[str, str] = {}
     owners: dict[str, set[str]] = {}
-    for title, forms in candidates.items():
-        for form in forms:
-            owners.setdefault(form.casefold(), set()).add(title)
+    for entry in entries:
+        alias = suffix_stripped_alias(entry.title, folded_titles)
+        if alias:
+            candidates[entry.title] = alias
+            owners.setdefault(alias.casefold(), set()).add(entry.title)
 
     aliases: dict[str, list[str]] = {}
     for entry in entries:
-        forms = {
-            entry.title,
-            *(form for form in candidates[entry.title] if owners[form.casefold()] == {entry.title}),
-        }
-        aliases[entry.title] = sorted(forms, key=lambda value: (value.casefold(), value))
+        forms = [entry.title]
+        alias = candidates.get(entry.title)
+        if alias and owners[alias.casefold()] == {entry.title}:
+            forms.append(alias)
+        aliases[entry.title] = forms
     return aliases
 
 
@@ -651,20 +629,22 @@ def entries_to_xhtml(
 ) -> str:
     """Render entries with alphabet page breaks and separators."""
 
-    parts: list[str] = []
+    rendered_entries: list[str] = []
     current_label: str | None = None
     for index, entry in enumerate(entries, 1):
         label = alphabet_section_label(entry.title)
+        section_heading = ""
         if label != current_label:
             current_label = label
-            parts.append(alphabet_section_to_xhtml(label))
+            section_heading = alphabet_section_to_xhtml(label)
         lookup_values = [entry.title, *(alias for alias in aliases[entry.title] if alias != entry.title)]
         for lookup_index, lookup_value in enumerate(lookup_values):
             entry_id = str(index) if lookup_index == 0 else f"{index}-alias-{lookup_index}"
-            parts.append(entry_to_xhtml(entry, lookup_value, entry_id, title_to_id))
-        if index < len(entries):
-            parts.append("      <hr />")
-    return "\n\n".join(parts)
+            rendered = entry_to_xhtml(entry, lookup_value, entry_id, title_to_id)
+            if lookup_index == 0 and section_heading:
+                rendered = f"{section_heading}\n\n{rendered}"
+            rendered_entries.append(rendered)
+    return "\n\n      <hr />\n\n".join(rendered_entries)
 
 
 def write_xhtml(entries: list[Entry], output: Path, title: str) -> None:
