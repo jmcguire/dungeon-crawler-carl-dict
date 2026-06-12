@@ -56,6 +56,12 @@ Fetch raw character page data into SQLite:
 python3 -m dcdict.fetch_characters --ignore-robots
 ```
 
+But if you want more categories, use:
+
+```sh
+» python3 -m dcdict.fetch_characters --category Characters --category Groups --category Spells --category Achievements --category Items --ignore-robots
+```
+
 For this DCC Fandom wiki, `robots.txt` disallows `/api.php` for crawlers. The script respects that by default and will stop unless you pass `--ignore-robots`. Use that override only for a user-triggered, polite fetch like this project: low rate, small scope, no indexing, no training, and no repeated hammering.
 
 Build Kindle dictionary source files:

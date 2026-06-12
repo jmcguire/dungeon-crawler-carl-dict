@@ -20,7 +20,7 @@ from dcdict.text import clean_wiki_text_artifacts
 
 
 DEFAULT_TITLE = "Dungeon Crawler Carl Dictionary"
-DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors"
+DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors, Code by Justin McGuire"
 LANGUAGE = "en-us"
 ALLOWED_INLINE_TAGS = {"b": "b", "strong": "b", "i": "i", "em": "i"}
 LINKABLE_INLINE_TAGS = {"a": "a", **ALLOWED_INLINE_TAGS}
@@ -710,9 +710,11 @@ def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier
       <dc:Title>{html.escape(title)}</dc:Title>
       <dc:Language>{LANGUAGE}</dc:Language>
       <dc:Creator>{html.escape(author)}</dc:Creator>
-      <dc:Publisher>Local build</dc:Publisher>
+      <dc:Publisher>The dungeon-crawler-carl-dict Project</dc:Publisher>
+      <dc:contributor opf:role="edt" opf:file-as="McGuire, Justin">Justin McGuire</dc:contributor>
       <dc:Subject>Dictionary</dc:Subject>
-      <dc:Description>Dungeon Crawler Carl lookup dictionary with entries including Carl, Donut, and Mordecai, generated from fetched wiki page summaries.</dc:Description>
+      <dc:Description>Dungeon Crawler Carl lookup dictionary, generated from the fandom wiki page summaries.</dc:Description>
+      <dc:Rights>Content is available under CC-BY-SA unless otherwise noted on it's linked wiki page.</dc:rights>
     </dc-metadata>
     <x-metadata>
       <DictionaryInLanguage>{LANGUAGE}</DictionaryInLanguage>
