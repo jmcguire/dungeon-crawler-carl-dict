@@ -218,6 +218,24 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             "<b>The 201st Security Group</b> is a cult of City Elves. They worship Apito, and they believe they must protect Skyfowl from flightless creatures.",
         )
 
+    def test_summary_replaces_truncated_intro_with_ai_description(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p>The <b>Flex in the City Achievement</b> is an achievement awarded to</p>
+          <h2><span class="mw-headline" id="AI_Description">AI Description</span></h2>
+          <blockquote>
+            <p><b>New Achievement! Flex in the City!</b></p>
+            <p>You killed a city boss with the participation of five or less crawlers. That is some serious badassery right there.</p>
+            <p>Reward: You already got a boss box.</p>
+          </blockquote>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Flex in the City Achievement", html),
+            "You killed a city boss with the participation of five or less crawlers. That is some serious badassery right there.",
+        )
+
     def test_summary_does_not_expand_from_story_section(self) -> None:
         html = """
         <div class="mw-parser-output">

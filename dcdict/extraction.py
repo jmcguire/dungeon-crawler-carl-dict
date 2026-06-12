@@ -417,7 +417,11 @@ def summary_from_html(title: str, html: str) -> str:
     summary = blocks[0] if blocks else ""
     if summary:
         ai_summary = ""
-        if is_stub_like_description(title, summary) or is_generic_small_description(title, summary):
+        if (
+            is_stub_like_description(title, summary)
+            or is_generic_small_description(title, summary)
+            or is_truncated_description(summary)
+        ):
             ai_summary = ai_description_paragraph_from_html(html)
         summary = ai_summary or expand_small_description(summary, blocks)
     if not summary:
