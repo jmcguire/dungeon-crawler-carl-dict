@@ -515,6 +515,20 @@ class BuildKindleDictionaryTests(unittest.TestCase):
 
         self.assertNotIn("Fireball", aliases["Fireball Spell"])
 
+    def test_build_aliases_skips_case_insensitive_and_generated_collisions(self) -> None:
+        entries = [
+            Entry("Fireball", "https://example/wiki/Fireball", "A thing."),
+            Entry("FIREBALL Spell", "https://example/wiki/Fireball_Spell", "A spell."),
+            Entry("Fire Box", "https://example/wiki/Fire_Box", "A box."),
+            Entry("Fire Spell", "https://example/wiki/Fire_Spell", "A spell."),
+        ]
+
+        aliases = build_aliases(entries)
+
+        self.assertNotIn("FIREBALL", aliases["FIREBALL Spell"])
+        self.assertNotIn("Fire", aliases["Fire Box"])
+        self.assertNotIn("Fire", aliases["Fire Spell"])
+
     def test_write_xhtml_keeps_displayed_title_unchanged_when_suffix_alias_exists(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             output = Path(tmp_dir) / "dictionary.xhtml"
@@ -525,9 +539,11 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             write_xhtml(entries, output, "Test Dictionary")
 
             text = output.read_text(encoding="utf-8")
-            self.assertIn('<idx:orth value="Fireball Spell"><b>Fireball Spell</b>', text)
-            self.assertIn('<idx:iform value="Fireball" />', text)
+            self.assertIn('<idx:orth value="Fireball Spell"><b>Fireball Spell</b></idx:orth>', text)
+            self.assertIn('<idx:orth value="Fireball"><b>Fireball Spell</b></idx:orth>', text)
+            self.assertNotIn("idx:iform", text)
             self.assertNotIn("<b>Fireball</b></idx:orth>", text)
+            self.assertEqual(text.count('<idx:entry name="default"'), 2)
 
     def test_sanitize_inline_html_preserves_only_safe_emphasis(self) -> None:
         self.assertEqual(
@@ -665,7 +681,8 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             text = output.read_text(encoding="utf-8")
             self.assertIn("<DictionaryInLanguage>en-us</DictionaryInLanguage>", text)
             self.assertIn("<DefaultLookupIndex>default</DefaultLookupIndex>", text)
-            self.assertIn("including Carl, Donut, and Mordecai", text)
+            self.assertIn("generated from the fandom wiki page summaries", text)
+            self.assertIn('xmlns:opf="http://www.idpf.org/2007/opf"', text)
             ET.parse(output)
 
     def test_build_dictionary_sources_writes_and_validates_outputs(self) -> None:

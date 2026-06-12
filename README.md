@@ -72,6 +72,8 @@ python3 -m dcdict.build_kindle_dictionary
 
 Definitions preserve safe inline emphasis from the wiki where possible: `<b>`/`<strong>` become bold text, and `<i>`/`<em>` become italic text. Other HTML is stripped or escaped during extraction/building.
 
+Lookup aliases such as `1914` for `1914 Box` and suffix-free spell names are emitted as direct `idx:orth` headwords that share the canonical entry's displayed title and definition. They are not represented as `idx:iform` inflections, because Kindle treats inflections differently from searchable dictionary headwords. Ambiguous aliases are omitted rather than routed to an arbitrary entry.
+
 Definitions are rendered as a short bullet list. If the source wiki page has a page-level spoiler warning banner, the generated entry places a spoiler note above the bullet so a reader has a chance to stop before reading the summary.  The warning is page-level; the wiki generally does not mark smaller spoiler phrases inside otherwise normal sentences.
 
 When present in the page sidebar's BIOGRAPHICAL INFO section, the dictionary adds a few conservative detail bullets below the summary: aliases, origin, race, and first scene. Noisy or more spoilery sidebar fields such as class, crawler number, crawler ID, and occupation are intentionally omitted.

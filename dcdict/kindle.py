@@ -541,18 +541,19 @@ def suffix_stripped_alias(title: str, titles: set[str]) -> str | None:
 
 
 def build_aliases(entries: list[Entry]) -> dict[str, list[str]]:
-    """Build conservative lookup aliases for each entry."""
+    """Build unique direct lookup headwords for each entry."""
 
     titles = {entry.title for entry in entries}
+    folded_titles = {title.casefold() for title in titles}
     first_names: dict[str, int] = {}
     for title in titles:
         first = title.split()[0]
         if len(first) > 2:
             first_names[first] = first_names.get(first, 0) + 1
 
-    aliases: dict[str, list[str]] = {}
+    candidates: dict[str, set[str]] = {}
     for entry in entries:
-        forms = {entry.title, entry.title.replace("_", " ")}
+        forms = {entry.title.replace("_", " ")}
         folded = ascii_fold(entry.title)
         if folded and folded != entry.title:
             forms.add(folded)
@@ -562,19 +563,37 @@ def build_aliases(entries: list[Entry]) -> dict[str, list[str]]:
         first = entry.title.split()[0]
         if first_names.get(first) == 1:
             forms.add(first)
-        aliases[entry.title] = sorted(forms, key=lambda value: (value.lower(), value))
+        candidates[entry.title] = {
+            form
+            for form in forms
+            if form == entry.title or form.casefold() not in folded_titles
+        }
+
+    owners: dict[str, set[str]] = {}
+    for title, forms in candidates.items():
+        for form in forms:
+            owners.setdefault(form.casefold(), set()).add(title)
+
+    aliases: dict[str, list[str]] = {}
+    for entry in entries:
+        forms = {
+            entry.title,
+            *(form for form in candidates[entry.title] if owners[form.casefold()] == {entry.title}),
+        }
+        aliases[entry.title] = sorted(forms, key=lambda value: (value.casefold(), value))
     return aliases
 
 
 def entry_to_xhtml(
     entry: Entry,
-    aliases: list[str],
-    entry_id: int,
+    lookup_value: str,
+    entry_id: str,
     title_to_id: dict[str, int] | None = None,
 ) -> str:
-    """Render one Kindle dictionary entry with idx lookup metadata."""
+    """Render one direct Kindle lookup headword for a dictionary entry."""
 
     title = html.escape(entry.title, quote=True)
+    lookup = html.escape(lookup_value, quote=True)
     definition = (
         link_definition_references(entry.definition, title_to_id, entry.title)
         if title_to_id
@@ -592,16 +611,9 @@ def entry_to_xhtml(
         for label, value in entry.details
     )
     details_block = f"\n{detail_items}" if detail_items else ""
-    infl = "\n".join(
-        f'          <idx:iform value="{html.escape(alias, quote=True)}" />'
-        for alias in aliases
-        if alias != entry.title
-    )
-    infl_block = f"\n        <idx:infl>\n{infl}\n        </idx:infl>" if infl else ""
     return f"""      <idx:entry name="default" scriptable="yes" spell="yes" id="entry-{entry_id}">
         <a id="entry-{entry_id}"></a>
-        <idx:orth value="{title}"><b>{title}</b>{infl_block}
-        </idx:orth>
+        <idx:orth value="{lookup}"><b>{title}</b></idx:orth>
         <idx:short>{spoiler_note}
         <ul class="definition">
           <li>{definition}</li>
@@ -646,7 +658,10 @@ def entries_to_xhtml(
         if label != current_label:
             current_label = label
             parts.append(alphabet_section_to_xhtml(label))
-        parts.append(entry_to_xhtml(entry, aliases[entry.title], index, title_to_id))
+        lookup_values = [entry.title, *(alias for alias in aliases[entry.title] if alias != entry.title)]
+        for lookup_index, lookup_value in enumerate(lookup_values):
+            entry_id = str(index) if lookup_index == 0 else f"{index}-alias-{lookup_index}"
+            parts.append(entry_to_xhtml(entry, lookup_value, entry_id, title_to_id))
         if index < len(entries):
             parts.append("      <hr />")
     return "\n\n".join(parts)
@@ -705,7 +720,8 @@ def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier
         f"""<?xml version="1.0" encoding="utf-8"?>
 <package unique-identifier="uid">
   <metadata>
-    <dc-metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc-metadata xmlns:dc="http://purl.org/dc/elements/1.1/"
+                 xmlns:opf="http://www.idpf.org/2007/opf">
       <dc:Identifier id="uid">{identifier}</dc:Identifier>
       <dc:Title>{html.escape(title)}</dc:Title>
       <dc:Language>{LANGUAGE}</dc:Language>
@@ -714,7 +730,7 @@ def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier
       <dc:contributor opf:role="edt" opf:file-as="McGuire, Justin">Justin McGuire</dc:contributor>
       <dc:Subject>Dictionary</dc:Subject>
       <dc:Description>Dungeon Crawler Carl lookup dictionary, generated from the fandom wiki page summaries.</dc:Description>
-      <dc:Rights>Content is available under CC-BY-SA unless otherwise noted on it's linked wiki page.</dc:rights>
+      <dc:Rights>Content is available under CC-BY-SA unless otherwise noted on its linked wiki page.</dc:Rights>
     </dc-metadata>
     <x-metadata>
       <DictionaryInLanguage>{LANGUAGE}</DictionaryInLanguage>

@@ -29,7 +29,7 @@ def synthetic_mobi() -> bytes:
     struct.pack_into(">I", first, 24, 2)
     struct.pack_into(">I", first, 28, 65001)
     struct.pack_into(">I", first, 36, 7)
-    struct.pack_into(">III", first, 40, 2, 2, 2)
+    struct.pack_into(">III", first, 40, 2, 0xFFFFFFFF, 2)
     encoded_title = TITLE.encode("utf-8")
     struct.pack_into(">II", first, 84, 668, len(encoded_title))
     first[668:668 + len(encoded_title)] = encoded_title
@@ -51,7 +51,8 @@ class MobiInspectionTests(unittest.TestCase):
         self.assertEqual(inspection.encoding, 65001)
         self.assertEqual(inspection.encryption, 0)
         self.assertEqual(inspection.title, TITLE)
-        self.assertIn("dictionary index pointers", inspection.checks)
+        self.assertEqual(inspection.inflection_index, 0xFFFFFFFF)
+        self.assertIn("direct dictionary index pointers", inspection.checks)
 
     def test_inspect_mobi_rejects_bad_signature(self) -> None:
         data = bytearray(synthetic_mobi())

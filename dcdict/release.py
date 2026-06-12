@@ -195,7 +195,6 @@ def validate_compilation(compilation: CompilationResult) -> None:
         "MOBI v7 output": "The file format version is V7",
         "default dictionary index": 'The default lookup index is: "default"',
         "orthographic index build": "Index name: default",
-        "inflection index build": "Building inflexions into record",
         "naming index build": "Building naming index into record",
     }
     missing = [name for name, message in required_messages.items() if message not in log]

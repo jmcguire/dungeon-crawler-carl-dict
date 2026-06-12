@@ -158,14 +158,13 @@ def inspect_mobi(
 
     indexes = {
         "orthographic": orthographic_index,
-        "inflection": inflection_index,
         "naming": naming_index,
     }
     for name, index in indexes.items():
         if index == UNUSED_INDEX or index >= record_count:
             errors.append(f"{name} dictionary index is missing or invalid ({index})")
     if not any("dictionary index" in error for error in errors):
-        checks.append("dictionary index pointers")
+        checks.append("direct dictionary index pointers")
 
     required_bytes = (b"INDX", b"default") + tuple(word.encode("utf-8") for word in representative_headwords)
     missing = [value.decode("utf-8") for value in required_bytes if value not in data]
