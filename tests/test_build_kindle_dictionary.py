@@ -665,6 +665,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             text = output.read_text(encoding="utf-8")
             self.assertIn("<DictionaryInLanguage>en-us</DictionaryInLanguage>", text)
             self.assertIn("<DefaultLookupIndex>default</DefaultLookupIndex>", text)
+            self.assertIn("including Carl, Donut, and Mordecai", text)
             ET.parse(output)
 
     def test_build_dictionary_sources_writes_and_validates_outputs(self) -> None:
@@ -692,7 +693,11 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                 textwrap.dedent(
                     f"""\
                     #!{sys.executable}
+                    import sys
                     from pathlib import Path
+                    assert "-dont_append_source" in sys.argv
+                    print("Amazon kindlegen(MAC OSX) V2.9 build 0000")
+                    print("Warning(test): expected warning")
                     Path("dictionary.mobi").write_bytes(b"MOBI")
                     raise SystemExit(1)
                     """
@@ -702,9 +707,14 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             fake_kindlegen.chmod(fake_kindlegen.stat().st_mode | stat.S_IXUSR)
 
             with mock.patch.dict(os.environ, {"PATH": str(tmp_path)}):
-                mobi_path = compile_with_kindlegen(opf_path)
+                compilation = compile_with_kindlegen(opf_path, dont_append_source=True)
 
-        self.assertEqual(mobi_path, opf_path.with_suffix(".mobi"))
+        self.assertIsNotNone(compilation)
+        assert compilation is not None
+        self.assertEqual(compilation.output_path, opf_path.with_suffix(".mobi"))
+        self.assertEqual(compilation.returncode, 1)
+        self.assertEqual(compilation.compiler_version, "2.9")
+        self.assertEqual(compilation.warnings, ("Warning(test): expected warning",))
 
     def test_compile_with_kindlegen_returns_none_when_not_available(self) -> None:
         with TemporaryDirectory() as tmp_dir:

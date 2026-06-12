@@ -57,9 +57,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"entries: {result.entry_count}")
 
     if args.compile:
-        mobi_path = compile_with_kindlegen(result.opf_path)
-        if mobi_path:
-            print(f"compiled {mobi_path}")
+        compilation = compile_with_kindlegen(result.opf_path)
+        if compilation:
+            print(compilation.compiler_log, end="")
+            print(f"compiled {compilation.output_path}")
         else:
             print("kindlegen was not found; source files are ready, but no .mobi was produced")
 

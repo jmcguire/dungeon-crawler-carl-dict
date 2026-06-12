@@ -109,6 +109,42 @@ python3 -m unittest discover -s tests
 
 The tests cover the HTML summary extraction rules, infobox fallback summaries, SQLite entry loading, Kindle XHTML/OPF generation, alias generation, and the Kindle Previewer/`kindlegen` compile wrapper.
 
+## Create A Release
+
+The release command builds a complete, tested bundle from the current stored database:
+
+```sh
+python3 -m dcdict.release --version 1.0.0
+```
+
+The command requires a clean Git worktree, `data/characters.sqlite`, and the `kindlegen` binary included with Kindle Previewer. It makes a SQLite snapshot, re-extracts descriptions from the snapshot's stored HTML without crawling the wiki, runs the complete test suite and entry audit, builds the MOBI without appended source files, and performs binary smoke tests on the finished dictionary.
+
+Successful output is written atomically to `dist/v1.0.0/`:
+
+- `Dungeon-Crawler-Carl-Dictionary.mobi`
+- `Dungeon-Crawler-Carl-Dictionary.zip`
+- `SHA256SUMS.txt`
+- `release-manifest.json`
+
+The ZIP includes sideloading instructions and the project's license and attribution files. The manifest records the commit, database hash, entry count, compiler details, artifact hashes, and completed MOBI checks. Existing version directories are protected; pass `--overwrite` only when intentionally rebuilding the same local version.
+
+To publish the same assets as a tagged GitHub Release, install and authenticate the [GitHub CLI](https://cli.github.com/):
+
+```sh
+brew install gh
+gh auth login
+python3 -m dcdict.release --version 1.0.0 --publish
+```
+
+Publishing additionally requires `HEAD` to match `origin/main`, and refuses to replace an existing tag or release. After upload, the command downloads every asset again and verifies its SHA-256 hash before fetching the new tag locally.
+
+These permanent URLs always point to the assets from the newest GitHub Release:
+
+- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.mobi>
+- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.zip>
+- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/SHA256SUMS.txt>
+- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/release-manifest.json>
+
 ## Sideload To Kindle
 
 After building `build/dictionary.mobi`, connect the Kindle to the Mac with USB. It should mount under `/Volumes`, usually as:

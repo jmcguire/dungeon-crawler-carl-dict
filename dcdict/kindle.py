@@ -56,6 +56,17 @@ class BuildResult:
     entry_count: int
 
 
+@dataclass(frozen=True)
+class CompilationResult:
+    """Structured result from a Kindle compiler invocation."""
+
+    output_path: Path
+    compiler_log: str
+    warnings: tuple[str, ...]
+    compiler_version: str | None
+    returncode: int
+
+
 def normalize_text(text: str) -> str:
     """Normalize Unicode and collapse whitespace for Kindle definitions."""
 
@@ -701,7 +712,7 @@ def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier
       <dc:Creator>{html.escape(author)}</dc:Creator>
       <dc:Publisher>Local build</dc:Publisher>
       <dc:Subject>Dictionary</dc:Subject>
-      <dc:Description>Character lookup dictionary generated from fetched wiki page summaries.</dc:Description>
+      <dc:Description>Dungeon Crawler Carl lookup dictionary with entries including Carl, Donut, and Mordecai, generated from fetched wiki page summaries.</dc:Description>
     </dc-metadata>
     <x-metadata>
       <DictionaryInLanguage>{LANGUAGE}</DictionaryInLanguage>
@@ -749,21 +760,45 @@ def build_dictionary_sources(
     return BuildResult(xhtml_path=xhtml_path, opf_path=opf_path, entry_count=len(entries))
 
 
-def compile_with_kindlegen(opf_path: Path) -> Path | None:
+def compile_with_kindlegen(
+    opf_path: Path,
+    *,
+    dont_append_source: bool = False,
+) -> CompilationResult | None:
     """Compile OPF/XHTML sources into MOBI when kindlegen is available."""
 
     kindlegen = find_kindlegen()
     if not kindlegen:
         return None
-    result = subprocess.run(
-        [kindlegen, opf_path.name, "-verbose"],
-        cwd=opf_path.parent,
-    )
+    command = [kindlegen, opf_path.name, "-verbose"]
+    if dont_append_source:
+        command.append("-dont_append_source")
     mobi_path = opf_path.with_suffix(".mobi")
+    mobi_path.unlink(missing_ok=True)
+    result = subprocess.run(
+        command,
+        cwd=opf_path.parent,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
     # Legacy kindlegen exits non-zero when it builds with warnings, including
     # expected dictionary warnings. Treat the output file as the success signal.
     if mobi_path.exists():
-        return mobi_path
+        log = result.stdout or ""
+        warnings = tuple(
+            line.strip()
+            for line in log.splitlines()
+            if line.strip().lower().startswith("warning")
+        )
+        version_match = re.search(r"kindlegen[^\n]*?\bV([0-9.]+)", log, re.I)
+        return CompilationResult(
+            output_path=mobi_path,
+            compiler_log=log,
+            warnings=warnings,
+            compiler_version=version_match.group(1) if version_match else None,
+            returncode=result.returncode,
+        )
     result.check_returncode()
     return None
 
