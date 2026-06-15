@@ -2,13 +2,16 @@
 
 ## Bugs:
 
- - Categories and Subcategories can technically contain a loop. Make sure we don't get caught in a loop. (DCC doesn't have any loops, but it's a good piece of defensive coding.)
+ - Categories and Subcategories can technically contain a loop, via MediaWiki rules. Make sure we don't get caught in a loop. (DCC doesn't have any loops, but it's a good piece of defensive coding.)
  - one entry, "Torch (Item)", get rid of the (Item).
  - fetch_characters should be renamed fetch_entries
  - can we fix these:
       - Krakaren
       - Krakaren Clone (Fourth Floor)
       - Krakaren Clone (Second Floor)
+ - make sure the list of "entries" makes sense, i'm worried the script is stripping the last word incorrectly at times.
+     - `grep idx:orth build/dictionary.xhtml | perl -nE'/value="([^"]+)"/; say $1'`
+     - single quotes are all &#x27;, is that good for kindle lookup?
 
 ## Todo:
 
@@ -21,19 +24,19 @@
     </idx:infl>
 
   - change the identifier in the XML files to a dictionary name + version
-  - make sure the list of "entries" makes sense, i'm worried the script is stripping the last word incorrectly at times.
-      - `grep idx:orth build/dictionary.xhtml | perl -nE'/value="([^"]+)"/; say $1'`
-      - single quotes are all &#x27;, is that good for kindle lookup?
   - should we also strip " Achievement" off the end? also " Potion"? and the prefix "Potion of "
-  - quality of life update: if there are multiple entries for one word, we should be able to show multiple entries. (Earth, Earth Box)
+  - if there are multiple entries for one word, we should be able to show multiple entries. (Earth, Earth Box)
   - for people with clear firstname lastname (only humans, i think), also let the search by just firstname or just lastname?
+  - improve the release note on the tag. it should be very non-expert user friendly. also should it only have the one mobi file? maybe.
+  - dicts for other platforms? look at https://github.com/ciscoriordan/kindling , which really I should internalize anyways, if it works as well as it claims to I should figure out how it formats that XHTML file
+  - at some point i should test this against a different fandom. there are a lot of DCC wording and assumptions built into this, but I thimnk the core is good. it should work out of the box and produce something that is good-but-not-refined, and have command-line options to produce something refined.
 
 ## Missing:
 
  - Shambling Berserker
  - The Final War (spell)
 
-## Missing  aliases
+## Missing aliases
 
  - Grimaldi exists, but not Ringmaster Grimaldi, https://dungeon-crawler-carl.fandom.com/wiki/Grimaldi, the page title is Ringmaster Grimaldi, but the URL is Grimaldi. There's a redirect in there. We need to capture both. The whole thing is weird.
  - Valtay (Valtay Corporation exists)
