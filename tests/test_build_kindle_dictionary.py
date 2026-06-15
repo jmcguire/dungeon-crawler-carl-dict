@@ -331,7 +331,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             )
             conn.commit()
 
-            with self.assertLogs("dcdict.kindle", level="INFO") as logs:
+            with self.assertLogs("dcdict.entries", level="INFO") as logs:
                 entries = load_entries(db_path, min_definition_length=8)
 
             self.assertEqual([entry.title for entry in entries], ["Carl"])

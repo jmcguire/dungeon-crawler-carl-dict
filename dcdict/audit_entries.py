@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from dcdict.kindle import (
+from dcdict.entries import (
     Entry,
     forwarding_target_from_definition,
     load_entries,

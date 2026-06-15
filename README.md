@@ -1,12 +1,12 @@
-# Dungeon Crawler Carl Kindle Dictionary
+# Dungeon Crawler Carl E-reader Dictionaries
 
-This project builds a Kindle lookup dictionary from character pages on a MediaWiki/Fandom wiki.
+This project builds Kindle and StarDict/KOReader lookup dictionaries from pages on a MediaWiki/Fandom wiki.
 
 The default target is the Dungeon Crawler Carl Fandom character category. The crawler and converter are intentionally generic enough to point at another Fandom wiki and category later.
 
 ## Requirements
 
-- macOS
+- macOS for Kindle MOBI compilation; StarDict builds work anywhere Python does
 - Python 3.11 or newer recommended
 - No Python package dependencies
 
@@ -88,6 +88,14 @@ For example, if the `Carl` definition mentions `Donut`, the generated XHTML link
 
 Kindle caveat: these links work when opening the dictionary directly as a book, but may not work inside the Kindle lookup popup/card UI. That appears to be a Kindle interface limitation rather than a dictionary build error.
 
+Build the StarDict dictionary used by KOReader:
+
+```sh
+python3 -m dcdict.build_stardict_dictionary --link-entries
+```
+
+StarDict is a small group of files rather than one native dictionary file. The builder writes the `.ifo`, `.idx`, `.dict`, `.syn`, and `.css` files together under `build/stardict/`. Its `.syn` file provides the same suffix aliases as the Kindle edition. With `--link-entries`, recognized entry names use KOReader's supported `bword://` links.
+
 Try to compile with `kindlegen` if it is installed:
 
 ```sh
@@ -106,6 +114,7 @@ Outputs:
 - `build/dictionary.xhtml`: Kindle dictionary content source
 - `build/dictionary.opf`: Kindle package metadata
 - `build/dictionary.mobi`: compiled Kindle file, only when `kindlegen` is available
+- `build/stardict/`: StarDict files for KOReader
 
 ## Tests
 
@@ -115,33 +124,36 @@ Run the focused standard-library test suite:
 python3 -m unittest discover -s tests
 ```
 
-The tests cover the HTML summary extraction rules, infobox fallback summaries, SQLite entry loading, Kindle XHTML/OPF generation, alias generation, and the Kindle Previewer/`kindlegen` compile wrapper.
+The tests cover extraction, SQLite loading, Kindle XHTML/OPF generation, StarDict binary generation and inspection, aliases, release packaging, and the Kindle Previewer/`kindlegen` compile wrapper.
 
 ## Create A Release
 
 The release command builds a complete, tested bundle from the current stored database:
 
 ```sh
-python3 -m dcdict.release --version 1.0.0
+python3 -m dcdict.release --version 1.1.0 --link-entries
 ```
 
-The command requires a clean Git worktree, `data/characters.sqlite`, and the `kindlegen` binary included with Kindle Previewer. It makes a SQLite snapshot, re-extracts descriptions from the snapshot's stored HTML without crawling the wiki, runs the complete test suite and entry audit, builds the MOBI without appended source files, and performs binary smoke tests on the finished dictionary.
+By default the command builds both Kindle and StarDict editions. It requires a clean Git worktree and `data/characters.sqlite`; Kindle builds additionally require the `kindlegen` binary included with Kindle Previewer. It makes a SQLite snapshot, re-extracts descriptions from stored HTML without crawling, runs the complete test suite and entry audit, and performs binary smoke tests on both finished dictionaries.
+
+For a faster local format-specific build, use `--format kindle` or `--format stardict`. StarDict-only builds do not require Kindle Previewer. Published releases must use the default `--format all` so every tagged release remains complete.
 
 Successful output is written atomically to `dist/v1.0.0/`:
 
-- `Dungeon-Crawler-Carl-Dictionary.mobi`
-- `Dungeon-Crawler-Carl-Dictionary.zip`
+- `Dungeon-Crawler-Carl-Dictionary.mobi` (Kindle)
+- `Dungeon-Crawler-Carl-Dictionary.zip` (Kindle bundle)
+- `Dungeon-Crawler-Carl-Dictionary-StarDict.zip` (KOReader bundle)
 - `SHA256SUMS.txt`
 - `release-manifest.json`
 
-The ZIP includes sideloading instructions and the project's license and attribution files. The manifest records the commit, database hash, entry count, compiler details, artifact hashes, and completed MOBI checks. Existing version directories are protected; pass `--overwrite` only when intentionally rebuilding the same local version.
+Each ZIP includes format-specific installation instructions and the project's license and attribution files. The schema 2 manifest records shared provenance plus separate Kindle and StarDict build and smoke-test results. Existing version directories are protected; pass `--overwrite` only when intentionally rebuilding the same local version.
 
 To publish the same assets as a tagged GitHub Release, install and authenticate the [GitHub CLI](https://cli.github.com/):
 
 ```sh
 brew install gh
 gh auth login
-python3 -m dcdict.release --version 1.0.0 --publish
+python3 -m dcdict.release --version 1.1.0 --link-entries --publish
 ```
 
 Publishing additionally requires `HEAD` to match `origin/main`, and refuses to replace an existing tag or release. After upload, the command downloads every asset again and verifies its SHA-256 hash before fetching the new tag locally.
@@ -150,6 +162,7 @@ These permanent URLs always point to the assets from the newest GitHub Release:
 
 - <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.mobi>
 - <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.zip>
+- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-StarDict.zip>
 - <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/SHA256SUMS.txt>
 - <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/release-manifest.json>
 
@@ -186,6 +199,16 @@ Settings -> Language & Dictionaries -> Dictionaries
 ```
 
 Look for `Dungeon Crawler Carl Dictionary` under English. Select it as the English dictionary, then try looking up names such as `Carl`, `Donut`, or `Mordecai` inside a book.
+
+## Install In KOReader
+
+Download and extract `Dungeon-Crawler-Carl-Dictionary-StarDict.zip`. Keep the extracted `Dungeon-Crawler-Carl-Dictionary` folder and all of its files together, then copy that folder into:
+
+```text
+koreader/data/dict/
+```
+
+Restart KOReader. If the dictionary is not enabled automatically, open KOReader's dictionary settings and enable `Dungeon Crawler Carl Dictionary`. Look up `Carl`, `Donut`, and `Mordecai`; `1914` and `Fire Fingers` are useful checks for Box and Spell aliases. With the linked release build, tapping a referenced dictionary entry should open that entry inside KOReader.
 
 ## Crawler Defaults
 

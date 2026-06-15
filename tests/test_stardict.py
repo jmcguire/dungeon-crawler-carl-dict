@@ -1,0 +1,101 @@
+import unittest
+from functools import cmp_to_key
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from dcdict.build_stardict_dictionary import parse_args
+from dcdict.entries import Entry
+from dcdict.stardict import (
+    BASE_NAME,
+    StarDictValidationError,
+    build_stardict,
+    inspect_stardict,
+    stardict_compare,
+)
+
+
+class StarDictTests(unittest.TestCase):
+    def sample_entries(self) -> list[Entry]:
+        return [
+            Entry(
+                "1914 Box",
+                "https://example/1914",
+                "A <b>loot box</b> awarded to Carl.",
+                "This article contains spoilers for Book 4.",
+                (("Source", "Achievement reward"),),
+            ),
+            Entry("Carl", "https://example/Carl", "Carl travels with <i>Donut</i>."),
+            Entry("Donut", "https://example/Donut", "Donut is a crawler with Carl."),
+            Entry("Fire Fingers Spell", "https://example/Fire", "A spell used by Mordecai."),
+            Entry("Mordecai", "https://example/Mordecai", "Mordecai is an experienced guide."),
+        ]
+
+    def test_stardict_comparator_matches_ascii_case_insensitive_then_bytes(self) -> None:
+        words = ["beta", "Alpha", "alpha", "Éclair", "Zulu"]
+        self.assertEqual(
+            sorted(words, key=cmp_to_key(stardict_compare)),
+            ["Alpha", "alpha", "beta", "Zulu", "Éclair"],
+        )
+
+    def test_build_and_inspect_html_dictionary_with_aliases_and_links(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            result = build_stardict(
+                self.sample_entries(),
+                Path(tmp_dir),
+                "Test Dictionary",
+                "Test Author",
+                link_entries=True,
+            )
+            inspection = inspect_stardict(
+                result.ifo_path,
+                expected_title="Test Dictionary",
+                required_headwords=("Carl", "Donut", "Mordecai", "1914", "Fire Fingers"),
+                require_links=True,
+                check_sdcv=False,
+            )
+
+            self.assertEqual(result.entry_count, 5)
+            self.assertEqual(result.alias_count, 2)
+            self.assertEqual(inspection.canonical_word("1914"), "1914 Box")
+            self.assertEqual(inspection.canonical_word("Fire Fingers"), "Fire Fingers Spell")
+            self.assertIn("<b>loot box</b>", inspection.lookup("1914") or "")
+            self.assertIn("<i><a", inspection.lookup("Carl") or "")
+            self.assertIn('href="bword://Donut"', inspection.lookup("Carl") or "")
+            self.assertIn("Spoiler note", inspection.lookup("1914") or "")
+            self.assertIn("Achievement reward", inspection.lookup("1914") or "")
+            self.assertNotIn("idx:", result.dict_path.read_text(encoding="utf-8"))
+
+    def test_synonyms_point_to_canonical_sorted_index_entries(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            result = build_stardict(
+                self.sample_entries(), Path(tmp_dir), "Test Dictionary", "Test Author"
+            )
+            inspection = inspect_stardict(result.ifo_path, check_sdcv=False)
+            canonical = {syn.word: inspection.entries[syn.original_index].word for syn in inspection.synonyms}
+            self.assertEqual(canonical, {"1914": "1914 Box", "Fire Fingers": "Fire Fingers Spell"})
+
+    def test_inspector_rejects_bad_index_metadata_and_offsets(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            result = build_stardict(
+                self.sample_entries(), Path(tmp_dir), "Test Dictionary", "Test Author"
+            )
+            text = result.ifo_path.read_text(encoding="utf-8")
+            result.ifo_path.write_text(text.replace("idxfilesize=", "idxfilesize=9"), encoding="utf-8")
+            with self.assertRaisesRegex(StarDictValidationError, "idxfilesize"):
+                inspect_stardict(result.ifo_path, check_sdcv=False)
+
+    def test_builder_rejects_oversized_headwords(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            entries = [Entry("A" * 256, "https://example", "A useful definition.")]
+            with self.assertRaisesRegex(StarDictValidationError, "headword"):
+                build_stardict(entries, Path(tmp_dir), "Test", "Author")
+
+    def test_cli_defaults_and_link_flag(self) -> None:
+        args = parse_args(["--link-entries"])
+        self.assertEqual(args.output_dir, Path("build/stardict"))
+        self.assertTrue(args.link_entries)
+        self.assertEqual(BASE_NAME, "Dungeon-Crawler-Carl-Dictionary")
+
+
+if __name__ == "__main__":
+    unittest.main()

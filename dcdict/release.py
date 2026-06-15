@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from dcdict.audit_entries import AuditFinding, audit_entries
+from dcdict.entries import load_entries
 from dcdict.fetch_characters import reextract_first_paragraphs
 from dcdict.kindle import (
     DEFAULT_AUTHOR,
@@ -28,17 +29,31 @@ from dcdict.kindle import (
     build_dictionary_sources,
     compile_with_kindlegen,
     find_kindlegen,
-    load_entries,
 )
-from dcdict.mobi import MobiInspection, MobiValidationError, inspect_mobi
+from dcdict.mobi import MobiValidationError, inspect_mobi
+from dcdict.stardict import (
+    BASE_NAME as STARDICT_BASE_NAME,
+    StarDictBuildResult,
+    StarDictValidationError,
+    build_stardict,
+    inspect_stardict,
+)
 
 
 LOGGER = logging.getLogger(__name__)
 MOBI_NAME = "Dungeon-Crawler-Carl-Dictionary.mobi"
 ZIP_NAME = "Dungeon-Crawler-Carl-Dictionary.zip"
+STARDICT_ZIP_NAME = "Dungeon-Crawler-Carl-Dictionary-StarDict.zip"
 CHECKSUMS_NAME = "SHA256SUMS.txt"
 MANIFEST_NAME = "release-manifest.json"
-RELEASE_ASSET_NAMES = (MOBI_NAME, ZIP_NAME, CHECKSUMS_NAME, MANIFEST_NAME)
+ALL_FORMATS = frozenset({"kindle", "stardict"})
+RELEASE_ASSET_NAMES = (
+    MOBI_NAME,
+    ZIP_NAME,
+    STARDICT_ZIP_NAME,
+    CHECKSUMS_NAME,
+    MANIFEST_NAME,
+)
 FATAL_AUDIT_KINDS = frozenset({"gallery-credit", "maintenance-text", "source-artifact", "truncated"})
 WARNING_AUDIT_KINDS = frozenset({"short", "unresolved-forward"})
 SEMVER_PATTERN = re.compile(
@@ -125,7 +140,12 @@ def repository_root(cwd: Path, runner: CommandRunner = run_command) -> Path:
     return Path(git_output(cwd, "rev-parse", "--show-toplevel", runner=runner))
 
 
-def preflight_local(repo_root: Path, input_db: Path, runner: CommandRunner = run_command) -> str:
+def preflight_local(
+    repo_root: Path,
+    input_db: Path,
+    runner: CommandRunner = run_command,
+    formats: frozenset[str] = ALL_FORMATS,
+) -> str:
     """Verify local inputs and return the exact commit being packaged."""
 
     if git_output(repo_root, "status", "--porcelain", runner=runner):
@@ -141,7 +161,7 @@ def preflight_local(repo_root: Path, input_db: Path, runner: CommandRunner = run
     finally:
         if conn is not None:
             conn.close()
-    if not find_kindlegen():
+    if "kindle" in formats and not find_kindlegen():
         raise ReleaseError("kindlegen was not found; install Kindle Previewer 3 first")
     return git_output(repo_root, "rev-parse", "HEAD", runner=runner)
 
@@ -215,7 +235,7 @@ def sha256_file(path: Path) -> str:
 
 
 def installation_text() -> str:
-    """Return concise sideloading instructions bundled with releases."""
+    """Return concise Kindle sideloading instructions."""
 
     return f"""Dungeon Crawler Carl Dictionary - Installation
 
@@ -231,13 +251,48 @@ and is distributed under CC BY-SA 3.0. See CONTENT_LICENSE and NOTICE.
 
 
 def write_release_zip(zip_path: Path, mobi_path: Path, repo_root: Path) -> None:
-    """Create the user-facing release ZIP with licenses and instructions."""
+    """Create the Kindle release ZIP with licenses and instructions."""
 
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.write(mobi_path, MOBI_NAME)
         archive.writestr("INSTALL.txt", installation_text())
         for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
             archive.write(repo_root / name, name)
+
+
+def koreader_installation_text() -> str:
+    """Return concise KOReader StarDict installation instructions."""
+
+    return f"""Dungeon Crawler Carl Dictionary - KOReader Installation
+
+1. Extract the {STARDICT_ZIP_NAME} download.
+2. Keep the extracted {STARDICT_BASE_NAME} folder and all files inside it together.
+3. Connect the reader to your computer and copy that folder into:
+   koreader/data/dict/
+4. Restart KOReader. If needed, open Dictionary settings and enable
+   Dungeon Crawler Carl Dictionary.
+5. Look up Carl, Donut, or Mordecai. The aliases 1914 and Fire Fingers are
+   useful checks for Box and Spell lookup aliases.
+
+The dictionary content is derived from Dungeon Crawler Carl Wiki contributors
+and is distributed under CC BY-SA 3.0. See CONTENT_LICENSE and NOTICE.
+"""
+
+
+def write_stardict_zip(
+    zip_path: Path,
+    build: StarDictBuildResult,
+    repo_root: Path,
+) -> None:
+    """Create one installable KOReader StarDict ZIP."""
+
+    folder = STARDICT_BASE_NAME
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in build.files:
+            archive.write(path, f"{folder}/{path.name}")
+        archive.writestr(f"{folder}/INSTALL-KOREADER.txt", koreader_installation_text())
+        for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+            archive.write(repo_root / name, f"{folder}/{name}")
 
 
 def write_manifest(
@@ -247,26 +302,20 @@ def write_manifest(
     commit_sha: str,
     entry_count: int,
     database_hash: str,
-    compilation: CompilationResult,
-    inspection: MobiInspection,
+    formats: dict[str, object],
     artifact_hashes: dict[str, str],
 ) -> None:
     """Write machine-readable provenance and smoke-test results."""
 
     manifest = {
+        "schema_version": 2,
         "version": version.value,
         "tag": version.tag,
         "commit_sha": commit_sha,
         "entry_count": entry_count,
         "database_sha256": database_hash,
-        "compiler": {
-            "name": "kindlegen",
-            "version": compilation.compiler_version,
-            "returncode": compilation.returncode,
-            "warnings": list(compilation.warnings),
-        },
         "built_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "smoke_tests": inspection.manifest_data(),
+        "formats": formats,
         "artifact_sha256": artifact_hashes,
     }
     path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -304,10 +353,14 @@ def package_release(
     dist_root: Path,
     commit_sha: str,
     overwrite: bool,
+    formats: frozenset[str] = ALL_FORMATS,
+    link_entries: bool = False,
     runner: CommandRunner = run_command,
 ) -> Path:
-    """Build and atomically install a verified local release directory."""
+    """Build and atomically install a verified multi-format release directory."""
 
+    if not formats or not formats <= ALL_FORMATS:
+        raise ReleaseError(f"unsupported release formats: {sorted(formats)}")
     final_dir = dist_root / version.tag
     if final_dir.exists() and not overwrite:
         raise ReleaseError(f"release directory already exists: {final_dir}; use --overwrite to replace it")
@@ -339,38 +392,78 @@ def package_release(
             raise ReleaseError(f"entry audit found release-blocking issues:\n{detail}")
         LOGGER.info("entry audit passed with %s warning(s)", len(warning_findings))
 
-        build = build_dictionary_sources(entries, work_dir, DEFAULT_TITLE, DEFAULT_AUTHOR)
-        compilation = compile_with_kindlegen(build.opf_path, dont_append_source=True)
-        if compilation is None:
-            raise ReleaseError("kindlegen disappeared after preflight")
-        (work_dir / "kindlegen.log").write_text(compilation.compiler_log, encoding="utf-8")
-        validate_compilation(compilation)
+        payload_paths: list[Path] = []
+        format_manifest: dict[str, object] = {}
+        if "kindle" in formats:
+            kindle_dir = work_dir / "kindle"
+            kindle_build = build_dictionary_sources(
+                entries,
+                kindle_dir,
+                DEFAULT_TITLE,
+                DEFAULT_AUTHOR,
+                link_entries=link_entries,
+            )
+            compilation = compile_with_kindlegen(kindle_build.opf_path, dont_append_source=True)
+            if compilation is None:
+                raise ReleaseError("kindlegen disappeared after preflight")
+            (kindle_dir / "kindlegen.log").write_text(compilation.compiler_log, encoding="utf-8")
+            validate_compilation(compilation)
 
-        mobi_path = asset_dir / MOBI_NAME
-        shutil.copy2(compilation.output_path, mobi_path)
-        inspection = inspect_mobi(mobi_path, expected_title=DEFAULT_TITLE)
-        LOGGER.info("MOBI smoke tests passed (%s checks)", len(inspection.checks))
+            mobi_path = asset_dir / MOBI_NAME
+            shutil.copy2(compilation.output_path, mobi_path)
+            mobi_inspection = inspect_mobi(mobi_path, expected_title=DEFAULT_TITLE)
+            LOGGER.info("MOBI smoke tests passed (%s checks)", len(mobi_inspection.checks))
+            kindle_zip_path = asset_dir / ZIP_NAME
+            write_release_zip(kindle_zip_path, mobi_path, repo_root)
+            payload_paths.extend((mobi_path, kindle_zip_path))
+            format_manifest["kindle"] = {
+                "assets": [MOBI_NAME, ZIP_NAME],
+                "compiler": {
+                    "name": "kindlegen",
+                    "version": compilation.compiler_version,
+                    "returncode": compilation.returncode,
+                    "warnings": list(compilation.warnings),
+                },
+                "smoke_tests": mobi_inspection.manifest_data(),
+            }
 
-        zip_path = asset_dir / ZIP_NAME
-        write_release_zip(zip_path, mobi_path, repo_root)
+        if "stardict" in formats:
+            stardict_build = build_stardict(
+                entries,
+                work_dir / "stardict",
+                DEFAULT_TITLE,
+                DEFAULT_AUTHOR,
+                link_entries=link_entries,
+            )
+            stardict_inspection = inspect_stardict(
+                stardict_build.ifo_path,
+                expected_title=DEFAULT_TITLE,
+                required_headwords=("Carl", "Donut", "Mordecai", "1914", "Fire Fingers"),
+                require_links=link_entries,
+            )
+            LOGGER.info("StarDict smoke tests passed (%s checks)", len(stardict_inspection.checks))
+            stardict_zip_path = asset_dir / STARDICT_ZIP_NAME
+            write_stardict_zip(stardict_zip_path, stardict_build, repo_root)
+            payload_paths.append(stardict_zip_path)
+            format_manifest["stardict"] = {
+                "assets": [STARDICT_ZIP_NAME],
+                "generator": "Python standard library",
+                "smoke_tests": stardict_inspection.manifest_data(),
+            }
+
         manifest_path = asset_dir / MANIFEST_NAME
-        payload_hashes = {
-            MOBI_NAME: sha256_file(mobi_path),
-            ZIP_NAME: sha256_file(zip_path),
-        }
+        payload_hashes = {path.name: sha256_file(path) for path in payload_paths}
         write_manifest(
             manifest_path,
             version=version,
             commit_sha=commit_sha,
-            entry_count=build.entry_count,
+            entry_count=len(entries),
             database_hash=sha256_file(snapshot_path),
-            compilation=compilation,
-            inspection=inspection,
+            formats=format_manifest,
             artifact_hashes=payload_hashes,
         )
         checksums_path = asset_dir / CHECKSUMS_NAME
-        write_checksums(checksums_path, (mobi_path, zip_path, manifest_path))
-
+        write_checksums(checksums_path, (*payload_paths, manifest_path))
         install_release_directory(asset_dir, final_dir, temp_root)
 
     return final_dir
@@ -379,11 +472,17 @@ def package_release(
 def release_notes(version: Version) -> str:
     """Return the maintained preface placed before generated GitHub notes."""
 
-    return f"""## Install
+    return f"""## Kindle
 
 Download `{MOBI_NAME}`, connect the Kindle by USB, and copy the file into
 `documents/dictionaries`. Then select **Dungeon Crawler Carl Dictionary** under
 Settings -> Language & Dictionaries -> Dictionaries.
+
+## KOReader
+
+Download `{STARDICT_ZIP_NAME}`, extract its dictionary folder, and copy that
+folder into `koreader/data/dict`. Restart KOReader and enable the dictionary if
+it is not selected automatically.
 
 ## Licensing
 
@@ -477,6 +576,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--version", required=True, help="Semantic version, such as 1.0.0")
     parser.add_argument("--input", type=Path, default=Path("data/characters.sqlite"))
     parser.add_argument("--dist-dir", type=Path, default=Path("dist"))
+    parser.add_argument(
+        "--format",
+        choices=("all", "kindle", "stardict"),
+        default="all",
+        help="Build all formats by default, or one format for local testing.",
+    )
+    parser.add_argument(
+        "--link-entries",
+        action="store_true",
+        help="Add format-appropriate internal links between known entries.",
+    )
     parser.add_argument("--overwrite", action="store_true", help="Replace an existing local version directory.")
     parser.add_argument("--publish", action="store_true", help="Create and verify a GitHub Release after packaging.")
     return parser.parse_args(argv)
@@ -492,7 +602,10 @@ def main(argv: list[str] | None = None) -> int:
         repo_root = repository_root(Path.cwd())
         input_db = args.input if args.input.is_absolute() else repo_root / args.input
         dist_root = args.dist_dir if args.dist_dir.is_absolute() else repo_root / args.dist_dir
-        commit_sha = preflight_local(repo_root, input_db)
+        formats = ALL_FORMATS if args.format == "all" else frozenset({args.format})
+        if args.publish and formats != ALL_FORMATS:
+            raise ReleaseError("--publish requires --format all")
+        commit_sha = preflight_local(repo_root, input_db, formats=formats)
         release_dir = package_release(
             version=version,
             repo_root=repo_root,
@@ -500,13 +613,22 @@ def main(argv: list[str] | None = None) -> int:
             dist_root=dist_root,
             commit_sha=commit_sha,
             overwrite=args.overwrite,
+            formats=formats,
+            link_entries=args.link_entries,
         )
         LOGGER.info("release bundle ready: %s", release_dir)
         if args.publish:
             publish_release(release_dir, version, commit_sha, repo_root)
             LOGGER.info("published and verified GitHub Release %s", version.tag)
         return 0
-    except (ReleaseError, MobiValidationError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
+    except (
+        ReleaseError,
+        MobiValidationError,
+        StarDictValidationError,
+        OSError,
+        sqlite3.Error,
+        subprocess.SubprocessError,
+    ) as exc:
         LOGGER.error("release failed: %s", exc)
         return 1
 

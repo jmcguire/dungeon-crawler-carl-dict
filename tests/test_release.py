@@ -1,5 +1,6 @@
 import json
 import shutil
+import sqlite3
 import unittest
 import zipfile
 from pathlib import Path
@@ -18,16 +19,20 @@ from dcdict.kindle import (
 )
 from dcdict.mobi import inspect_mobi
 from dcdict.release import (
+    ALL_FORMATS,
     CHECKSUMS_NAME,
     MANIFEST_NAME,
     MOBI_NAME,
     RELEASE_ASSET_NAMES,
+    STARDICT_ZIP_NAME,
     ZIP_NAME,
     CommandResult,
     ReleaseError,
     Version,
     classify_audit_findings,
     install_release_directory,
+    package_release,
+    parse_args,
     parse_version,
     preflight_local,
     publish_release,
@@ -36,7 +41,9 @@ from dcdict.release import (
     write_checksums,
     write_manifest,
     write_release_zip,
+    write_stardict_zip,
 )
+from dcdict.stardict import build_stardict
 
 
 VALID_COMPILER_LOG = """Amazon kindlegen(MAC OSX) V2.9 build 0000
@@ -77,6 +84,38 @@ class ReleaseTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ReleaseError, "does not exist"):
                 preflight_local(root, root / "missing.sqlite", clean_runner)
+
+    def test_stardict_only_preflight_does_not_require_kindlegen(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            database = root / "entries.sqlite"
+            conn = sqlite3.connect(database)
+            conn.execute("CREATE TABLE pages (title TEXT)")
+            conn.execute("INSERT INTO pages VALUES ('Carl')")
+            conn.commit()
+            conn.close()
+
+            def runner(command, cwd):
+                if command[1:3] == ("status", "--porcelain"):
+                    return CommandResult(0, "")
+                return CommandResult(0, "abc123\n")
+
+            with mock.patch("dcdict.release.find_kindlegen", return_value=None):
+                commit = preflight_local(
+                    root,
+                    database,
+                    runner,
+                    formats=frozenset({"stardict"}),
+                )
+                self.assertEqual(commit, "abc123")
+                with self.assertRaisesRegex(ReleaseError, "kindlegen"):
+                    preflight_local(root, database, runner, formats=frozenset({"kindle"}))
+
+    def test_release_cli_defaults_to_all_formats(self) -> None:
+        args = parse_args(["--version", "1.2.3", "--link-entries"])
+        self.assertEqual(args.format, "all")
+        self.assertTrue(args.link_entries)
+        self.assertEqual(ALL_FORMATS, frozenset({"kindle", "stardict"}))
 
     def test_audit_policy_warns_only_for_short_and_unresolved_forward(self) -> None:
         findings = [
@@ -120,29 +159,59 @@ class ReleaseTests(unittest.TestCase):
                     {MOBI_NAME, "INSTALL.txt", "NOTICE", "CONTENT_LICENSE", "LICENSE"},
                 )
 
+            stardict_build = build_stardict(
+                [Entry("Carl", "https://example/Carl", "Carl is a crawler.")],
+                root / "stardict",
+                DEFAULT_TITLE,
+                DEFAULT_AUTHOR,
+            )
+            stardict_archive = root / STARDICT_ZIP_NAME
+            write_stardict_zip(stardict_archive, stardict_build, root)
+            with zipfile.ZipFile(stardict_archive) as bundle:
+                prefix = "Dungeon-Crawler-Carl-Dictionary/"
+                self.assertEqual(
+                    set(bundle.namelist()),
+                    {
+                        prefix + "Dungeon-Crawler-Carl-Dictionary.ifo",
+                        prefix + "Dungeon-Crawler-Carl-Dictionary.idx",
+                        prefix + "Dungeon-Crawler-Carl-Dictionary.dict",
+                        prefix + "Dungeon-Crawler-Carl-Dictionary.syn",
+                        prefix + "Dungeon-Crawler-Carl-Dictionary.css",
+                        prefix + "INSTALL-KOREADER.txt",
+                        prefix + "NOTICE",
+                        prefix + "CONTENT_LICENSE",
+                        prefix + "LICENSE",
+                    },
+                )
+
             manifest = root / MANIFEST_NAME
-            compilation = CompilationResult(mobi, VALID_COMPILER_LOG, (), "2.9", 1)
-            inspection = mock.Mock()
-            inspection.manifest_data.return_value = {"checks": ["MOBI v7"]}
             write_manifest(
                 manifest,
                 version=Version("1.0.0", "v1.0.0"),
                 commit_sha="abc123",
                 entry_count=575,
                 database_hash="dbhash",
-                compilation=compilation,
-                inspection=inspection,
-                artifact_hashes={MOBI_NAME: sha256_file(mobi), ZIP_NAME: sha256_file(archive)},
+                formats={
+                    "kindle": {"smoke_tests": {"checks": ["MOBI v7"]}},
+                    "stardict": {"smoke_tests": {"checks": ["StarDict 2.4.2"]}},
+                },
+                artifact_hashes={
+                    MOBI_NAME: sha256_file(mobi),
+                    ZIP_NAME: sha256_file(archive),
+                    STARDICT_ZIP_NAME: sha256_file(stardict_archive),
+                },
             )
             manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
             self.assertEqual(manifest_data["entry_count"], 575)
-            self.assertEqual(manifest_data["compiler"]["version"], "2.9")
+            self.assertEqual(manifest_data["schema_version"], 2)
+            self.assertIn("stardict", manifest_data["formats"])
 
             checksums = root / CHECKSUMS_NAME
-            write_checksums(checksums, (mobi, archive, manifest))
+            write_checksums(checksums, (mobi, archive, stardict_archive, manifest))
             text = checksums.read_text(encoding="ascii")
             self.assertIn(f"{sha256_file(mobi)}  {MOBI_NAME}", text)
             self.assertIn(MANIFEST_NAME, text)
+            self.assertIn(STARDICT_ZIP_NAME, text)
 
     def test_install_release_directory_replaces_existing_version(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -161,6 +230,56 @@ class ReleaseTests(unittest.TestCase):
             self.assertFalse((final / "old").exists())
             self.assertEqual((final / "new").read_text(encoding="ascii"), "new")
             self.assertFalse((temp_root / "previous-release").exists())
+
+    def test_stardict_only_release_packages_only_stardict_assets(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+                (root / name).write_text(name, encoding="utf-8")
+            database = root / "entries.sqlite"
+            conn = sqlite3.connect(database)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT, url TEXT, first_paragraph TEXT,
+                    raw_html TEXT, status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, '', 'ok')",
+                [
+                    ("Carl", "https://example/Carl", "Carl travels with Donut."),
+                    ("Donut", "https://example/Donut", "Donut is a crawler."),
+                    ("Mordecai", "https://example/Mordecai", "Mordecai is a guide."),
+                    ("1914 Box", "https://example/1914", "A reward box."),
+                    ("Fire Fingers Spell", "https://example/Fire", "A fire spell."),
+                ],
+            )
+            conn.commit()
+            conn.close()
+
+            with mock.patch("dcdict.release.run_unit_tests"), mock.patch(
+                "dcdict.release.reextract_first_paragraphs", return_value=5
+            ):
+                release_dir = package_release(
+                    version=Version("1.2.3", "v1.2.3"),
+                    repo_root=root,
+                    input_db=database,
+                    dist_root=root / "dist",
+                    commit_sha="abc123",
+                    overwrite=False,
+                    formats=frozenset({"stardict"}),
+                    link_entries=True,
+                )
+
+            self.assertEqual(
+                {path.name for path in release_dir.iterdir()},
+                {STARDICT_ZIP_NAME, CHECKSUMS_NAME, MANIFEST_NAME},
+            )
+            manifest = json.loads((release_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
+            self.assertEqual(set(manifest["formats"]), {"stardict"})
+            self.assertEqual(manifest["formats"]["stardict"]["smoke_tests"]["alias_count"], 2)
 
     def test_publish_release_creates_and_verifies_assets(self) -> None:
         with TemporaryDirectory() as tmp_dir:
