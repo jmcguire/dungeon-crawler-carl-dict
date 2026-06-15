@@ -540,10 +540,10 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             write_xhtml(entries, output, "Test Dictionary")
 
             text = output.read_text(encoding="utf-8")
-            self.assertIn('<idx:orth value="Fireball Spell"><b>Fireball Spell</b></idx:orth>', text)
-            self.assertIn('<idx:orth value="Fireball"><b>Fireball Spell</b></idx:orth>', text)
+            self.assertIn('<b><idx:orth value="Fireball Spell">Fireball Spell</idx:orth></b>', text)
+            self.assertIn('<b><idx:orth value="Fireball">Fireball Spell</idx:orth></b>', text)
             self.assertNotIn("idx:iform", text)
-            self.assertNotIn("<b>Fireball</b></idx:orth>", text)
+            self.assertNotIn("Fireball</idx:orth></b>", text)
             self.assertEqual(text.count('<idx:entry name="default"'), 2)
             canonical_end = text.index("</idx:entry>")
             alias_start = text.index('<idx:entry name="default"', canonical_end)

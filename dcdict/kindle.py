@@ -20,7 +20,7 @@ from dcdict.text import clean_wiki_text_artifacts
 
 
 DEFAULT_TITLE = "Dungeon Crawler Carl Dictionary"
-DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors, Code by Justin McGuire"
+DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors"
 LANGUAGE = "en-us"
 ALLOWED_INLINE_TAGS = {"b": "b", "strong": "b", "i": "i", "em": "i"}
 LINKABLE_INLINE_TAGS = {"a": "a", **ALLOWED_INLINE_TAGS}
@@ -589,9 +589,9 @@ def entry_to_xhtml(
         for label, value in entry.details
     )
     details_block = f"\n{detail_items}" if detail_items else ""
-    return f"""      <idx:entry name="default" scriptable="yes" spell="yes" id="entry-{entry_id}">
+    return f"""<idx:entry name="default" scriptable="yes" spell="yes" id="entry-{entry_id}">
         <a id="entry-{entry_id}"></a>
-        <idx:orth value="{lookup}"><b>{title}</b></idx:orth>
+        <b><idx:orth value="{lookup}">{title}</idx:orth></b>
         <idx:short>{spoiler_note}
         <ul class="definition">
           <li>{definition}</li>
@@ -675,7 +675,7 @@ def write_xhtml_with_options(
     <title>{html.escape(title)}</title>
     <style type="text/css">
       body {{ font-family: serif; }}
-      idx\\:orth b {{ font-size: 1.15em; }}
+      b idx\\:orth {{ font-size: 1.15em; }}
       ul.definition {{ margin-top: 0.35em; }}
       .letter-heading {{ font-size: 1.1em; }}
       .spoiler-note {{ margin-bottom: 0.35em; }}
@@ -706,10 +706,9 @@ def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier
       <dc:Title>{html.escape(title)}</dc:Title>
       <dc:Language>{LANGUAGE}</dc:Language>
       <dc:Creator>{html.escape(author)}</dc:Creator>
-      <dc:Publisher>The dungeon-crawler-carl-dict Project</dc:Publisher>
       <dc:contributor opf:role="edt" opf:file-as="McGuire, Justin">Justin McGuire</dc:contributor>
       <dc:Subject>Dictionary</dc:Subject>
-      <dc:Description>Dungeon Crawler Carl lookup dictionary, generated from the fandom wiki page summaries.</dc:Description>
+      <dc:Description>A dictionary for {html.escape(title)}, generated from the fandom wiki page summaries.</dc:Description>
       <dc:Rights>Content is available under CC-BY-SA unless otherwise noted on its linked wiki page.</dc:Rights>
     </dc-metadata>
     <x-metadata>
@@ -724,6 +723,9 @@ def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier
   <spine>
     <itemref idref="dictionary" />
   </spine>
+  <guide>
+    <reference type="index" title="IndexName" href="{html.escape(xhtml_name)}" />
+  </guide>
 </package>
 """,
         encoding="utf-8",
