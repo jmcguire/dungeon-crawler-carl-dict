@@ -1,4 +1,1 @@
-"""Tools for building Kindle dictionaries from wiki character pages."""
-
-__version__ = "0.1.0"
-
+"""Tools for building e-reader dictionaries from wiki pages."""

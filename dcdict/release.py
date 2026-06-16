@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from dcdict.audit_entries import AuditFinding, audit_entries
+from dcdict.badges import validate_badges
 from dcdict.entries import load_entries
 from dcdict.fetch_characters import reextract_first_paragraphs
 from dcdict.kindle import (
@@ -46,6 +47,7 @@ ZIP_NAME = "Dungeon-Crawler-Carl-Dictionary.zip"
 STARDICT_ZIP_NAME = "Dungeon-Crawler-Carl-Dictionary-StarDict.zip"
 CHECKSUMS_NAME = "SHA256SUMS.txt"
 MANIFEST_NAME = "release-manifest.json"
+BADGE_DIR_NAME = "badges"
 ALL_FORMATS = frozenset({"kindle", "stardict"})
 RELEASE_ASSET_NAMES = (
     MOBI_NAME,
@@ -277,6 +279,7 @@ def koreader_installation_text() -> str:
 6. To make it the priority dictionary for one book only, open that book and
    use Dictionary settings -> Set dictionary priority for this book. Select
    Dungeon Crawler Carl Dictionary so it appears first in the preferred list.
+
 The dictionary content is derived from Dungeon Crawler Carl Wiki contributors
 and is distributed under CC BY-SA 3.0. See CONTENT_LICENSE and NOTICE.
 """
@@ -386,6 +389,14 @@ def package_release(
 
         run_unit_tests(repo_root, runner)
         entries = load_entries(snapshot_path, min_definition_length=8)
+        try:
+            validate_badges(repo_root / BADGE_DIR_NAME, version, len(entries))
+        except ValueError as exc:
+            raise ReleaseError(
+                f"badge metadata is stale: {exc}. Run "
+                f"`python3 -m dcdict.badges --version {version.value} --input {input_db}` "
+                "and commit the badge JSON files before releasing."
+            ) from exc
         findings = audit_entries(entries)
         fatal_findings, warning_findings = classify_audit_findings(findings)
         for finding in warning_findings:

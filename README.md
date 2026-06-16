@@ -1,5 +1,12 @@
 # Dungeon Crawler Carl E-reader Dictionaries
 
+[![Release](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Frelease.json)](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fcoverage.json)](#tests)
+[![Python](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fpython.json)](#requirements)
+[![Formats](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fformats.json)](#create-a-release)
+[![Licenses](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Flicenses.json)](#licensing)
+[![Output](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Foutput.json)](#create-a-release)
+
 This project builds Kindle and StarDict/KOReader lookup dictionaries from pages on a MediaWiki/Fandom wiki.
 
 The default target is the Dungeon Crawler Carl Fandom character category. The crawler and converter are intentionally generic enough to point at another Fandom wiki and category later.
@@ -126,12 +133,20 @@ python3 -m unittest discover -s tests
 
 The tests cover extraction, SQLite loading, Kindle XHTML/OPF generation, StarDict binary generation and inspection, aliases, release packaging, and the Kindle Previewer/`kindlegen` compile wrapper.
 
+Update the tracked README badge metadata before a release-prep commit:
+
+```sh
+python3 -m dcdict.badges --version 0.5.0 --input data/characters.sqlite
+```
+
+The badge command runs the test suite with Python's standard-library `trace` tool, computes line coverage for `dcdict/`, counts usable dictionary entries, and writes Shields endpoint JSON files under `badges/`. Badge updates are committed with normal project changes; there is no badge-only GitHub Actions commit.
+
 ## Create A Release
 
 The release command builds a complete, tested bundle from the current stored database:
 
 ```sh
-python3 -m dcdict.release --version 1.1.0 --link-entries
+python3 -m dcdict.release --version 0.5.0 --link-entries
 ```
 
 By default the command builds both Kindle and StarDict editions. It requires a clean Git worktree and `data/characters.sqlite`; Kindle builds additionally require the `kindlegen` binary included with Kindle Previewer. It makes a SQLite snapshot, re-extracts descriptions from stored HTML without crawling, runs the complete test suite and entry audit, and performs binary smoke tests on both finished dictionaries.
@@ -153,7 +168,7 @@ To publish the same assets as a tagged GitHub Release, install and authenticate 
 ```sh
 brew install gh
 gh auth login
-python3 -m dcdict.release --version 1.1.0 --link-entries --publish
+python3 -m dcdict.release --version 0.5.0 --link-entries --publish
 ```
 
 Publishing additionally requires `HEAD` to match `origin/main`, and refuses to replace an existing tag or release. After upload, the command downloads every asset again and verifies its SHA-256 hash before fetching the new tag locally.

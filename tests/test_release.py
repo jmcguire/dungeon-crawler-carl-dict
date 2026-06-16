@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 from dcdict.audit_entries import AuditFinding
+from dcdict.badges import CoverageResult, build_badges, parse_version as parse_badge_version, write_badge_files
 from dcdict.kindle import (
     DEFAULT_AUTHOR,
     DEFAULT_TITLE,
@@ -239,6 +240,10 @@ class ReleaseTests(unittest.TestCase):
             root = Path(tmp_dir)
             for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
                 (root / name).write_text(name, encoding="utf-8")
+            write_badge_files(
+                root / "badges",
+                build_badges(parse_badge_version("1.2.3"), CoverageResult(100, 100), 5),
+            )
             database = root / "entries.sqlite"
             conn = sqlite3.connect(database)
             conn.execute(
@@ -283,6 +288,52 @@ class ReleaseTests(unittest.TestCase):
             manifest = json.loads((release_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
             self.assertEqual(set(manifest["formats"]), {"stardict"})
             self.assertEqual(manifest["formats"]["stardict"]["smoke_tests"]["alias_count"], 2)
+
+    def test_package_release_rejects_stale_badge_metadata(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+                (root / name).write_text(name, encoding="utf-8")
+            write_badge_files(
+                root / "badges",
+                build_badges(parse_badge_version("1.2.2"), CoverageResult(100, 100), 5),
+            )
+            database = root / "entries.sqlite"
+            conn = sqlite3.connect(database)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT, url TEXT, first_paragraph TEXT,
+                    raw_html TEXT, status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, '', 'ok')",
+                [
+                    ("Carl", "https://example/Carl", "Carl travels with Donut."),
+                    ("Donut", "https://example/Donut", "Donut is a crawler."),
+                    ("Mordecai", "https://example/Mordecai", "Mordecai is a guide."),
+                    ("1914 Box", "https://example/1914", "A reward box."),
+                    ("Fire Fingers Spell", "https://example/Fire", "A fire spell."),
+                ],
+            )
+            conn.commit()
+            conn.close()
+
+            with mock.patch("dcdict.release.run_unit_tests"), mock.patch(
+                "dcdict.release.reextract_first_paragraphs", return_value=5
+            ), self.assertRaisesRegex(ReleaseError, "badge metadata is stale"):
+                package_release(
+                    version=Version("1.2.3", "v1.2.3"),
+                    repo_root=root,
+                    input_db=database,
+                    dist_root=root / "dist",
+                    commit_sha="abc123",
+                    overwrite=False,
+                    formats=frozenset({"stardict"}),
+                    link_entries=True,
+                )
 
     def test_publish_release_creates_and_verifies_assets(self) -> None:
         with TemporaryDirectory() as tmp_dir:
