@@ -208,7 +208,13 @@ Download and extract `Dungeon-Crawler-Carl-Dictionary-StarDict.zip`. Keep the ex
 koreader/data/dict/
 ```
 
-Restart KOReader. If the dictionary is not enabled automatically, open KOReader's dictionary settings and enable `Dungeon Crawler Carl Dictionary`. Look up `Carl`, `Donut`, and `Mordecai`; `1914` and `Fire Fingers` are useful checks for Box and Spell aliases. With the linked release build, tapping a referenced dictionary entry should open that entry inside KOReader.
+Restart KOReader. If the dictionary is not enabled automatically, open **Dictionary settings -> Manage dictionaries** and enable `Dungeon Crawler Carl Dictionary`.
+
+To make it the default lookup result globally, use **Dictionary settings -> Manage dictionaries** to move `Dungeon Crawler Carl Dictionary` above your other dictionaries, then accept/save the order. KOReader uses that order as dictionary priority.
+
+To make it the priority dictionary for one book only, open that book and use **Dictionary settings -> Set dictionary priority for this book**. Select `Dungeon Crawler Carl Dictionary` so it appears first in the preferred list.
+
+With the linked release build, tapping a referenced dictionary entry should open that entry inside KOReader.
 
 ## Crawler Defaults
 

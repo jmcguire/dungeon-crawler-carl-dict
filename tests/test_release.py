@@ -183,6 +183,9 @@ class ReleaseTests(unittest.TestCase):
                         prefix + "LICENSE",
                     },
                 )
+                instructions = bundle.read(prefix + "INSTALL-KOREADER.txt").decode("utf-8")
+                self.assertIn("Manage dictionaries", instructions)
+                self.assertIn("Set dictionary priority for this book", instructions)
 
             manifest = root / MANIFEST_NAME
             write_manifest(

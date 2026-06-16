@@ -269,11 +269,14 @@ def koreader_installation_text() -> str:
 2. Keep the extracted {STARDICT_BASE_NAME} folder and all files inside it together.
 3. Connect the reader to your computer and copy that folder into:
    koreader/data/dict/
-4. Restart KOReader. If needed, open Dictionary settings and enable
-   Dungeon Crawler Carl Dictionary.
-5. Look up Carl, Donut, or Mordecai. The aliases 1914 and Fire Fingers are
-   useful checks for Box and Spell lookup aliases.
-
+4. Restart KOReader. If needed, open Dictionary settings -> Manage dictionaries
+   and enable Dungeon Crawler Carl Dictionary.
+5. To make it the default lookup result globally, use the same Manage
+   dictionaries screen to move Dungeon Crawler Carl Dictionary above your
+   other dictionaries, then accept/save the order.
+6. To make it the priority dictionary for one book only, open that book and
+   use Dictionary settings -> Set dictionary priority for this book. Select
+   Dungeon Crawler Carl Dictionary so it appears first in the preferred list.
 The dictionary content is derived from Dungeon Crawler Carl Wiki contributors
 and is distributed under CC BY-SA 3.0. See CONTENT_LICENSE and NOTICE.
 """
