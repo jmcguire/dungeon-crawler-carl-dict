@@ -50,6 +50,7 @@ python3 -m unittest discover -s tests
 
 - If changing Kindle output, validate XHTML/OPF generation and, when available, compile and smoke-test the MOBI.
 - If changing StarDict output, run the StarDict inspector and verify aliases, source attribution, and representative lookups.
+- If adding or changing an output format, include user instructions for both installing the dictionary and selecting/enabling it in the target reader UI.
 - If changing release packaging, run a local packaging smoke test before reporting success.
 
 ## Release Versioning

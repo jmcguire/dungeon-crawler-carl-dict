@@ -221,7 +221,7 @@ def build_badges(version: Version, coverage: CoverageResult, entry_count: int) -
         "release": badge("release", version.tag, "blue"),
         "coverage": badge("coverage", f"{percent}% lines", coverage_color(percent)),
         "python": badge("python", "3.9+", "blue"),
-        "formats": badge("formats", "Kindle + StarDict", "informational"),
+        "formats": badge("formats", "Kindle + StarDict + Kobo", "informational"),
         "licenses": badge("licenses", "MIT + CC BY-SA 3.0", "blueviolet"),
         "output": badge("output", f"{format_count(entry_count)} entries", entry_count_color(entry_count)),
     }

@@ -30,6 +30,7 @@
   - improve the release note on the tag. it should be very non-expert user friendly. also should it only have the one mobi file? maybe.
   - dicts for other platforms? look at https://github.com/ciscoriordan/kindling , which really I should internalize anyways, if it works as well as it claims to I should figure out how it formats that XHTML file
   - at some point i should test this against a different fandom. there are a lot of DCC wording and assumptions built into this, but I thimnk the core is good. it should work out of the box and produce something that is good-but-not-refined, and have command-line options to produce something refined.
+  - Kobo output does not currently include internal dictionary links. Research whether Kobo dicthtml supports reliable in-dictionary links before adding them.
 
 ## Missing:
 

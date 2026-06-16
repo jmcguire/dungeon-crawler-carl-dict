@@ -31,6 +31,14 @@ from dcdict.kindle import (
     compile_with_kindlegen,
     find_kindlegen,
 )
+from dcdict.kobo import (
+    DICTGEN_OUTPUT_NAME,
+    KoboBuildResult,
+    KoboValidationError,
+    build_kobo,
+    find_dictgen,
+    inspect_kobo,
+)
 from dcdict.mobi import MobiValidationError, inspect_mobi
 from dcdict.stardict import (
     BASE_NAME as STARDICT_BASE_NAME,
@@ -45,14 +53,17 @@ LOGGER = logging.getLogger(__name__)
 MOBI_NAME = "Dungeon-Crawler-Carl-Dictionary.mobi"
 ZIP_NAME = "Dungeon-Crawler-Carl-Dictionary.zip"
 STARDICT_ZIP_NAME = "Dungeon-Crawler-Carl-Dictionary-StarDict.zip"
+KOBO_ZIP_NAME = "Dungeon-Crawler-Carl-Dictionary-Kobo.zip"
 CHECKSUMS_NAME = "SHA256SUMS.txt"
 MANIFEST_NAME = "release-manifest.json"
 BADGE_DIR_NAME = "badges"
-ALL_FORMATS = frozenset({"kindle", "stardict"})
+ALL_FORMATS = frozenset({"kindle", "stardict", "kobo"})
 RELEASE_ASSET_NAMES = (
     MOBI_NAME,
     ZIP_NAME,
     STARDICT_ZIP_NAME,
+    DICTGEN_OUTPUT_NAME,
+    KOBO_ZIP_NAME,
     CHECKSUMS_NAME,
     MANIFEST_NAME,
 )
@@ -165,6 +176,8 @@ def preflight_local(
             conn.close()
     if "kindle" in formats and not find_kindlegen():
         raise ReleaseError("kindlegen was not found; install Kindle Previewer 3 first")
+    if "kobo" in formats and not find_dictgen():
+        raise ReleaseError("dictgen was not found; install pgaskin/dictutil dictgen first")
     return git_output(repo_root, "rev-parse", "HEAD", runner=runner)
 
 
@@ -299,6 +312,42 @@ def write_stardict_zip(
         archive.writestr(f"{folder}/INSTALL-KOREADER.txt", koreader_installation_text())
         for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
             archive.write(repo_root / name, f"{folder}/{name}")
+
+
+def kobo_installation_text() -> str:
+    """Return concise Kobo sideloading instructions."""
+
+    return f"""Dungeon Crawler Carl Dictionary - Kobo Installation
+
+1. Connect your Kobo to your computer with USB.
+2. Copy {DICTGEN_OUTPUT_NAME} into the Kobo's .kobo/custom-dict folder.
+   If that folder does not exist, create it.
+3. Safely eject the Kobo and restart it.
+4. Open a book, select a word, and open the dictionary panel.
+5. Use the dictionary selector in the lookup panel to choose the custom
+   dictionary named for the dc locale.
+
+On older Kobo firmware, custom dictionaries may require ExtraLocales or a
+custom dictionary patch before they can be selected. Current Kobo firmware
+supports .kobo/custom-dict for custom dictionaries.
+
+The dictionary content is derived from Dungeon Crawler Carl Wiki contributors
+and is distributed under CC BY-SA 3.0. See CONTENT_LICENSE and NOTICE.
+"""
+
+
+def write_kobo_zip(
+    zip_path: Path,
+    build: KoboBuildResult,
+    repo_root: Path,
+) -> None:
+    """Create one installable Kobo bundle with instructions."""
+
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.write(build.dictzip_path, DICTGEN_OUTPUT_NAME)
+        archive.writestr("INSTALL-KOBO.txt", kobo_installation_text())
+        for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+            archive.write(repo_root / name, name)
 
 
 def write_manifest(
@@ -465,6 +514,27 @@ def package_release(
                 "smoke_tests": stardict_inspection.manifest_data(),
             }
 
+        if "kobo" in formats:
+            kobo_build = build_kobo(entries, work_dir / "kobo")
+            kobo_inspection = inspect_kobo(
+                kobo_build.dictzip_path,
+                required_headwords=("Carl", "Donut", "Mordecai", "1914", "Fire Fingers"),
+            )
+            LOGGER.info("Kobo smoke tests passed (%s checks)", len(kobo_inspection.checks))
+            kobo_dictzip_path = asset_dir / DICTGEN_OUTPUT_NAME
+            shutil.copy2(kobo_build.dictzip_path, kobo_dictzip_path)
+            kobo_zip_path = asset_dir / KOBO_ZIP_NAME
+            write_kobo_zip(kobo_zip_path, kobo_build, repo_root)
+            payload_paths.extend((kobo_dictzip_path, kobo_zip_path))
+            format_manifest["kobo"] = {
+                "assets": [DICTGEN_OUTPUT_NAME, KOBO_ZIP_NAME],
+                "compiler": {
+                    "name": "dictgen",
+                    "version": kobo_build.compiler_version,
+                },
+                "smoke_tests": kobo_inspection.manifest_data(),
+            }
+
         manifest_path = asset_dir / MANIFEST_NAME
         payload_hashes = {path.name: sha256_file(path) for path in payload_paths}
         write_manifest(
@@ -497,6 +567,12 @@ Settings -> Language & Dictionaries -> Dictionaries.
 Download `{STARDICT_ZIP_NAME}`, extract its dictionary folder, and copy that
 folder into `koreader/data/dict`. Restart KOReader and enable the dictionary if
 it is not selected automatically.
+
+## Kobo
+
+Download `{DICTGEN_OUTPUT_NAME}` and copy it into `.kobo/custom-dict` on the
+Kobo. Restart the Kobo, then choose the custom dictionary from the lookup
+panel's dictionary selector.
 
 ## Licensing
 
@@ -592,7 +668,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--dist-dir", type=Path, default=Path("dist"))
     parser.add_argument(
         "--format",
-        choices=("all", "kindle", "stardict"),
+        choices=("all", "kindle", "stardict", "kobo"),
         default="all",
         help="Build all formats by default, or one format for local testing.",
     )
@@ -638,6 +714,7 @@ def main(argv: list[str] | None = None) -> int:
     except (
         ReleaseError,
         MobiValidationError,
+        KoboValidationError,
         StarDictValidationError,
         OSError,
         sqlite3.Error,

@@ -22,6 +22,8 @@ from dcdict.mobi import inspect_mobi
 from dcdict.release import (
     ALL_FORMATS,
     CHECKSUMS_NAME,
+    DICTGEN_OUTPUT_NAME,
+    KOBO_ZIP_NAME,
     MANIFEST_NAME,
     MOBI_NAME,
     RELEASE_ASSET_NAMES,
@@ -41,10 +43,12 @@ from dcdict.release import (
     validate_compilation,
     write_checksums,
     write_manifest,
+    write_kobo_zip,
     write_release_zip,
     write_stardict_zip,
 )
 from dcdict.stardict import build_stardict
+from dcdict.kobo import KoboBuildResult, synthetic_kobo_zip
 
 
 VALID_COMPILER_LOG = """Amazon kindlegen(MAC OSX) V2.9 build 0000
@@ -101,7 +105,9 @@ class ReleaseTests(unittest.TestCase):
                     return CommandResult(0, "")
                 return CommandResult(0, "abc123\n")
 
-            with mock.patch("dcdict.release.find_kindlegen", return_value=None):
+            with mock.patch("dcdict.release.find_kindlegen", return_value=None), mock.patch(
+                "dcdict.release.find_dictgen", return_value=None
+            ):
                 commit = preflight_local(
                     root,
                     database,
@@ -111,12 +117,15 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(commit, "abc123")
                 with self.assertRaisesRegex(ReleaseError, "kindlegen"):
                     preflight_local(root, database, runner, formats=frozenset({"kindle"}))
+                with self.assertRaisesRegex(ReleaseError, "dictgen"):
+                    preflight_local(root, database, runner, formats=frozenset({"kobo"}))
 
     def test_release_cli_defaults_to_all_formats(self) -> None:
         args = parse_args(["--version", "1.2.3", "--link-entries"])
         self.assertEqual(args.format, "all")
         self.assertTrue(args.link_entries)
-        self.assertEqual(ALL_FORMATS, frozenset({"kindle", "stardict"}))
+        self.assertEqual(ALL_FORMATS, frozenset({"kindle", "stardict", "kobo"}))
+        self.assertEqual(parse_args(["--version", "1.2.3", "--format", "kobo"]).format, "kobo")
 
     def test_audit_policy_warns_only_for_short_and_unresolved_forward(self) -> None:
         findings = [
@@ -188,6 +197,29 @@ class ReleaseTests(unittest.TestCase):
                 self.assertIn("Manage dictionaries", instructions)
                 self.assertIn("Set dictionary priority for this book", instructions)
 
+            kobo_dir = root / "kobo"
+            kobo_dir.mkdir()
+            kobo_dictzip = kobo_dir / DICTGEN_OUTPUT_NAME
+            synthetic_kobo_zip(kobo_dictzip, [Entry("Carl", "https://example/Carl", "Carl is a crawler.")])
+            kobo_build = KoboBuildResult(
+                dictfile_path=kobo_dir / "dictionary.df",
+                dictzip_path=kobo_dictzip,
+                entry_count=1,
+                alias_count=0,
+                compiler_log="",
+                compiler_version="dictgen",
+            )
+            kobo_archive = root / KOBO_ZIP_NAME
+            write_kobo_zip(kobo_archive, kobo_build, root)
+            with zipfile.ZipFile(kobo_archive) as bundle:
+                self.assertEqual(
+                    set(bundle.namelist()),
+                    {DICTGEN_OUTPUT_NAME, "INSTALL-KOBO.txt", "NOTICE", "CONTENT_LICENSE", "LICENSE"},
+                )
+                instructions = bundle.read("INSTALL-KOBO.txt").decode("utf-8")
+                self.assertIn(".kobo/custom-dict", instructions)
+                self.assertIn("dictionary selector", instructions)
+
             manifest = root / MANIFEST_NAME
             write_manifest(
                 manifest,
@@ -198,24 +230,30 @@ class ReleaseTests(unittest.TestCase):
                 formats={
                     "kindle": {"smoke_tests": {"checks": ["MOBI v7"]}},
                     "stardict": {"smoke_tests": {"checks": ["StarDict 2.4.2"]}},
+                    "kobo": {"smoke_tests": {"checks": ["Kobo dicthtml"]}},
                 },
                 artifact_hashes={
                     MOBI_NAME: sha256_file(mobi),
                     ZIP_NAME: sha256_file(archive),
                     STARDICT_ZIP_NAME: sha256_file(stardict_archive),
+                    DICTGEN_OUTPUT_NAME: sha256_file(kobo_dictzip),
+                    KOBO_ZIP_NAME: sha256_file(kobo_archive),
                 },
             )
             manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
             self.assertEqual(manifest_data["entry_count"], 575)
             self.assertEqual(manifest_data["schema_version"], 2)
             self.assertIn("stardict", manifest_data["formats"])
+            self.assertIn("kobo", manifest_data["formats"])
 
             checksums = root / CHECKSUMS_NAME
-            write_checksums(checksums, (mobi, archive, stardict_archive, manifest))
+            write_checksums(checksums, (mobi, archive, stardict_archive, kobo_dictzip, kobo_archive, manifest))
             text = checksums.read_text(encoding="ascii")
             self.assertIn(f"{sha256_file(mobi)}  {MOBI_NAME}", text)
             self.assertIn(MANIFEST_NAME, text)
             self.assertIn(STARDICT_ZIP_NAME, text)
+            self.assertIn(DICTGEN_OUTPUT_NAME, text)
+            self.assertIn(KOBO_ZIP_NAME, text)
 
     def test_install_release_directory_replaces_existing_version(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -288,6 +326,73 @@ class ReleaseTests(unittest.TestCase):
             manifest = json.loads((release_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
             self.assertEqual(set(manifest["formats"]), {"stardict"})
             self.assertEqual(manifest["formats"]["stardict"]["smoke_tests"]["alias_count"], 2)
+
+    def test_kobo_only_release_packages_only_kobo_assets(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+                (root / name).write_text(name, encoding="utf-8")
+            write_badge_files(
+                root / "badges",
+                build_badges(parse_badge_version("1.2.3"), CoverageResult(100, 100), 5),
+            )
+            database = root / "entries.sqlite"
+            conn = sqlite3.connect(database)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT, url TEXT, first_paragraph TEXT,
+                    raw_html TEXT, status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, '', 'ok')",
+                [
+                    ("Carl", "https://example/Carl", "Carl travels with Donut."),
+                    ("Donut", "https://example/Donut", "Donut is a crawler."),
+                    ("Mordecai", "https://example/Mordecai", "Mordecai is a guide."),
+                    ("1914 Box", "https://example/1914", "A reward box."),
+                    ("Fire Fingers Spell", "https://example/Fire", "A fire spell."),
+                ],
+            )
+            conn.commit()
+            conn.close()
+
+            def fake_build_kobo(entries, output_dir):
+                output_dir.mkdir(parents=True)
+                dictzip_path = output_dir / DICTGEN_OUTPUT_NAME
+                synthetic_kobo_zip(dictzip_path, entries)
+                return KoboBuildResult(
+                    dictfile_path=output_dir / "dictionary.df",
+                    dictzip_path=dictzip_path,
+                    entry_count=len(entries),
+                    alias_count=2,
+                    compiler_log="",
+                    compiler_version="test-dictgen",
+                )
+
+            with mock.patch("dcdict.release.run_unit_tests"), mock.patch(
+                "dcdict.release.reextract_first_paragraphs", return_value=5
+            ), mock.patch("dcdict.release.build_kobo", side_effect=fake_build_kobo):
+                release_dir = package_release(
+                    version=Version("1.2.3", "v1.2.3"),
+                    repo_root=root,
+                    input_db=database,
+                    dist_root=root / "dist",
+                    commit_sha="abc123",
+                    overwrite=False,
+                    formats=frozenset({"kobo"}),
+                    link_entries=True,
+                )
+
+            self.assertEqual(
+                {path.name for path in release_dir.iterdir()},
+                {DICTGEN_OUTPUT_NAME, KOBO_ZIP_NAME, CHECKSUMS_NAME, MANIFEST_NAME},
+            )
+            manifest = json.loads((release_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
+            self.assertEqual(set(manifest["formats"]), {"kobo"})
+            self.assertEqual(manifest["formats"]["kobo"]["smoke_tests"]["alias_count"], 2)
 
     def test_package_release_rejects_stale_badge_metadata(self) -> None:
         with TemporaryDirectory() as tmp_dir:

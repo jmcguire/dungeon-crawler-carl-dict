@@ -7,19 +7,20 @@
 [![Licenses](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Flicenses.json)](#licensing)
 [![Output](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Foutput.json)](#create-a-release)
 
-This project builds Kindle and StarDict/KOReader lookup dictionaries from pages on a MediaWiki/Fandom wiki.
+This project builds Kindle, StarDict/KOReader, and Kobo lookup dictionaries from pages on a MediaWiki/Fandom wiki.
 
 The default target is the Dungeon Crawler Carl Fandom character category. The crawler and converter are intentionally generic enough to point at another Fandom wiki and category later.
 
 ## Requirements
 
-- macOS for Kindle MOBI compilation; StarDict builds work anywhere Python does
+- macOS for Kindle MOBI compilation; StarDict and Kobo source builds work anywhere Python does
 - Python 3.11 or newer recommended
 - No Python package dependencies
 
 Optional:
 
 - Kindle Previewer 3 if you want the converter to compile a `.mobi` file automatically.
+- `dictgen` from [pgaskin/dictutil](https://github.com/pgaskin/dictutil) if you want to compile a Kobo `dicthtml` dictionary.
 
 ## Licensing
 
@@ -103,6 +104,14 @@ python3 -m dcdict.build_stardict_dictionary --link-entries
 
 StarDict is a small group of files rather than one native dictionary file. The builder writes the `.ifo`, `.idx`, `.dict`, `.syn`, and `.css` files together under `build/stardict/`. Its `.syn` file provides the same suffix aliases as the Kindle edition. With `--link-entries`, recognized entry names use KOReader's supported `bword://` links.
 
+Build the Kobo dictionary:
+
+```sh
+python3 -m dcdict.build_kobo_dictionary
+```
+
+Kobo dictionaries are compiled with the external `dictgen` tool. The builder writes `build/kobo/dictionary.df` as an intermediate file and `build/kobo/dicthtml-dc.zip` as the Kobo dictionary file. The same ` Box` and ` Spell` suffix aliases are emitted as Kobo variants.
+
 Try to compile with `kindlegen` if it is installed:
 
 ```sh
@@ -122,6 +131,7 @@ Outputs:
 - `build/dictionary.opf`: Kindle package metadata
 - `build/dictionary.mobi`: compiled Kindle file, only when `kindlegen` is available
 - `build/stardict/`: StarDict files for KOReader
+- `build/kobo/dicthtml-dc.zip`: compiled Kobo dictionary file, only when `dictgen` is available
 
 ## Tests
 
@@ -149,19 +159,21 @@ The release command builds a complete, tested bundle from the current stored dat
 python3 -m dcdict.release --version 0.5.0 --link-entries
 ```
 
-By default the command builds both Kindle and StarDict editions. It requires a clean Git worktree and `data/characters.sqlite`; Kindle builds additionally require the `kindlegen` binary included with Kindle Previewer. It makes a SQLite snapshot, re-extracts descriptions from stored HTML without crawling, runs the complete test suite and entry audit, and performs binary smoke tests on both finished dictionaries.
+By default the command builds Kindle, StarDict, and Kobo editions. It requires a clean Git worktree and `data/characters.sqlite`; Kindle builds additionally require the `kindlegen` binary included with Kindle Previewer, and Kobo builds require Patrick Gaskin's `dictgen` tool from [dictutil](https://github.com/pgaskin/dictutil) on your `PATH`. It makes a SQLite snapshot, re-extracts descriptions from stored HTML without crawling, runs the complete test suite and entry audit, and performs binary smoke tests on all finished dictionaries.
 
-For a faster local format-specific build, use `--format kindle` or `--format stardict`. StarDict-only builds do not require Kindle Previewer. Published releases must use the default `--format all` so every tagged release remains complete.
+For a faster local format-specific build, use `--format kindle`, `--format stardict`, or `--format kobo`. StarDict-only builds do not require Kindle Previewer or `dictgen`; Kobo-only builds do not require Kindle Previewer. Published releases must use the default `--format all` so every tagged release remains complete.
 
 Successful output is written atomically to `dist/v1.0.0/`:
 
 - `Dungeon-Crawler-Carl-Dictionary.mobi` (Kindle)
 - `Dungeon-Crawler-Carl-Dictionary.zip` (Kindle bundle)
 - `Dungeon-Crawler-Carl-Dictionary-StarDict.zip` (KOReader bundle)
+- `dicthtml-dc.zip` (Kobo)
+- `Dungeon-Crawler-Carl-Dictionary-Kobo.zip` (Kobo bundle)
 - `SHA256SUMS.txt`
 - `release-manifest.json`
 
-Each ZIP includes format-specific installation instructions and the project's license and attribution files. The schema 2 manifest records shared provenance plus separate Kindle and StarDict build and smoke-test results. Existing version directories are protected; pass `--overwrite` only when intentionally rebuilding the same local version.
+Each ZIP includes format-specific installation instructions and the project's license and attribution files. The schema 2 manifest records shared provenance plus separate Kindle, StarDict, and Kobo build and smoke-test results. Existing version directories are protected; pass `--overwrite` only when intentionally rebuilding the same local version.
 
 To publish the same assets as a tagged GitHub Release, install and authenticate the [GitHub CLI](https://cli.github.com/):
 
@@ -178,6 +190,8 @@ These permanent URLs always point to the assets from the newest GitHub Release:
 - <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.mobi>
 - <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.zip>
 - <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-StarDict.zip>
+- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/dicthtml-dc.zip>
+- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-Kobo.zip>
 - <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/SHA256SUMS.txt>
 - <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/release-manifest.json>
 
@@ -230,6 +244,20 @@ To make it the default lookup result globally, use **Dictionary settings -> Mana
 To make it the priority dictionary for one book only, open that book and use **Dictionary settings -> Set dictionary priority for this book**. Select `Dungeon Crawler Carl Dictionary` so it appears first in the preferred list.
 
 With the linked release build, tapping a referenced dictionary entry should open that entry inside KOReader.
+
+## Install On Kobo
+
+Download `dicthtml-dc.zip`. Connect the Kobo to the Mac with USB and copy the file into:
+
+```text
+KOBOeReader/.kobo/custom-dict/
+```
+
+If `custom-dict` does not exist, create it. Safely eject and restart the Kobo.
+
+Open a book, select a word, and open the dictionary panel. Use the dictionary selector in the lookup panel to choose the custom dictionary named for the `dc` locale.
+
+On older Kobo firmware, custom dictionaries may require ExtraLocales or a custom dictionary patch before they can be selected. Current Kobo firmware supports `.kobo/custom-dict` for custom dictionaries.
 
 ## Crawler Defaults
 
