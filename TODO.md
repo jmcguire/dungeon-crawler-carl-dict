@@ -34,10 +34,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
 ## P2 - Improve Default Crawl Scope
 
-- Make the default categories match the normal DCC build.
-  - The normal DCC build should use multiple categories: `Characters`, `Groups`, `Spells`, `Achievements`, `Races`, and `Items`.
-  - Decide the default set for this project while keeping CLI overrides generic for other Fandom wikis.
-
 - Rename `fetch_characters` to `fetch_entries`.
   - Update README examples and tests when this happens.
 

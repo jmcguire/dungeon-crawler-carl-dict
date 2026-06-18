@@ -52,7 +52,14 @@ from dcdict.mediawiki import (
 
 
 DEFAULT_FANDOM = "dungeon-crawler-carl"
-DEFAULT_CATEGORY = "Characters"
+DEFAULT_CATEGORIES = (
+    "Characters",
+    "Groups",
+    "Spells",
+    "Achievements",
+    "Races",
+    "Items",
+)
 DEFAULT_USER_AGENT = "KindleDictionaryCreationCrawler/0.1"
 LOGGER = logging.getLogger(__name__)
 
@@ -336,7 +343,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         dest="categories",
         action="append",
         default=None,
-        help="Category name without the Category: prefix. May be repeated. Defaults to Characters.",
+        help="Category name without the Category: prefix. May be repeated. Defaults to the normal DCC build categories.",
     )
     parser.add_argument("--output", type=Path, default=Path("data/characters.sqlite"))
     parser.add_argument("--user-agent", default=DEFAULT_USER_AGENT)
@@ -371,7 +378,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.ignore_robots:
         assert_robots_allowed(fandom_api_url(args.fandom), args.user_agent)
 
-    args.categories = args.categories or [DEFAULT_CATEGORY]
+    args.categories = args.categories or list(DEFAULT_CATEGORIES)
     api_url = fandom_api_url(args.fandom)
 
     save_meta(

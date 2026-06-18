@@ -2,6 +2,7 @@ import sqlite3
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from dcdict.extraction import (
     ai_description_paragraph_from_html,
@@ -18,8 +19,10 @@ from dcdict.extraction import (
 )
 from dcdict.fetch_characters import (
     CrawlConfig,
+    DEFAULT_CATEGORIES,
     init_db,
     load_category_members,
+    parse_args,
     reextract_first_paragraphs,
     upsert_page,
 )
@@ -515,6 +518,37 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         self.assertEqual(fandom_api_url("dungeon-crawler-carl"), "https://dungeon-crawler-carl.fandom.com/api.php")
         self.assertEqual(wiki_category_title("Characters"), "Category:Characters")
         self.assertEqual(wiki_category_title("Category:Spells"), "Category:Spells")
+
+    def test_parse_args_defaults_to_normal_dcc_categories(self) -> None:
+        args = parse_args([])
+
+        self.assertIsNone(args.categories)
+        self.assertEqual(
+            DEFAULT_CATEGORIES,
+            ("Characters", "Groups", "Spells", "Achievements", "Races", "Items"),
+        )
+
+    def test_main_uses_normal_dcc_categories_when_none_are_passed(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            captured = {}
+
+            class StubClient:
+                def __init__(self, fandom, request_config) -> None:
+                    captured["fandom"] = fandom
+                    captured["request_config"] = request_config
+
+            with mock.patch("dcdict.fetch_characters.MediaWikiClient", StubClient), mock.patch(
+                "dcdict.fetch_characters.load_category_members", return_value=[]
+            ) as load_members, mock.patch("dcdict.fetch_characters.crawl_pages"), mock.patch(
+                "dcdict.fetch_characters.print_crawl_summary"
+            ), mock.patch("dcdict.fetch_characters.assert_robots_allowed"):
+                from dcdict.fetch_characters import main
+
+                self.assertEqual(main(["--output", str(db_path)]), 0)
+
+            crawl_config = load_members.call_args.args[1]
+            self.assertEqual(crawl_config.categories, DEFAULT_CATEGORIES)
 
     def test_wiki_page_url_uses_api_origin_and_encoded_title(self) -> None:
         self.assertEqual(

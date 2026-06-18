@@ -266,7 +266,7 @@ On older Kobo firmware, custom dictionaries may require ExtraLocales or a custom
 The default crawler target is:
 
 - API: `https://dungeon-crawler-carl.fandom.com/api.php`
-- Category: `Category:Characters`
+- Categories: `Category:Characters`, `Category:Groups`, `Category:Spells`, `Category:Achievements`, `Category:Races`, `Category:Items`
 - User-Agent: `KindleDictionaryCreationCrawler/0.1`
 
 The crawler:
@@ -294,6 +294,7 @@ python3 -m dcdict.fetch_characters \
   --fandom example \
   --category Characters \
   --category Groups \
+  --category Items \
   --output data/example.sqlite
 ```
 
