@@ -17,6 +17,7 @@ These instructions are for AI agents working in this repository. Follow them unl
 - Commit only when the user explicitly asks for a commit. When committing, use one concise commit message unless the user requests otherwise.
 - Do not create badge-only commits unless the user explicitly asks. Badge updates should travel with the feature, release, or documentation change that made them stale.
 - Do not push, publish, tag, or create GitHub releases unless the user explicitly asks.
+- When completing an item from `TODO.md`, remove that completed item in the same change unless the user asks to keep it.
 
 ## Dependencies
 

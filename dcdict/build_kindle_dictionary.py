@@ -28,6 +28,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min-definition-length", type=int, default=8)
     parser.add_argument("--compile", action="store_true", help="Run kindlegen if it is installed.")
     parser.add_argument(
+        "--release-version",
+        help="Dictionary release version for the Kindle OPF identifier, such as 0.5.0. Defaults to dev.",
+    )
+    parser.add_argument(
         "--no-sidebar-aliases",
         action="store_true",
         help="Disable lookup aliases derived from wiki sidebar alias fields.",
@@ -48,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     entries = load_entries(args.input, args.min_definition_length)
     if not entries:
         raise SystemExit(f"no usable entries found in {args.input}")
+    release_version = normalize_release_version(args.release_version)
 
     result = build_dictionary_sources(
         entries,
@@ -56,6 +61,7 @@ def main(argv: list[str] | None = None) -> int:
         args.author,
         link_entries=args.link_entries,
         include_sidebar_aliases=not args.no_sidebar_aliases,
+        release_version=release_version,
     )
 
     print(f"wrote {result.xhtml_path}")
@@ -73,6 +79,19 @@ def main(argv: list[str] | None = None) -> int:
             print("kindlegen was not found; source files are ready, but no .mobi was produced")
 
     return 0
+
+
+def normalize_release_version(value: str | None) -> str:
+    """Return the OPF identifier version component for local Kindle builds."""
+
+    if value is None:
+        return "dev"
+    from dcdict.release import ReleaseError, parse_version
+
+    try:
+        return parse_version(value).tag
+    except ReleaseError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 if __name__ == "__main__":

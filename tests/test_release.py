@@ -12,6 +12,7 @@ from dcdict.badges import CoverageResult, build_badges, parse_version as parse_b
 from dcdict.kindle import (
     DEFAULT_AUTHOR,
     DEFAULT_TITLE,
+    BuildResult,
     CompilationResult,
     Entry,
     build_dictionary_sources,
@@ -393,6 +394,76 @@ class ReleaseTests(unittest.TestCase):
             manifest = json.loads((release_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
             self.assertEqual(set(manifest["formats"]), {"kobo"})
             self.assertEqual(manifest["formats"]["kobo"]["smoke_tests"]["alias_count"], 2)
+
+    def test_kindle_release_passes_version_tag_to_opf_builder(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+                (root / name).write_text(name, encoding="utf-8")
+            write_badge_files(
+                root / "badges",
+                build_badges(parse_badge_version("1.2.3"), CoverageResult(100, 100), 3),
+            )
+            database = root / "entries.sqlite"
+            conn = sqlite3.connect(database)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT, url TEXT, first_paragraph TEXT,
+                    raw_html TEXT, status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, '', 'ok')",
+                [
+                    ("Carl", "https://example/Carl", "Carl travels with Donut."),
+                    ("Donut", "https://example/Donut", "Donut is a crawler."),
+                    ("Mordecai", "https://example/Mordecai", "Mordecai is a guide."),
+                ],
+            )
+            conn.commit()
+            conn.close()
+            captured: dict[str, str] = {}
+
+            def fake_build_dictionary_sources(entries, output_dir, title, author, **kwargs):
+                captured["release_version"] = kwargs["release_version"]
+                output_dir.mkdir(parents=True)
+                opf_path = output_dir / "dictionary.opf"
+                xhtml_path = output_dir / "dictionary.xhtml"
+                opf_path.write_text("<package />", encoding="utf-8")
+                xhtml_path.write_text("<html />", encoding="utf-8")
+                return BuildResult(xhtml_path, opf_path, len(entries), 0, 0)
+
+            def fake_compile(opf_path, **_kwargs):
+                mobi_path = opf_path.with_suffix(".mobi")
+                mobi_path.write_bytes(b"MOBI")
+                return CompilationResult(mobi_path, VALID_COMPILER_LOG, (), "2.9", 0)
+
+            inspection = mock.Mock()
+            inspection.checks = ("valid MOBI",)
+            inspection.manifest_data.return_value = {"checks": ["valid MOBI"]}
+
+            with mock.patch("dcdict.release.run_unit_tests"), mock.patch(
+                "dcdict.release.reextract_first_paragraphs", return_value=3
+            ), mock.patch(
+                "dcdict.release.build_dictionary_sources",
+                side_effect=fake_build_dictionary_sources,
+            ), mock.patch("dcdict.release.compile_with_kindlegen", side_effect=fake_compile), mock.patch(
+                "dcdict.release.inspect_mobi", return_value=inspection
+            ):
+                package_release(
+                    version=Version("1.2.3", "v1.2.3"),
+                    repo_root=root,
+                    input_db=database,
+                    dist_root=root / "dist",
+                    commit_sha="abc123",
+                    overwrite=False,
+                    formats=frozenset({"kindle"}),
+                    link_entries=True,
+                )
+
+            self.assertEqual(captured["release_version"], "v1.2.3")
 
     def test_package_release_rejects_stale_badge_metadata(self) -> None:
         with TemporaryDirectory() as tmp_dir:

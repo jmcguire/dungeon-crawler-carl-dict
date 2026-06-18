@@ -467,6 +467,7 @@ def package_release(
                 DEFAULT_AUTHOR,
                 link_entries=link_entries,
                 include_sidebar_aliases=include_sidebar_aliases,
+                release_version=version.tag,
             )
             LOGGER.info(
                 "Kindle aliases: %s accepted, %s omitted",

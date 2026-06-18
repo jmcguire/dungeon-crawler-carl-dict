@@ -16,6 +16,7 @@ from dcdict.kindle import (
     build_dictionary_sources,
     compile_with_kindlegen,
     forwarding_target_from_definition,
+    kindle_identifier,
     link_definition_references,
     load_entries,
     sanitize_inline_html,
@@ -25,6 +26,8 @@ from dcdict.kindle import (
     write_xhtml,
     write_xhtml_with_options,
 )
+from dcdict.build_kindle_dictionary import main as build_kindle_main
+from dcdict.build_kindle_dictionary import normalize_release_version
 
 
 class BuildKindleDictionaryTests(unittest.TestCase):
@@ -837,10 +840,32 @@ class BuildKindleDictionaryTests(unittest.TestCase):
 
             text = output.read_text(encoding="utf-8")
             self.assertIn("<DictionaryInLanguage>en-us</DictionaryInLanguage>", text)
+            self.assertIn('<dc:Identifier id="uid">urn:test</dc:Identifier>', text)
             self.assertIn("<DefaultLookupIndex>default</DefaultLookupIndex>", text)
             self.assertIn("generated from the fandom wiki page summaries", text)
             self.assertIn('xmlns:opf="http://www.idpf.org/2007/opf"', text)
             ET.parse(output)
+
+    def test_kindle_identifier_uses_title_and_release_version(self) -> None:
+        self.assertEqual(
+            kindle_identifier("Dungeon Crawler Carl Dictionary", "v0.5.0"),
+            "dcdict:Dungeon-Crawler-Carl-Dictionary:v0.5.0",
+        )
+        self.assertEqual(
+            kindle_identifier("Dungeon Crawler Carl Dictionary"),
+            "dcdict:Dungeon-Crawler-Carl-Dictionary:dev",
+        )
+        self.assertEqual(
+            kindle_identifier("Dungeon: Crawler / Carl Dictionary!", "v1.0.0-beta.1+build.4"),
+            "dcdict:Dungeon-Crawler-Carl-Dictionary:v1.0.0-beta.1-build.4",
+        )
+
+    def test_normalize_release_version_uses_release_semver_rules(self) -> None:
+        self.assertEqual(normalize_release_version(None), "dev")
+        self.assertEqual(normalize_release_version("0.5.0"), "v0.5.0")
+        self.assertEqual(normalize_release_version("v1.0.0-rc.1+build.4"), "v1.0.0-rc.1+build.4")
+        with self.assertRaises(SystemExit):
+            normalize_release_version("release-1.0")
 
     def test_build_dictionary_sources_writes_and_validates_outputs(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -854,8 +879,68 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertEqual(result.entry_count, 1)
             self.assertTrue(result.xhtml_path.exists())
             self.assertTrue(result.opf_path.exists())
+            self.assertIn(
+                "<dc:Identifier id=\"uid\">dcdict:Test-Dictionary:dev</dc:Identifier>",
+                result.opf_path.read_text(encoding="utf-8"),
+            )
             ET.parse(result.xhtml_path)
             ET.parse(result.opf_path)
+
+    def test_build_dictionary_sources_uses_release_version_in_opf_identifier(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            result = build_dictionary_sources(
+                [Entry("Carl", "https://example/wiki/Carl", "Carl is a crawler.")],
+                Path(tmp_dir),
+                "Test Dictionary",
+                "Test Author",
+                release_version="v0.5.0",
+            )
+
+            self.assertIn(
+                "<dc:Identifier id=\"uid\">dcdict:Test-Dictionary:v0.5.0</dc:Identifier>",
+                result.opf_path.read_text(encoding="utf-8"),
+            )
+
+    def test_cli_release_version_writes_release_identifier(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            db_path = root / "entries.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT, url TEXT, first_paragraph TEXT,
+                    raw_html TEXT, status TEXT
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO pages VALUES (?, ?, ?, '', 'ok')",
+                ("Carl", "https://example/wiki/Carl", "Carl is a crawler."),
+            )
+            conn.commit()
+            conn.close()
+
+            with mock.patch("builtins.print"):
+                code = build_kindle_main(
+                    [
+                        "--input",
+                        str(db_path),
+                        "--output-dir",
+                        str(root / "build"),
+                        "--title",
+                        "Test Dictionary",
+                        "--release-version",
+                        "0.5.0",
+                    ]
+                )
+
+            self.assertEqual(code, 0)
+            text = (root / "build" / "dictionary.opf").read_text(encoding="utf-8")
+            self.assertIn(
+                "<dc:Identifier id=\"uid\">dcdict:Test-Dictionary:v0.5.0</dc:Identifier>",
+                text,
+            )
 
     def test_compile_with_kindlegen_accepts_warning_exit_when_mobi_exists(self) -> None:
         with TemporaryDirectory() as tmp_dir:

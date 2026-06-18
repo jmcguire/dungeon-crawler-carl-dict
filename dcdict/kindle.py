@@ -7,7 +7,6 @@ import re
 import shutil
 import subprocess
 import sys
-import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,6 +51,7 @@ from dcdict.entries import (
 DEFAULT_TITLE = "Dungeon Crawler Carl Dictionary"
 DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors"
 LANGUAGE = "en-us"
+DEFAULT_RELEASE_VERSION = "dev"
 
 
 @dataclass(frozen=True)
@@ -222,7 +222,7 @@ def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier
   <metadata>
     <dc-metadata xmlns:dc="http://purl.org/dc/elements/1.1/"
                  xmlns:opf="http://www.idpf.org/2007/opf">
-      <dc:Identifier id="uid">{identifier}</dc:Identifier>
+      <dc:Identifier id="uid">{html.escape(identifier)}</dc:Identifier>
       <dc:Title>{html.escape(title)}</dc:Title>
       <dc:Language>{LANGUAGE}</dc:Language>
       <dc:Creator>{html.escape(author)}</dc:Creator>
@@ -252,6 +252,24 @@ def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier
     )
 
 
+def kindle_identifier(title: str, release_version: str = DEFAULT_RELEASE_VERSION) -> str:
+    """Return the deterministic OPF identifier for one Kindle dictionary build."""
+
+    title_component = identifier_component(title)
+    version_component = identifier_component(release_version)
+    return f"dcdict:{title_component}:{version_component}"
+
+
+def identifier_component(value: str) -> str:
+    """Normalize one identifier segment to stable ASCII words."""
+
+    folded = ascii_fold(normalize_text(value))
+    component = re.sub(r"[^A-Za-z0-9.]+", "-", folded).strip("-")
+    if not component:
+        raise ValueError("Kindle identifier components cannot be empty")
+    return component
+
+
 def validate_xml(path: Path) -> None:
     """Raise if a generated XML/XHTML file is not well-formed."""
 
@@ -265,13 +283,14 @@ def build_dictionary_sources(
     author: str,
     link_entries: bool = False,
     include_sidebar_aliases: bool = True,
+    release_version: str = DEFAULT_RELEASE_VERSION,
 ) -> BuildResult:
     """Generate and validate Kindle dictionary source files."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
     xhtml_path = output_dir / "dictionary.xhtml"
     opf_path = output_dir / "dictionary.opf"
-    identifier = f"urn:uuid:{uuid.uuid4()}"
+    identifier = kindle_identifier(title, release_version)
 
     alias_report = write_xhtml_with_options(
         entries,

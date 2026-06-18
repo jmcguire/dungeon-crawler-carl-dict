@@ -70,10 +70,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - Possible prefix: `Potion of ...`.
   - Only add these after collision tests and manual spot checks; previous broad aliasing created bad one-word aliases.
 
-- Change Kindle OPF/XML identifier to include dictionary name plus release version.
-  - This may help Kindle treat updates as the same dictionary with a newer build.
-  - Coordinate with release versioning; do not add a separate Python package version.
-
 ## P3 - Release And User Experience Polish
 
 - Improve GitHub release notes for non-expert users.
