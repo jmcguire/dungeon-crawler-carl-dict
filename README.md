@@ -3,13 +3,69 @@
 [![Release](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Frelease.json)](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fcoverage.json)](#tests)
 [![Python](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fpython.json)](#requirements)
-[![Formats](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fformats.json)](#create-a-release)
+[![Formats](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fformats.json)](#supported-formats)
 [![Licenses](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Flicenses.json)](#licensing)
 [![Output](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Foutput.json)](#create-a-release)
 
+A free custom e-reader dictionary for *Dungeon Crawler Carl*.
+
+This project lets you look up Dungeon Crawler Carl characters, factions, races, spells, achievements, items, and other terms directly from an e-reader dictionary panel. It is meant for readers who do not want to stop reading, search the web, or risk wandering through spoiler-heavy wiki pages just to remember who or what something is.
+
+The easiest starting point is the project site:
+
+**Project site:** <https://jmcguire.github.io/dungeon-crawler-carl-dict/>
+
+## Download
+
+Download the file for your device or reading app from the latest GitHub Release.
+
+| Reader | Download | Use this if |
+|---|---|---|
+| Kindle | [Dungeon-Crawler-Carl-Dictionary.mobi](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.mobi) | You want to sideload the dictionary onto a Kindle device. |
+| Kindle bundle | [Dungeon-Crawler-Carl-Dictionary.zip](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.zip) | You want the Kindle dictionary plus license, attribution, and install notes. |
+| KOReader / StarDict | [Dungeon-Crawler-Carl-Dictionary-StarDict.zip](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-StarDict.zip) | You read in KOReader or another StarDict-compatible reader. |
+| Kobo | [dicthtml-dc.zip](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/dicthtml-dc.zip) | You want the Kobo custom dictionary file. |
+| Kobo bundle | [Dungeon-Crawler-Carl-Dictionary-Kobo.zip](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-Kobo.zip) | You want the Kobo dictionary plus license, attribution, and install notes. |
+| Checksums | [SHA256SUMS.txt](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/SHA256SUMS.txt) | You want to verify downloaded files. |
+
+Full release history is here: <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases>
+
+## Supported formats
+
+This repository currently builds:
+
+- Kindle `.mobi` dictionary files
+- StarDict dictionaries for KOReader
+- Kobo `dicthtml` custom dictionaries
+- Release ZIP files with installation notes, license files, attribution, and build metadata
+
+The default dictionary source is the Dungeon Crawler Carl Fandom wiki. The crawler and converter are intentionally generic enough to point at another Fandom wiki and category later, but this repository is currently focused on Dungeon Crawler Carl.
+
+## Spoiler caveat
+
+This dictionary is intended to be less risky than opening a wiki while reading, but it is not guaranteed to be spoiler-free.
+
+If a source wiki page has a page-level spoiler warning banner, the generated dictionary entry places a spoiler note above the definition so the reader has a chance to stop before reading further. The warning is page-level. The wiki generally does not mark smaller spoiler phrases inside otherwise normal sentences, so some entries may still reveal details from later books.
+
+## Fan-project disclaimer
+
+This is an unofficial fan project. It is not affiliated with, authorized by, endorsed by, or sponsored by Matt Dinniman, the Dungeon Crawler Carl rights holders, Amazon, Kindle, Kobo, KOReader, Fandom, or any related publisher or platform.
+
+Generated dictionary entries are derived from community-contributed Dungeon Crawler Carl Wiki text on Fandom, with source page links included where practical. See [Licensing](#licensing), `CONTENT_LICENSE`, and `NOTICE` for details.
+
+## For developers
+
 This project builds Kindle, StarDict/KOReader, and Kobo lookup dictionaries from pages on a MediaWiki/Fandom wiki.
 
-The default target is the Dungeon Crawler Carl Fandom character category. The crawler and converter are intentionally generic enough to point at another Fandom wiki and category later.
+The technical workflow is:
+
+1. Fetch selected wiki pages into SQLite.
+2. Extract short dictionary definitions and conservative aliases.
+3. Build Kindle XHTML/OPF source, StarDict files, and Kobo dictionary source.
+4. Optionally compile Kindle and Kobo device-ready outputs.
+5. Package tested release artifacts for GitHub Releases.
+
+Developer build, test, release, licensing, and sideloading details are below.
 
 ## Requirements
 
@@ -36,8 +92,7 @@ Generated dictionary entries are derived from community-contributed Dungeon Craw
 
 Amazon no longer offers `kindlegen` as a separate supported download. Install Kindle Previewer instead:
 
-1. Go to Amazon's Kindle Previewer page:
-   <https://kdp.amazon.com/en_US/help/topic/G202131170>
+1. Go to Amazon's Kindle Previewer page: <https://kdp.amazon.com/en_US/help/topic/G202131170>
 2. Download the macOS installer.
 3. Open `KindlePreviewerInstaller.pkg`.
 4. Follow the installer prompts.
@@ -67,10 +122,12 @@ python3 -m dcdict.fetch_entries --ignore-robots
 But if you want more categories, use:
 
 ```sh
-» python3 -m dcdict.fetch_entries --category Characters --category Groups --category Spells --category Achievements --category Races --category Items --ignore-robots
+python3 -m dcdict.fetch_entries --category Characters --category Groups --category Spells --category Achievements --category Races --category Items --ignore-robots
 ```
 
-For this DCC Fandom wiki, `robots.txt` disallows `/api.php` for crawlers. The script respects that by default and will stop unless you pass `--ignore-robots`. Use that override only for a user-triggered, polite fetch like this project: low rate, small scope, no indexing, no training, and no repeated hammering.
+For this DCC Fandom wiki, `robots.txt` disallows `/api.php` for crawlers. The script respects that by default and will stop unless you pass `--ignore-robots`.
+
+Use that override only for a user-triggered, polite fetch like this project: low rate, small scope, no indexing, no training, and no repeated hammering.
 
 Build Kindle dictionary source files:
 
@@ -80,13 +137,17 @@ python3 -m dcdict.build_kindle_dictionary
 
 Definitions preserve safe inline emphasis from the wiki where possible: `<b>`/`<strong>` become bold text, and `<i>`/`<em>` become italic text. Other HTML is stripped or escaped during extraction/building.
 
-Lookup aliases are discovered conservatively from the entry data: generic ` Box` and ` Spell` suffix stripping, selected wiki sidebar aliases, recognized intro parentheticals such as `(aka Borant)` or `(actually named "Gravy Boat")`, first bold intro names that differ from the page title, and first/last names for likely human characters. For example, `1914 Box` is also indexed as `1914`, and `Saccathian (or Sacs)` is also indexed as `Sacs`. Kindle aliases are emitted as hidden `idx:iform` inflections under the canonical headword, so lookups resolve without duplicating the visible dictionary entry. StarDict uses `.syn` aliases, and Kobo uses variants. Ambiguous aliases are omitted rather than routed to an arbitrary entry.
+Lookup aliases are discovered conservatively from the entry data: generic ` Box` and ` Spell` suffix stripping, selected wiki sidebar aliases, recognized intro parentheticals such as `(aka Borant)` or `(actually named "Gravy Boat")`, first bold intro names that differ from the page title, and first/last names for likely human characters. For example, `1914 Box` is also indexed as `1914`, and `Saccathian (or Sacs)` is also indexed as `Sacs`.
 
-For local testing, pass `--no-sidebar-aliases` to disable aliases derived from wiki sidebars.
+Kindle aliases are emitted as hidden `idx:iform` inflections under the canonical headword, so lookups resolve without duplicating the visible dictionary entry. StarDict uses `.syn` aliases, and Kobo uses variants. Ambiguous aliases are omitted rather than routed to an arbitrary entry. For local testing, pass `--no-sidebar-aliases` to disable aliases derived from wiki sidebars.
 
-Definitions are rendered as a short bullet list. If the source wiki page has a page-level spoiler warning banner, the generated entry places a spoiler note above the bullet so a reader has a chance to stop before reading the summary.  The warning is page-level; the wiki generally does not mark smaller spoiler phrases inside otherwise normal sentences.
+Definitions are rendered as a short bullet list.
 
-When present in the page sidebar's BIOGRAPHICAL INFO section, the dictionary adds a few conservative detail bullets below the summary: aliases, origin, race, and first scene. Noisy or more spoilery sidebar fields such as class, crawler number, crawler ID, and occupation are intentionally omitted.
+If the source wiki page has a page-level spoiler warning banner, the generated entry places a spoiler note above the bullet so a reader has a chance to stop before reading the summary. The warning is page-level; the wiki generally does not mark smaller spoiler phrases inside otherwise normal sentences.
+
+When present in the page sidebar's BIOGRAPHICAL INFO section, the dictionary adds a few conservative detail bullets below the summary: aliases, origin, race, and first scene.
+
+Noisy or more spoilery sidebar fields such as class, crawler number, crawler ID, and occupation are intentionally omitted.
 
 Optionally add internal cross-links between known dictionary entries:
 
@@ -94,7 +155,9 @@ Optionally add internal cross-links between known dictionary entries:
 python3 -m dcdict.build_kindle_dictionary --link-entries
 ```
 
-For example, if the `Carl` definition mentions `Donut`, the generated XHTML links `Donut` to Donut's dictionary entry with an internal anchor. The linker only touches text nodes, preserves bold/italic markup, skips self-links, and avoids very short single-word titles to reduce noisy false positives.
+For example, if the `Carl` definition mentions `Donut`, the generated XHTML links `Donut` to Donut's dictionary entry with an internal anchor.
+
+The linker only touches text nodes, preserves bold/italic markup, skips self-links, and avoids very short single-word titles to reduce noisy false positives.
 
 Kindle caveat: these links work when opening the dictionary directly as a book, but may not work inside the Kindle lookup popup/card UI. That appears to be a Kindle interface limitation rather than a dictionary build error.
 
@@ -161,7 +224,9 @@ The release command builds a complete, tested bundle from the current stored dat
 python3 -m dcdict.release --version 0.5.0 --link-entries
 ```
 
-By default the command builds Kindle, StarDict, and Kobo editions. It requires a clean Git worktree and `data/characters.sqlite`; Kindle builds additionally require the `kindlegen` binary included with Kindle Previewer, and Kobo builds require Patrick Gaskin's `dictgen` tool from [dictutil](https://github.com/pgaskin/dictutil) on your `PATH`. It makes a SQLite snapshot, re-extracts descriptions from stored HTML without crawling, runs the complete test suite and entry audit, and performs binary smoke tests on all finished dictionaries.
+By default the command builds Kindle, StarDict, and Kobo editions.
+
+It requires a clean Git worktree and `data/characters.sqlite`; Kindle builds additionally require the `kindlegen` binary included with Kindle Previewer, and Kobo builds require Patrick Gaskin's `dictgen` tool from [dictutil](https://github.com/pgaskin/dictutil) on your `PATH`. It makes a SQLite snapshot, re-extracts descriptions from stored HTML without crawling, runs the complete test suite and entry audit, and performs binary smoke tests on all finished dictionaries.
 
 For a faster local format-specific build, use `--format kindle`, `--format stardict`, or `--format kobo`. StarDict-only builds do not require Kindle Previewer or `dictgen`; Kobo-only builds do not require Kindle Previewer. Published releases must use the default `--format all` so every tagged release remains complete.
 
@@ -175,7 +240,9 @@ Successful output is written atomically to `dist/v1.0.0/`:
 - `SHA256SUMS.txt`
 - `release-manifest.json`
 
-Each ZIP includes format-specific installation instructions and the project's license and attribution files. The schema 2 manifest records shared provenance plus separate Kindle, StarDict, and Kobo build and smoke-test results. Existing version directories are protected; pass `--overwrite` only when intentionally rebuilding the same local version.
+Each ZIP includes format-specific installation instructions and the project's license and attribution files.
+
+The schema 2 manifest records shared provenance plus separate Kindle, StarDict, and Kobo build and smoke-test results. Existing version directories are protected; pass `--overwrite` only when intentionally rebuilding the same local version.
 
 To publish the same assets as a tagged GitHub Release, install and authenticate the [GitHub CLI](https://cli.github.com/):
 
@@ -199,7 +266,9 @@ These permanent URLs always point to the assets from the newest GitHub Release:
 
 ## Sideload To Kindle
 
-After building `build/dictionary.mobi`, connect the Kindle to the Mac with USB. It should mount under `/Volumes`, usually as:
+After building `build/dictionary.mobi`, connect the Kindle to the Mac with USB.
+
+It should mount under `/Volumes`, usually as:
 
 ```text
 /Volumes/Kindle
@@ -223,7 +292,9 @@ Safely eject the Kindle:
 diskutil eject /Volumes/Kindle
 ```
 
-Unplug the Kindle and give it a moment to index the new file. Then check:
+Unplug the Kindle and give it a moment to index the new file.
+
+Then check:
 
 ```text
 Settings -> Language & Dictionaries -> Dictionaries
@@ -239,7 +310,9 @@ Download and extract `Dungeon-Crawler-Carl-Dictionary-StarDict.zip`. Keep the ex
 koreader/data/dict/
 ```
 
-Restart KOReader. If the dictionary is not enabled automatically, open **Dictionary settings -> Manage dictionaries** and enable `Dungeon Crawler Carl Dictionary`.
+Restart KOReader.
+
+If the dictionary is not enabled automatically, open **Dictionary settings -> Manage dictionaries** and enable `Dungeon Crawler Carl Dictionary`.
 
 To make it the default lookup result globally, use **Dictionary settings -> Manage dictionaries** to move `Dungeon Crawler Carl Dictionary` above your other dictionaries, then accept/save the order. KOReader uses that order as dictionary priority.
 
@@ -249,17 +322,21 @@ With the linked release build, tapping a referenced dictionary entry should open
 
 ## Install On Kobo
 
-Download `dicthtml-dc.zip`. Connect the Kobo to the Mac with USB and copy the file into:
+Download `dicthtml-dc.zip`.
+
+Connect the Kobo to the Mac with USB and copy the file into:
 
 ```text
 KOBOeReader/.kobo/custom-dict/
 ```
 
-If `custom-dict` does not exist, create it. Safely eject and restart the Kobo.
+If `custom-dict` does not exist, create it.
 
-Open a book, select a word, and open the dictionary panel. Use the dictionary selector in the lookup panel to choose the custom dictionary named for the `dc` locale.
+Safely eject and restart the Kobo. Open a book, select a word, and open the dictionary panel. Use the dictionary selector in the lookup panel to choose the custom dictionary named for the `dc` locale.
 
-On older Kobo firmware, custom dictionaries may require ExtraLocales or a custom dictionary patch before they can be selected. Current Kobo firmware supports `.kobo/custom-dict` for custom dictionaries.
+On older Kobo firmware, custom dictionaries may require ExtraLocales or a custom dictionary patch before they can be selected.
+
+Current Kobo firmware supports `.kobo/custom-dict` for custom dictionaries.
 
 ## Crawler Defaults
 
@@ -301,13 +378,17 @@ python3 -m dcdict.fetch_entries \
 
 ## Kindle Notes
 
-Kindle dictionaries are built from XHTML content with Amazon-specific `idx:*` tags plus an OPF package file. The converter writes those source files. Amazon's older documented compiler command is:
+Kindle dictionaries are built from XHTML content with Amazon-specific `idx:*` tags plus an OPF package file.
+
+The converter writes those source files. Amazon's older documented compiler command is:
 
 ```sh
 kindlegen dictionary.opf -c2 -verbose -dont_append_source
 ```
 
-For this project, the bundled Kindle Previewer compiler successfully produces a classic MOBI v7 dictionary when run without `-c2`. The Python build script handles that detail for you. Kindle tooling has changed over the years, so the source files are the stable artifact this project controls, and `build/dictionary.mobi` is the sideloadable artifact to try on the device.
+For this project, the bundled Kindle Previewer compiler successfully produces a classic MOBI v7 dictionary when run without `-c2`. The Python build script handles that detail for you.
+
+Kindle tooling has changed over the years, so the source files are the stable artifact this project controls, and `build/dictionary.mobi` is the sideloadable artifact to try on the device.
 
 ## Attribution
 
