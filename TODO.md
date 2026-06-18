@@ -32,12 +32,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - `Krakaren Clone (Second Floor)`
   - Determine whether these need better extraction, aliases, disambiguation, or manual cleanup.
 
-## P2 - Improve Default Crawl Scope
-
-- Add defensive subcategory loop protection.
-  - MediaWiki categories can theoretically loop.
-  - DCC does not appear to trigger this, so this is defensive rather than urgent.
-
 ## P2 - Improve Kindle Indexing
 
 - Add inflection support for selected aliases and possessives.

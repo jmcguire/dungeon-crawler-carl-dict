@@ -478,6 +478,9 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             def __init__(self) -> None:
                 self.calls = []
 
+            def category_title(self, category):
+                return wiki_category_title(category)
+
             def category_members(self, category, batch_size, max_pages, delay):
                 self.calls.append((category, batch_size, max_pages, delay))
                 if category == "Characters":
@@ -501,6 +504,9 @@ class FetchCharacterExtractionTests(unittest.TestCase):
 
     def test_load_category_members_skips_failed_category_and_continues(self) -> None:
         class StubClient:
+            def category_title(self, category):
+                return wiki_category_title(category)
+
             def category_members(self, category, batch_size, max_pages, delay):
                 if category == "Characters":
                     raise RuntimeError("boom")
@@ -513,6 +519,60 @@ class FetchCharacterExtractionTests(unittest.TestCase):
 
         self.assertEqual([target.pageid for target in targets], [2])
         self.assertEqual(targets[0].source_categories, ("Groups",))
+
+    def test_load_category_members_skips_duplicate_categories(self) -> None:
+        class StubClient:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def category_title(self, category):
+                return wiki_category_title(category)
+
+            def category_members(self, category, batch_size, max_pages, delay):
+                self.calls.append(category)
+                return [PageRef(pageid=1, title="Carl", ns=0)]
+
+        client = StubClient()
+        config = CrawlConfig(
+            categories=("Characters", "Characters", "Category:Characters"),
+            delay=0.0,
+            max_pages=0,
+            category_batch_size=50,
+            refresh=False,
+        )
+
+        targets = load_category_members(client, config)
+
+        self.assertEqual([target.pageid for target in targets], [1])
+        self.assertEqual(client.calls, ["Characters"])
+
+    def test_load_category_members_uses_canonical_titles_for_seen_guard(self) -> None:
+        class StubClient:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def category_title(self, category):
+                return wiki_category_title(category)
+
+            def category_members(self, category, batch_size, max_pages, delay):
+                self.calls.append(category)
+                if category == "Groups":
+                    return [PageRef(pageid=2, title="Donut", ns=0)]
+                return [PageRef(pageid=1, title="Carl", ns=0)]
+
+        client = StubClient()
+        config = CrawlConfig(
+            categories=("Category:Characters", "Characters", "Groups"),
+            delay=0.0,
+            max_pages=0,
+            category_batch_size=50,
+            refresh=False,
+        )
+
+        targets = load_category_members(client, config)
+
+        self.assertEqual([target.pageid for target in targets], [1, 2])
+        self.assertEqual(client.calls, ["Category:Characters", "Groups"])
 
     def test_fandom_url_helpers_use_slug_and_canonical_category_title(self) -> None:
         self.assertEqual(fandom_api_url("dungeon-crawler-carl"), "https://dungeon-crawler-carl.fandom.com/api.php")

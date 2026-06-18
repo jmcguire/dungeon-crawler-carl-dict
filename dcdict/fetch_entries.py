@@ -216,7 +216,14 @@ def load_category_members(client: MediaWikiClient, config: CrawlConfig) -> list[
 
     targets: dict[int, CrawlTarget] = {}
     order: list[int] = []
-    for category in config.categories:
+    seen_categories: set[str] = set()
+    category_queue = list(config.categories)
+    while category_queue:
+        category = category_queue.pop(0)
+        canonical_category = client.category_title(category)
+        if canonical_category in seen_categories:
+            continue
+        seen_categories.add(canonical_category)
         try:
             pages = client.category_members(
                 category,

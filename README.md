@@ -275,6 +275,7 @@ The crawler:
 - Accepts a Fandom wiki slug with `--fandom`, such as `dungeon-crawler-carl`.
 - Accepts one or more categories with repeated `--category` flags.
 - Restricts category members to namespace `0`, which skips subcategory pages.
+- Canonicalizes and de-duplicates the category queue, which defensively avoids repeated traversal if duplicate or reintroduced category names appear.
 - Checks `robots.txt` before crawling unless `--ignore-robots` is passed.
 - Sleeps between requests with jitter.
 - Retries temporary HTTP failures with exponential backoff.
