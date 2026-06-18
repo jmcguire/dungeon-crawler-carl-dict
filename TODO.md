@@ -34,9 +34,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
 ## P2 - Improve Default Crawl Scope
 
-- Rename `fetch_characters` to `fetch_entries`.
-  - Update README examples and tests when this happens.
-
 - Add defensive subcategory loop protection.
   - MediaWiki categories can theoretically loop.
   - DCC does not appear to trigger this, so this is defensive rather than urgent.

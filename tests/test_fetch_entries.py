@@ -17,7 +17,7 @@ from dcdict.extraction import (
     summary_from_html,
     summary_from_infobox,
 )
-from dcdict.fetch_characters import (
+from dcdict.fetch_entries import (
     CrawlConfig,
     DEFAULT_CATEGORIES,
     init_db,
@@ -538,17 +538,23 @@ class FetchCharacterExtractionTests(unittest.TestCase):
                     captured["fandom"] = fandom
                     captured["request_config"] = request_config
 
-            with mock.patch("dcdict.fetch_characters.MediaWikiClient", StubClient), mock.patch(
-                "dcdict.fetch_characters.load_category_members", return_value=[]
-            ) as load_members, mock.patch("dcdict.fetch_characters.crawl_pages"), mock.patch(
-                "dcdict.fetch_characters.print_crawl_summary"
-            ), mock.patch("dcdict.fetch_characters.assert_robots_allowed"):
-                from dcdict.fetch_characters import main
+            with mock.patch("dcdict.fetch_entries.MediaWikiClient", StubClient), mock.patch(
+                "dcdict.fetch_entries.load_category_members", return_value=[]
+            ) as load_members, mock.patch("dcdict.fetch_entries.crawl_pages"), mock.patch(
+                "dcdict.fetch_entries.print_crawl_summary"
+            ), mock.patch("dcdict.fetch_entries.assert_robots_allowed"):
+                from dcdict.fetch_entries import main
 
                 self.assertEqual(main(["--output", str(db_path)]), 0)
 
             crawl_config = load_members.call_args.args[1]
             self.assertEqual(crawl_config.categories, DEFAULT_CATEGORIES)
+
+    def test_fetch_characters_wrapper_reexports_main(self) -> None:
+        from dcdict import fetch_characters
+        from dcdict import fetch_entries
+
+        self.assertIs(fetch_characters.main, fetch_entries.main)
 
     def test_wiki_page_url_uses_api_origin_and_encoded_title(self) -> None:
         self.assertEqual(

@@ -22,7 +22,7 @@ from typing import Callable, Sequence
 from dcdict.audit_entries import AuditFinding, audit_entries
 from dcdict.badges import validate_badges
 from dcdict.entries import load_entries
-from dcdict.fetch_characters import reextract_first_paragraphs
+from dcdict.fetch_entries import reextract_first_paragraphs
 from dcdict.kindle import (
     DEFAULT_AUTHOR,
     DEFAULT_TITLE,

@@ -61,13 +61,13 @@ The build script checks that location automatically when you pass `--compile`.
 Fetch raw character page data into SQLite:
 
 ```sh
-python3 -m dcdict.fetch_characters --ignore-robots
+python3 -m dcdict.fetch_entries --ignore-robots
 ```
 
 But if you want more categories, use:
 
 ```sh
-» python3 -m dcdict.fetch_characters --category Characters --category Groups --category Spells --category Achievements --category Items --ignore-robots
+» python3 -m dcdict.fetch_entries --category Characters --category Groups --category Spells --category Achievements --category Races --category Items --ignore-robots
 ```
 
 For this DCC Fandom wiki, `robots.txt` disallows `/api.php` for crawlers. The script respects that by default and will stop unless you pass `--ignore-robots`. Use that override only for a user-triggered, polite fetch like this project: low rate, small scope, no indexing, no training, and no repeated hammering.
@@ -284,13 +284,13 @@ The crawler:
 Re-run paragraph extraction from already stored raw HTML, without touching the network:
 
 ```sh
-python3 -m dcdict.fetch_characters --output data/characters.sqlite --reextract-only
+python3 -m dcdict.fetch_entries --output data/characters.sqlite --reextract-only
 ```
 
 Example for a different Fandom wiki:
 
 ```sh
-python3 -m dcdict.fetch_characters \
+python3 -m dcdict.fetch_entries \
   --fandom example \
   --category Characters \
   --category Groups \
