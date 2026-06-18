@@ -16,7 +16,7 @@ from typing import Iterable
 
 from dcdict.entries import (
     Entry,
-    build_aliases,
+    build_alias_report,
     link_definition_references,
     sanitize_inline_html,
 )
@@ -48,6 +48,7 @@ class StarDictBuildResult:
     css_path: Path
     entry_count: int
     alias_count: int
+    omitted_alias_count: int = 0
 
     @property
     def files(self) -> tuple[Path, ...]:
@@ -206,11 +207,16 @@ def build_stardict(
     *,
     link_entries: bool = False,
     base_name: str = BASE_NAME,
+    include_sidebar_aliases: bool = True,
 ) -> StarDictBuildResult:
     """Generate a StarDict 2.4.2 bundle from normalized entries."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    aliases = build_aliases(entries)
+    alias_report = build_alias_report(
+        entries,
+        include_sidebar_aliases=include_sidebar_aliases,
+    )
+    aliases = alias_report.aliases
     entries_by_title = {entry.title: entry for entry in entries}
     if len(entries_by_title) != len(entries):
         raise StarDictValidationError("canonical entry titles must be unique")
@@ -295,6 +301,7 @@ def build_stardict(
         css_path=css_path,
         entry_count=len(index_records),
         alias_count=len(synonym_records),
+        omitted_alias_count=alias_report.omitted_alias_count,
     )
 
 

@@ -410,6 +410,7 @@ def package_release(
     overwrite: bool,
     formats: frozenset[str] = ALL_FORMATS,
     link_entries: bool = False,
+    include_sidebar_aliases: bool = True,
     runner: CommandRunner = run_command,
 ) -> Path:
     """Build and atomically install a verified multi-format release directory."""
@@ -465,6 +466,12 @@ def package_release(
                 DEFAULT_TITLE,
                 DEFAULT_AUTHOR,
                 link_entries=link_entries,
+                include_sidebar_aliases=include_sidebar_aliases,
+            )
+            LOGGER.info(
+                "Kindle aliases: %s accepted, %s omitted",
+                kindle_build.alias_count,
+                kindle_build.omitted_alias_count,
             )
             compilation = compile_with_kindlegen(kindle_build.opf_path, dont_append_source=True)
             if compilation is None:
@@ -488,6 +495,8 @@ def package_release(
                     "warnings": list(compilation.warnings),
                 },
                 "smoke_tests": mobi_inspection.manifest_data(),
+                "alias_count": kindle_build.alias_count,
+                "omitted_alias_count": kindle_build.omitted_alias_count,
             }
 
         if "stardict" in formats:
@@ -497,6 +506,12 @@ def package_release(
                 DEFAULT_TITLE,
                 DEFAULT_AUTHOR,
                 link_entries=link_entries,
+                include_sidebar_aliases=include_sidebar_aliases,
+            )
+            LOGGER.info(
+                "StarDict aliases: %s accepted, %s omitted",
+                stardict_build.alias_count,
+                stardict_build.omitted_alias_count,
             )
             stardict_inspection = inspect_stardict(
                 stardict_build.ifo_path,
@@ -512,10 +527,21 @@ def package_release(
                 "assets": [STARDICT_ZIP_NAME],
                 "generator": "Python standard library",
                 "smoke_tests": stardict_inspection.manifest_data(),
+                "alias_count": stardict_build.alias_count,
+                "omitted_alias_count": stardict_build.omitted_alias_count,
             }
 
         if "kobo" in formats:
-            kobo_build = build_kobo(entries, work_dir / "kobo")
+            kobo_build = build_kobo(
+                entries,
+                work_dir / "kobo",
+                include_sidebar_aliases=include_sidebar_aliases,
+            )
+            LOGGER.info(
+                "Kobo aliases: %s accepted, %s omitted",
+                kobo_build.alias_count,
+                kobo_build.omitted_alias_count,
+            )
             kobo_inspection = inspect_kobo(
                 kobo_build.dictzip_path,
                 required_headwords=("Carl", "Donut", "Mordecai", "1914", "Fire Fingers"),
@@ -533,6 +559,8 @@ def package_release(
                     "version": kobo_build.compiler_version,
                 },
                 "smoke_tests": kobo_inspection.manifest_data(),
+                "alias_count": kobo_build.alias_count,
+                "omitted_alias_count": kobo_build.omitted_alias_count,
             }
 
         manifest_path = asset_dir / MANIFEST_NAME
@@ -667,6 +695,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--input", type=Path, default=Path("data/characters.sqlite"))
     parser.add_argument("--dist-dir", type=Path, default=Path("dist"))
     parser.add_argument(
+        "--no-sidebar-aliases",
+        action="store_true",
+        help="Disable lookup aliases derived from wiki sidebar alias fields.",
+    )
+    parser.add_argument(
         "--format",
         choices=("all", "kindle", "stardict", "kobo"),
         default="all",
@@ -705,6 +738,7 @@ def main(argv: list[str] | None = None) -> int:
             overwrite=args.overwrite,
             formats=formats,
             link_entries=args.link_entries,
+            include_sidebar_aliases=not args.no_sidebar_aliases,
         )
         LOGGER.info("release bundle ready: %s", release_dir)
         if args.publish:

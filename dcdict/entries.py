@@ -41,6 +41,43 @@ class Entry:
     details: tuple[tuple[str, str], ...] = ()
 
 
+@dataclass(frozen=True)
+class AliasOmission:
+    """One alias candidate intentionally omitted from lookup indexes."""
+
+    alias: str
+    target: str
+    source: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class AliasReport:
+    """Accepted aliases and rejected alias candidates for one entry set."""
+
+    aliases: dict[str, list[str]]
+    omissions: tuple[AliasOmission, ...] = ()
+
+    @property
+    def accepted_alias_count(self) -> int:
+        """Return the number of non-canonical aliases accepted."""
+
+        return sum(max(0, len(forms) - 1) for forms in self.aliases.values())
+
+    @property
+    def omitted_alias_count(self) -> int:
+        """Return the number of alias candidates rejected."""
+
+        return len(self.omissions)
+
+
+@dataclass(frozen=True)
+class _AliasCandidate:
+    target: str
+    alias: str
+    source: str
+
+
 def normalize_text(text: str) -> str:
     """Normalize Unicode and collapse whitespace."""
 
@@ -99,6 +136,38 @@ class InlineTextParser(HTMLParser):
 
     def handle_data(self, data: str) -> None:
         self.chunks.append(data)
+
+
+class InlineAliasParser(HTMLParser):
+    """Extract plain text plus bold phrases from sanitized inline HTML."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.chunks: list[str] = []
+        self.bold_phrases: list[str] = []
+        self._bold_depth = 0
+        self._bold_chunks: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if ALLOWED_INLINE_TAGS.get(tag) == "b":
+            if self._bold_depth == 0:
+                self._bold_chunks = []
+            self._bold_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if ALLOWED_INLINE_TAGS.get(tag) != "b" or self._bold_depth == 0:
+            return
+        self._bold_depth -= 1
+        if self._bold_depth == 0:
+            phrase = normalize_text("".join(self._bold_chunks))
+            if phrase:
+                self.bold_phrases.append(phrase)
+            self._bold_chunks = []
+
+    def handle_data(self, data: str) -> None:
+        self.chunks.append(data)
+        if self._bold_depth:
+            self._bold_chunks.append(data)
 
 
 class LinkedDefinitionParser(HTMLParser):
@@ -529,23 +598,252 @@ def suffix_stripped_alias(title: str, folded_titles: set[str]) -> str | None:
     return None
 
 
-def build_aliases(entries: list[Entry]) -> dict[str, list[str]]:
-    """Build unique aliases for titles ending in Box or Spell."""
+def inline_alias_data(fragment: str) -> tuple[str, list[str]]:
+    """Return plain text and bold phrases from sanitized inline HTML."""
 
-    folded_titles = {entry.title.casefold() for entry in entries}
-    candidates: dict[str, str] = {}
-    owners: dict[str, set[str]] = {}
+    parser = InlineAliasParser()
+    parser.feed(sanitize_inline_html(fragment))
+    parser.close()
+    return normalize_text("".join(parser.chunks)), parser.bold_phrases
+
+
+def description_alias_candidates(entry: Entry) -> list[_AliasCandidate]:
+    """Infer alias candidates from the opening definition text and emphasis."""
+
+    plain_text, bold_phrases = inline_alias_data(entry.definition)
+    candidates: list[_AliasCandidate] = []
+    for alias in parenthetical_aliases_from_intro(plain_text, bold_phrases):
+        candidates.append(_AliasCandidate(entry.title, alias, "description-parenthetical"))
+    if bold_phrases and bold_phrases[0].casefold() != entry.title.casefold():
+        candidates.append(_AliasCandidate(entry.title, bold_phrases[0], "bold-intro"))
+    candidates.extend(leading_article_title_candidates(entry, plain_text, bold_phrases))
+    return candidates
+
+
+def parenthetical_aliases_from_intro(text: str, bold_phrases: list[str]) -> list[str]:
+    """Extract aliases from recognized intro parentheticals."""
+
+    intro = first_sentence_for_aliases(text)
+    aliases: list[str] = []
+    for parenthetical in re.findall(r"\(([^)]{1,160})\)", intro):
+        match = re.match(r"\s*(?:or|aka)\s+(.+?)\s*$", parenthetical, flags=re.I)
+        if not match:
+            match = re.match(
+                r'\s*actually named\s+["“]([^"”]+)["”]',
+                parenthetical,
+                flags=re.I,
+            )
+        if not match:
+            match = re.match(
+                r'\s*shortened to\s+["“]([^"”]+)["”]',
+                parenthetical,
+                flags=re.I,
+            )
+        if not match:
+            continue
+        alias = preferred_bold_alias(match.group(1), bold_phrases)
+        if alias:
+            aliases.append(alias)
+    return aliases
+
+
+def first_sentence_for_aliases(text: str) -> str:
+    """Return the first sentence-ish span used for conservative alias inference."""
+
+    match = re.search(r"(?<=[.!?])\s+", text)
+    if not match:
+        return text[:500]
+    return text[: match.start() + 1]
+
+
+def preferred_bold_alias(candidate: str, bold_phrases: list[str]) -> str:
+    """Prefer a bold phrase contained in a recognized alias expression."""
+
+    candidate = clean_alias_text(candidate)
+    folded_candidate = candidate.casefold()
+    for phrase in bold_phrases:
+        if phrase.casefold() in folded_candidate:
+            return phrase
+    return candidate
+
+
+def clean_alias_text(alias: str) -> str:
+    """Normalize one automatically discovered alias string."""
+
+    alias = html.unescape(alias)
+    alias = alias.strip().strip("'\"“”")
+    return normalize_text(alias)
+
+
+def leading_article_title_candidates(entry: Entry, text: str, bold_phrases: list[str]) -> list[_AliasCandidate]:
+    """Return article-included title aliases seen at the start of a definition."""
+
+    if not bold_phrases or bold_phrases[0].casefold() != entry.title.casefold():
+        return []
+    pattern = rf"^(The|A|An)\s+{re.escape(entry.title)}\b"
+    match = re.match(pattern, text, flags=re.I)
+    if not match:
+        return []
+    alias = normalize_text(f"{match.group(1)} {entry.title}")
+    return [_AliasCandidate(entry.title, alias, "description-leading-article")]
+
+
+def sidebar_alias_candidates(entry: Entry) -> list[_AliasCandidate]:
+    """Return filtered alias candidates from one entry's sidebar details."""
+
+    candidates: list[_AliasCandidate] = []
+    for label, value in entry.details:
+        if label != "Aliases":
+            continue
+        for alias in split_sidebar_aliases(value):
+            candidates.append(_AliasCandidate(entry.title, alias, "sidebar"))
+            stripped = strip_leading_article(alias)
+            if stripped != alias:
+                candidates.append(_AliasCandidate(entry.title, stripped, "sidebar-leading-article"))
+    return candidates
+
+
+def strip_leading_article(alias: str) -> str:
+    """Remove a leading English article from a discovered alias."""
+
+    return normalize_text(re.sub(r"^(?:the|a|an)\s+", "", alias, count=1, flags=re.I))
+
+
+def split_sidebar_aliases(value: str) -> list[str]:
+    """Split a wiki sidebar alias field into conservative alias candidates."""
+
+    value = value.replace(";", ",").replace("|", ",")
+    value = re.sub(r"\s+or\s+", ",", value, flags=re.I)
+    aliases = []
+    for chunk in value.split(","):
+        alias = normalize_text(chunk)
+        if alias:
+            aliases.append(alias)
+    return aliases
+
+
+def human_name_alias_candidates(entry: Entry) -> list[_AliasCandidate]:
+    """Return conservative first/last-name aliases for likely human entries."""
+
+    if not is_likely_human_name_entry(entry):
+        return []
+    first, last = entry.title.split()
+    return [
+        _AliasCandidate(entry.title, first, "human-name"),
+        _AliasCandidate(entry.title, last, "human-name"),
+    ]
+
+
+def is_likely_human_name_entry(entry: Entry) -> bool:
+    """Return whether an entry is safe for first/last-name aliases."""
+
+    words = entry.title.split()
+    if len(words) != 2:
+        return False
+    if any(len(word) < 3 or not re.fullmatch(r"[A-Z][A-Za-z'-]*", word) for word in words):
+        return False
+    race_values = [value for label, value in entry.details if label == "Race"]
+    return any("human" in value.casefold() for value in race_values)
+
+
+def alias_candidate_is_usable(alias: str) -> tuple[bool, str]:
+    """Validate an alias candidate before collision checks."""
+
+    if not alias:
+        return False, "empty"
+    if len(alias) < 2:
+        return False, "too-short"
+    if re.search(r"\[\d+\]", alias):
+        return False, "citation-marker"
+    if "(" in alias or ")" in alias:
+        return False, "parenthetical-note"
+    if ":" in alias or "://" in alias:
+        return False, "not-a-name"
+    if '"' in alias or "“" in alias or "”" in alias:
+        return False, "quoted-noise"
+    if not (alias[0].isupper() or alias[0].isdigit()):
+        return False, "not-title-like"
+    return True, ""
+
+
+def build_alias_report(
+    entries: list[Entry],
+    *,
+    include_sidebar_aliases: bool = True,
+    include_human_name_aliases: bool = True,
+) -> AliasReport:
+    """Build unique aliases from titles, descriptions, sidebars, and names."""
+
+    folded_titles = {entry.title.casefold(): entry.title for entry in entries}
+    raw_candidates: list[_AliasCandidate] = []
+    omissions: list[AliasOmission] = []
     for entry in entries:
         alias = suffix_stripped_alias(entry.title, folded_titles)
         if alias:
-            candidates[entry.title] = alias
-            owners.setdefault(alias.casefold(), set()).add(entry.title)
+            raw_candidates.append(_AliasCandidate(entry.title, alias, "suffix"))
+        raw_candidates.extend(description_alias_candidates(entry))
+        if include_sidebar_aliases:
+            raw_candidates.extend(sidebar_alias_candidates(entry))
+        if include_human_name_aliases:
+            raw_candidates.extend(human_name_alias_candidates(entry))
+
+    owners: dict[str, set[str]] = {}
+    candidate_map: dict[tuple[str, str], _AliasCandidate] = {}
+    for candidate in raw_candidates:
+        alias = normalize_text(candidate.alias)
+        usable, reason = alias_candidate_is_usable(alias)
+        omission = AliasOmission(alias, candidate.target, candidate.source, reason)
+        if not usable:
+            omissions.append(omission)
+            continue
+        if alias.casefold() == candidate.target.casefold():
+            omissions.append(AliasOmission(alias, candidate.target, candidate.source, "self-alias"))
+            continue
+        canonical_collision = folded_titles.get(alias.casefold())
+        if canonical_collision and canonical_collision != candidate.target:
+            omissions.append(AliasOmission(alias, candidate.target, candidate.source, "canonical-collision"))
+            continue
+        key = (candidate.target, alias.casefold())
+        if key not in candidate_map:
+            candidate_map[key] = _AliasCandidate(candidate.target, alias, candidate.source)
+            owners.setdefault(alias.casefold(), set()).add(candidate.target)
+
+    accepted: dict[str, list[str]] = {entry.title: [] for entry in entries}
+    for candidate in candidate_map.values():
+        if owners[candidate.alias.casefold()] == {candidate.target}:
+            accepted[candidate.target].append(candidate.alias)
+        else:
+            omissions.append(
+                AliasOmission(
+                    candidate.alias,
+                    candidate.target,
+                    candidate.source,
+                    "alias-collision",
+                )
+            )
 
     aliases: dict[str, list[str]] = {}
     for entry in entries:
         forms = [entry.title]
-        alias = candidates.get(entry.title)
-        if alias and owners[alias.casefold()] == {entry.title}:
-            forms.append(alias)
+        seen = {entry.title.casefold()}
+        for alias in accepted[entry.title]:
+            if alias.casefold() not in seen:
+                forms.append(alias)
+                seen.add(alias.casefold())
         aliases[entry.title] = forms
-    return aliases
+    return AliasReport(aliases=aliases, omissions=tuple(omissions))
+
+
+def build_aliases(
+    entries: list[Entry],
+    *,
+    include_sidebar_aliases: bool = True,
+    include_human_name_aliases: bool = True,
+) -> dict[str, list[str]]:
+    """Build unique lookup aliases for dictionary entries."""
+
+    return build_alias_report(
+        entries,
+        include_sidebar_aliases=include_sidebar_aliases,
+        include_human_name_aliases=include_human_name_aliases,
+    ).aliases

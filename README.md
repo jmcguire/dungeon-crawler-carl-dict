@@ -80,7 +80,9 @@ python3 -m dcdict.build_kindle_dictionary
 
 Definitions preserve safe inline emphasis from the wiki where possible: `<b>`/`<strong>` become bold text, and `<i>`/`<em>` become italic text. Other HTML is stripped or escaped during extraction/building.
 
-Only entries ending exactly in ` Box` or ` Spell` receive lookup aliases, with that suffix removed. For example, `1914 Box` is also indexed as `1914`. These aliases are emitted as direct `idx:orth` headwords that share the canonical entry's displayed title and definition. They are not represented as `idx:iform` inflections, because Kindle treats inflections differently from searchable dictionary headwords. Ambiguous aliases are omitted rather than routed to an arbitrary entry.
+Lookup aliases are discovered conservatively from the entry data: generic ` Box` and ` Spell` suffix stripping, selected wiki sidebar aliases, recognized intro parentheticals such as `(aka Borant)` or `(actually named "Gravy Boat")`, first bold intro names that differ from the page title, and first/last names for likely human characters. For example, `1914 Box` is also indexed as `1914`, and `Saccathian (or Sacs)` is also indexed as `Sacs`. Kindle aliases are emitted as direct `idx:orth` headwords that share the canonical entry's displayed title and definition. StarDict uses `.syn` aliases, and Kobo uses variants. Ambiguous aliases are omitted rather than routed to an arbitrary entry.
+
+For local testing, pass `--no-sidebar-aliases` to disable aliases derived from wiki sidebars.
 
 Definitions are rendered as a short bullet list. If the source wiki page has a page-level spoiler warning banner, the generated entry places a spoiler note above the bullet so a reader has a chance to stop before reading the summary.  The warning is page-level; the wiki generally does not mark smaller spoiler phrases inside otherwise normal sentences.
 
@@ -102,7 +104,7 @@ Build the StarDict dictionary used by KOReader:
 python3 -m dcdict.build_stardict_dictionary --link-entries
 ```
 
-StarDict is a small group of files rather than one native dictionary file. The builder writes the `.ifo`, `.idx`, `.dict`, `.syn`, and `.css` files together under `build/stardict/`. Its `.syn` file provides the same suffix aliases as the Kindle edition. With `--link-entries`, recognized entry names use KOReader's supported `bword://` links.
+StarDict is a small group of files rather than one native dictionary file. The builder writes the `.ifo`, `.idx`, `.dict`, `.syn`, and `.css` files together under `build/stardict/`. Its `.syn` file provides the same aliases as the Kindle edition. With `--link-entries`, recognized entry names use KOReader's supported `bword://` links.
 
 Build the Kobo dictionary:
 
@@ -110,7 +112,7 @@ Build the Kobo dictionary:
 python3 -m dcdict.build_kobo_dictionary
 ```
 
-Kobo dictionaries are compiled with the external `dictgen` tool. The builder writes `build/kobo/dictionary.df` as an intermediate file and `build/kobo/dicthtml-dc.zip` as the Kobo dictionary file. The same ` Box` and ` Spell` suffix aliases are emitted as Kobo variants.
+Kobo dictionaries are compiled with the external `dictgen` tool. The builder writes `build/kobo/dictionary.df` as an intermediate file and `build/kobo/dicthtml-dc.zip` as the Kobo dictionary file. The same shared aliases are emitted as Kobo variants.
 
 Try to compile with `kindlegen` if it is installed:
 

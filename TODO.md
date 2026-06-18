@@ -15,35 +15,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - Check whether single quotes encoded as `&#x27;` in Kindle XHTML affect lookup display or matching.
   - Decide whether to add lowercase variants as direct aliases or `idx:infl` entries.
 
-## P1 - Improve Alias Coverage
-
-- Add an explicit alias system separate from suffix stripping.
-  - Current automatic aliases only remove trailing ` Box` or ` Spell`.
-  - Add a small curated alias source for important DCC names that do not fit generic rules.
-  - The same alias data should feed Kindle direct headwords, StarDict `.syn`, and Kobo variants.
-
-- Add high-confidence curated aliases.
-  - `Valtay` -> `Valtay Corporation`
-  - `Borant` -> `Borant Corporation`
-  - `Gravy Boat` -> `Ferdinand`
-  - `Prince Stalwart` -> `Stalwart`
-  - `Daniel Bautista` -> `Bautista`
-  - `Sac` -> `Saccathian`
-  - `Null` -> `Nullian`
-  - `Brain Boilers` -> `Brain Boiler`
-  - `Ringmaster Grimaldi` -> `Grimaldi`
-  - `Katia` -> `Katia Grim`
-
-- Consider sidebar-derived aliases.
-  - Some pages already expose useful alias fields, such as `Valtay Corporation` listing `The Valtay, The Brain Worms`.
-  - Parse sidebar aliases into lookup aliases only after collision handling is clear.
-  - This could also find cases like `Saccathian` / `Sac` if the wiki sidebar contains them.
-
-- Consider conservative human-name aliases.
-  - For clear human full names, support first-name or last-name lookup only when there is no collision.
-  - Start with explicit tests for `Katia Grim` -> `Katia`.
-  - Do not broadly alias every two-word title; many DCC names are groups, items, spells, or places.
-
 ## P1 - Fix Known Missing Or Misnamed Entries
 
 - Investigate true missing entries.

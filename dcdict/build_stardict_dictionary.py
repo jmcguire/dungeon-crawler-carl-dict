@@ -22,6 +22,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--author", default=DEFAULT_AUTHOR)
     parser.add_argument("--min-definition-length", type=int, default=8)
     parser.add_argument(
+        "--no-sidebar-aliases",
+        action="store_true",
+        help="Disable lookup aliases derived from wiki sidebar alias fields.",
+    )
+    parser.add_argument(
         "--link-entries",
         action="store_true",
         help="Add tappable KOReader links between known dictionary entries.",
@@ -43,6 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         args.title,
         args.author,
         link_entries=args.link_entries,
+        include_sidebar_aliases=not args.no_sidebar_aliases,
     )
     inspection = inspect_stardict(
         result.ifo_path,
@@ -53,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {path}")
     print(f"entries: {result.entry_count}")
     print(f"aliases: {result.alias_count}")
+    print(f"omitted aliases: {result.omitted_alias_count}")
     print(f"smoke checks: {len(inspection.checks)}")
     return 0
 

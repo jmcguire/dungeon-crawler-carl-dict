@@ -28,6 +28,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min-definition-length", type=int, default=8)
     parser.add_argument("--compile", action="store_true", help="Run kindlegen if it is installed.")
     parser.add_argument(
+        "--no-sidebar-aliases",
+        action="store_true",
+        help="Disable lookup aliases derived from wiki sidebar alias fields.",
+    )
+    parser.add_argument(
         "--link-entries",
         action="store_true",
         help="Add internal links between dictionary entries. These work when opening the dictionary directly, but may not work in Kindle lookup popups.",
@@ -50,11 +55,14 @@ def main(argv: list[str] | None = None) -> int:
         args.title,
         args.author,
         link_entries=args.link_entries,
+        include_sidebar_aliases=not args.no_sidebar_aliases,
     )
 
     print(f"wrote {result.xhtml_path}")
     print(f"wrote {result.opf_path}")
     print(f"entries: {result.entry_count}")
+    print(f"aliases: {result.alias_count}")
+    print(f"omitted aliases: {result.omitted_alias_count}")
 
     if args.compile:
         compilation = compile_with_kindlegen(result.opf_path)

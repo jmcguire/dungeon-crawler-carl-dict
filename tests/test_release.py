@@ -359,7 +359,7 @@ class ReleaseTests(unittest.TestCase):
             conn.commit()
             conn.close()
 
-            def fake_build_kobo(entries, output_dir):
+            def fake_build_kobo(entries, output_dir, **_kwargs):
                 output_dir.mkdir(parents=True)
                 dictzip_path = output_dir / DICTGEN_OUTPUT_NAME
                 synthetic_kobo_zip(dictzip_path, entries)

@@ -11,6 +11,7 @@ from unittest import mock
 
 from dcdict.kindle import (
     Entry,
+    build_alias_report,
     build_aliases,
     build_dictionary_sources,
     compile_with_kindlegen,
@@ -530,6 +531,115 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertNotIn("Fire", aliases["Fire Box"])
         self.assertNotIn("Fire", aliases["Fire Spell"])
 
+    def test_build_alias_report_adds_parenthetical_description_aliases(self) -> None:
+        entries = [
+            Entry(
+                "Saccathian",
+                "https://example/wiki/Saccathian",
+                "<b>Saccathian</b> (or <b>Sacs</b>) are a common race.",
+            ),
+            Entry(
+                "Borant Corporation",
+                "https://example/wiki/Borant",
+                "A Syndicate company, the <b>Borant Corporation</b> (aka <b>Borant</b>) is here.",
+            ),
+            Entry(
+                "Ferdinand",
+                "https://example/wiki/Ferdinand",
+                '<b>Ferdinand</b> (actually named "Gravy Boat") is a cat.',
+            ),
+            Entry(
+                "Katia Grim",
+                "https://example/wiki/Katia",
+                '<b>Katia Grimmsdóttir</b> (shortened to "Grim" in her crawler ID) is a crawler.',
+                details=(("Race", "Human | Doppelgänger"),),
+            ),
+        ]
+
+        report = build_alias_report(entries)
+
+        self.assertIn("Sacs", report.aliases["Saccathian"])
+        self.assertIn("Borant", report.aliases["Borant Corporation"])
+        self.assertIn("Gravy Boat", report.aliases["Ferdinand"])
+        self.assertIn("Grim", report.aliases["Katia Grim"])
+
+    def test_build_alias_report_adds_bold_intro_variant_alias(self) -> None:
+        entries = [
+            Entry("Brain Boiler", "https://example/wiki/Brain_Boiler", "<b>Brain Boilers</b> are a mob."),
+            Entry(
+                "Suppurating Eye Spell",
+                "https://example/wiki/Suppurating_Eye_Spell",
+                "<b>Suppurating Eye Spell</b> is a spell.",
+            ),
+        ]
+
+        report = build_alias_report(entries)
+
+        self.assertIn("Brain Boilers", report.aliases["Brain Boiler"])
+        self.assertIn("Suppurating Eye", report.aliases["Suppurating Eye Spell"])
+
+    def test_build_alias_report_adds_leading_article_variants_from_discovered_aliases(self) -> None:
+        entries = [
+            Entry(
+                "Valtay Corporation",
+                "https://example/wiki/Valtay",
+                "The <b>Valtay Corporation</b> is a massive company.",
+                details=(("Aliases", "The Valtay, The Brain Worms"),),
+            ),
+        ]
+
+        report = build_alias_report(entries)
+
+        self.assertIn("The Valtay Corporation", report.aliases["Valtay Corporation"])
+        self.assertIn("The Valtay", report.aliases["Valtay Corporation"])
+        self.assertIn("Valtay", report.aliases["Valtay Corporation"])
+        self.assertIn("Brain Worms", report.aliases["Valtay Corporation"])
+
+    def test_build_alias_report_filters_sidebar_aliases(self) -> None:
+        entries = [
+            Entry(
+                "Ferdinand",
+                "https://example/wiki/Ferdinand",
+                "A cat.",
+                details=(("Aliases", 'Gravy Boat, Ferdinand, Circe Took (sponsor), The "kill, kill" lady[1]'),),
+            )
+        ]
+
+        report = build_alias_report(entries)
+
+        self.assertIn("Gravy Boat", report.aliases["Ferdinand"])
+        reasons = {omission.reason for omission in report.omissions}
+        self.assertIn("self-alias", reasons)
+        self.assertIn("parenthetical-note", reasons)
+        self.assertIn("quoted-noise", reasons)
+
+    def test_build_alias_report_adds_conservative_human_name_aliases(self) -> None:
+        entries = [
+            Entry("Katia Grim", "https://example/wiki/Katia", "A crawler.", details=(("Race", "Human"),)),
+            Entry("Carl", "https://example/wiki/Carl", "A crawler."),
+            Entry("Carl Smith", "https://example/wiki/Carl_Smith", "A crawler.", details=(("Race", "Human"),)),
+        ]
+
+        report = build_alias_report(entries)
+
+        self.assertIn("Katia", report.aliases["Katia Grim"])
+        self.assertIn("Grim", report.aliases["Katia Grim"])
+        self.assertNotIn("Carl", report.aliases["Carl Smith"])
+        self.assertIn("Smith", report.aliases["Carl Smith"])
+        self.assertIn("canonical-collision", {omission.reason for omission in report.omissions})
+
+    def test_build_alias_report_omits_ambiguous_aliases(self) -> None:
+        entries = [
+            Entry("First Target", "https://example/wiki/First", "A thing.", details=(("Aliases", "Shared"),)),
+            Entry("Second Target", "https://example/wiki/Second", "A thing.", details=(("Aliases", "Shared"),)),
+        ]
+
+        report = build_alias_report(entries)
+
+        self.assertNotIn("Shared", report.aliases["First Target"])
+        self.assertNotIn("Shared", report.aliases["Second Target"])
+        self.assertIn("alias-collision", {omission.reason for omission in report.omissions})
+
     def test_write_xhtml_keeps_displayed_title_unchanged_when_suffix_alias_exists(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             output = Path(tmp_dir) / "dictionary.xhtml"
@@ -548,6 +658,46 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             canonical_end = text.index("</idx:entry>")
             alias_start = text.index('<idx:entry name="default"', canonical_end)
             self.assertIn("<hr />", text[canonical_end:alias_start])
+
+    def test_write_xhtml_emits_automatic_alias_headwords(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry(
+                    "Saccathian",
+                    "https://example/wiki/Saccathian",
+                    "<b>Saccathian</b> (or <b>Sacs</b>) are a common race.",
+                ),
+                Entry(
+                    "Borant Corporation",
+                    "https://example/wiki/Borant",
+                    "A Syndicate company, the <b>Borant Corporation</b> (aka <b>Borant</b>) is here.",
+                ),
+                Entry(
+                    "Ferdinand",
+                    "https://example/wiki/Ferdinand",
+                    '<b>Ferdinand</b> (actually named "Gravy Boat") is a cat.',
+                ),
+                Entry(
+                    "Valtay Corporation",
+                    "https://example/wiki/Valtay",
+                    "The <b>Valtay Corporation</b> is a massive company.",
+                    details=(("Aliases", "The Valtay"),),
+                ),
+                Entry("Katia Grim", "https://example/wiki/Katia", "A crawler.", details=(("Race", "Human"),)),
+                Entry("Brain Boiler", "https://example/wiki/Brain_Boiler", "<b>Brain Boilers</b> are a mob."),
+            ]
+
+            write_xhtml(entries, output, "Test Dictionary")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertIn('<b><idx:orth value="Sacs">Saccathian</idx:orth></b>', text)
+            self.assertIn('<b><idx:orth value="Borant">Borant Corporation</idx:orth></b>', text)
+            self.assertIn('<b><idx:orth value="Gravy Boat">Ferdinand</idx:orth></b>', text)
+            self.assertIn('<b><idx:orth value="Valtay">Valtay Corporation</idx:orth></b>', text)
+            self.assertIn('<b><idx:orth value="The Valtay Corporation">Valtay Corporation</idx:orth></b>', text)
+            self.assertIn('<b><idx:orth value="Katia">Katia Grim</idx:orth></b>', text)
+            self.assertIn('<b><idx:orth value="Brain Boilers">Brain Boiler</idx:orth></b>', text)
 
     def test_sanitize_inline_html_preserves_only_safe_emphasis(self) -> None:
         self.assertEqual(

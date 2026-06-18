@@ -20,6 +20,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=Path("build/kobo"))
     parser.add_argument("--output-name", default=DICTGEN_OUTPUT_NAME)
     parser.add_argument("--min-definition-length", type=int, default=8)
+    parser.add_argument(
+        "--no-sidebar-aliases",
+        action="store_true",
+        help="Disable lookup aliases derived from wiki sidebar alias fields.",
+    )
     return parser.parse_args(argv)
 
 
@@ -32,7 +37,12 @@ def main(argv: list[str] | None = None) -> int:
     if not entries:
         raise SystemExit(f"no usable entries found in {args.input}")
     try:
-        result = build_kobo(entries, args.output_dir, output_name=args.output_name)
+        result = build_kobo(
+            entries,
+            args.output_dir,
+            output_name=args.output_name,
+            include_sidebar_aliases=not args.no_sidebar_aliases,
+        )
         inspection = inspect_kobo(
             result.dictzip_path,
             required_headwords=("Carl", "Donut", "Mordecai", "1914", "Fire Fingers"),
@@ -44,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"wrote {result.dictzip_path}")
     print(f"entries: {result.entry_count}")
     print(f"aliases: {result.alias_count}")
+    print(f"omitted aliases: {result.omitted_alias_count}")
     print(f"smoke checks: {len(inspection.checks)}")
     return 0
 

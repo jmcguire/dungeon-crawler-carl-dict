@@ -74,6 +74,37 @@ class StarDictTests(unittest.TestCase):
             canonical = {syn.word: inspection.entries[syn.original_index].word for syn in inspection.synonyms}
             self.assertEqual(canonical, {"1914": "1914 Box", "Fire Fingers": "Fire Fingers Spell"})
 
+    def test_automatic_aliases_resolve_to_canonical_entries(self) -> None:
+        entries = [
+            Entry("Saccathian", "https://example/Saccathian", "<b>Saccathian</b> (or <b>Sacs</b>) are common."),
+            Entry(
+                "Borant Corporation",
+                "https://example/Borant",
+                "The <b>Borant Corporation</b> (aka <b>Borant</b>) is a company.",
+            ),
+            Entry("Ferdinand", "https://example/Ferdinand", '<b>Ferdinand</b> (actually named "Gravy Boat") is a cat.'),
+            Entry(
+                "Valtay Corporation",
+                "https://example/Valtay",
+                "The <b>Valtay Corporation</b> is a massive company.",
+                details=(("Aliases", "The Valtay"),),
+            ),
+            Entry("Katia Grim", "https://example/Katia", "A crawler.", details=(("Race", "Human"),)),
+            Entry("Brain Boiler", "https://example/Brain_Boiler", "<b>Brain Boilers</b> are a mob."),
+        ]
+        with TemporaryDirectory() as tmp_dir:
+            result = build_stardict(entries, Path(tmp_dir), "Test Dictionary", "Test Author")
+            inspection = inspect_stardict(result.ifo_path, check_sdcv=False)
+
+        self.assertEqual(inspection.canonical_word("Sacs"), "Saccathian")
+        self.assertEqual(inspection.canonical_word("Borant"), "Borant Corporation")
+        self.assertEqual(inspection.canonical_word("Gravy Boat"), "Ferdinand")
+        self.assertEqual(inspection.canonical_word("Valtay"), "Valtay Corporation")
+        self.assertEqual(inspection.canonical_word("The Valtay Corporation"), "Valtay Corporation")
+        self.assertEqual(inspection.canonical_word("Katia"), "Katia Grim")
+        self.assertEqual(inspection.canonical_word("Grim"), "Katia Grim")
+        self.assertEqual(inspection.canonical_word("Brain Boilers"), "Brain Boiler")
+
     def test_inspector_rejects_bad_index_metadata_and_offsets(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             result = build_stardict(

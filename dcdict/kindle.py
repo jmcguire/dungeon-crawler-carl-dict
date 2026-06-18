@@ -14,6 +14,7 @@ from pathlib import Path
 
 from dcdict.entries import (
     ALLOWED_INLINE_TAGS,
+    AliasReport,
     BIOGRAPHICAL_FIELD_LABELS,
     LINKABLE_INLINE_TAGS,
     SIDEBAR_FIELD_LABELS,
@@ -28,6 +29,7 @@ from dcdict.entries import (
     ascii_fold,
     biographical_details_from_html,
     build_aliases,
+    build_alias_report,
     compile_title_pattern,
     filter_low_quality_entries,
     forwarding_target_from_definition,
@@ -59,6 +61,8 @@ class BuildResult:
     xhtml_path: Path
     opf_path: Path
     entry_count: int
+    alias_count: int = 0
+    omitted_alias_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -168,10 +172,15 @@ def write_xhtml_with_options(
     output: Path,
     title: str,
     link_entries: bool,
-) -> None:
+    include_sidebar_aliases: bool = True,
+) -> AliasReport:
     """Write the Kindle dictionary XHTML source file with build options."""
 
-    aliases = build_aliases(entries)
+    alias_report = build_alias_report(
+        entries,
+        include_sidebar_aliases=include_sidebar_aliases,
+    )
+    aliases = alias_report.aliases
     title_to_id = {entry.title: index for index, entry in enumerate(entries, 1)} if link_entries else None
     body = entries_to_xhtml(entries, aliases, title_to_id)
     output.write_text(
@@ -201,6 +210,7 @@ def write_xhtml_with_options(
 """,
         encoding="utf-8",
     )
+    return alias_report
 
 
 def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier: str) -> None:
@@ -254,6 +264,7 @@ def build_dictionary_sources(
     title: str,
     author: str,
     link_entries: bool = False,
+    include_sidebar_aliases: bool = True,
 ) -> BuildResult:
     """Generate and validate Kindle dictionary source files."""
 
@@ -262,12 +273,24 @@ def build_dictionary_sources(
     opf_path = output_dir / "dictionary.opf"
     identifier = f"urn:uuid:{uuid.uuid4()}"
 
-    write_xhtml_with_options(entries, xhtml_path, title, link_entries)
+    alias_report = write_xhtml_with_options(
+        entries,
+        xhtml_path,
+        title,
+        link_entries,
+        include_sidebar_aliases=include_sidebar_aliases,
+    )
     write_opf(opf_path, title, author, xhtml_path.name, identifier)
     validate_xml(xhtml_path)
     validate_xml(opf_path)
 
-    return BuildResult(xhtml_path=xhtml_path, opf_path=opf_path, entry_count=len(entries))
+    return BuildResult(
+        xhtml_path=xhtml_path,
+        opf_path=opf_path,
+        entry_count=len(entries),
+        alias_count=alias_report.accepted_alias_count,
+        omitted_alias_count=alias_report.omitted_alias_count,
+    )
 
 
 def compile_with_kindlegen(

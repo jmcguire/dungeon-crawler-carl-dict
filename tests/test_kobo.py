@@ -61,8 +61,9 @@ class KoboTests(unittest.TestCase):
                 self.assertEqual(kobo_prefix(word), prefix)
 
     def test_dictfile_preserves_formatting_and_suffix_alias_variants(self) -> None:
-        dictfile, alias_count = entries_to_dictfile(self.sample_entries())
+        dictfile, alias_count, omitted_alias_count = entries_to_dictfile(self.sample_entries())
         self.assertEqual(alias_count, 2)
+        self.assertGreaterEqual(omitted_alias_count, 0)
         self.assertIn("@ 1914 Box\n& 1914\n::\n<html>", dictfile)
         self.assertIn("@ Fire Fingers Spell\n& Fire Fingers\n::\n<html>", dictfile)
         self.assertIn("@ Red Beret\n::\n<html>", dictfile)
@@ -86,6 +87,50 @@ class KoboTests(unittest.TestCase):
             self.assertIn("<b>loot box</b>", inspection.lookup("1914") or "")
             self.assertIn("<i>Donut</i>", inspection.lookup("Carl") or "")
             self.assertEqual(inspection.alias_count, 2)
+
+    def test_automatic_aliases_become_variants(self) -> None:
+        entries = [
+            Entry("Saccathian", "https://example/Saccathian", "<b>Saccathian</b> (or <b>Sacs</b>) are common."),
+            Entry(
+                "Borant Corporation",
+                "https://example/Borant",
+                "The <b>Borant Corporation</b> (aka <b>Borant</b>) is a company.",
+            ),
+            Entry("Ferdinand", "https://example/Ferdinand", '<b>Ferdinand</b> (actually named "Gravy Boat") is a cat.'),
+            Entry(
+                "Valtay Corporation",
+                "https://example/Valtay",
+                "The <b>Valtay Corporation</b> is a massive company.",
+                details=(("Aliases", "The Valtay"),),
+            ),
+            Entry("Katia Grim", "https://example/Katia", "A crawler.", details=(("Race", "Human"),)),
+            Entry("Brain Boiler", "https://example/Brain_Boiler", "<b>Brain Boilers</b> are a mob."),
+        ]
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
+            synthetic_kobo_zip(path, entries)
+            inspection = inspect_kobo(
+                path,
+                required_headwords=(
+                    "Sacs",
+                    "Borant",
+                    "Gravy Boat",
+                    "Valtay",
+                    "The Valtay Corporation",
+                    "Katia",
+                    "Grim",
+                    "Brain Boilers",
+                ),
+            )
+
+        self.assertEqual(inspection.canonical_word("Sacs"), "Saccathian")
+        self.assertEqual(inspection.canonical_word("Borant"), "Borant Corporation")
+        self.assertEqual(inspection.canonical_word("Gravy Boat"), "Ferdinand")
+        self.assertEqual(inspection.canonical_word("Valtay"), "Valtay Corporation")
+        self.assertEqual(inspection.canonical_word("The Valtay Corporation"), "Valtay Corporation")
+        self.assertEqual(inspection.canonical_word("Katia"), "Katia Grim")
+        self.assertEqual(inspection.canonical_word("Grim"), "Katia Grim")
+        self.assertEqual(inspection.canonical_word("Brain Boilers"), "Brain Boiler")
 
     def test_inspector_accepts_gzipped_dicthtml_members(self) -> None:
         with TemporaryDirectory() as tmp_dir:

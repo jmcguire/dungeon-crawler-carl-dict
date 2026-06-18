@@ -13,7 +13,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Iterable
 
-from dcdict.entries import Entry, build_aliases, sanitize_inline_html
+from dcdict.entries import Entry, build_alias_report, sanitize_inline_html
 
 
 DICTGEN_OUTPUT_NAME = "dicthtml-dc.zip"
@@ -35,6 +35,7 @@ class KoboBuildResult:
     alias_count: int
     compiler_log: str
     compiler_version: str | None
+    omitted_alias_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -57,9 +58,9 @@ class KoboInspection:
 
     @property
     def alias_count(self) -> int:
-        """Return the number of variant lookup names."""
+        """Return the number of unique variant lookup names."""
 
-        return sum(len(entry.variants) for entry in self.entries)
+        return len({variant for entry in self.entries for variant in entry.variants})
 
     def lookup(self, word: str) -> str | None:
         """Return the exact canonical or variant definition for a word."""
@@ -84,7 +85,7 @@ class KoboInspection:
 
         return {
             "format": "Kobo dicthtml v2",
-            "entry_count": len(self.entries),
+            "entry_count": len({entry.headword for entry in self.entries}),
             "alias_count": self.alias_count,
             "words_size": self.words_size,
             "checks": list(self.checks),
@@ -166,10 +167,18 @@ def render_definition(entry: Entry) -> str:
     return "".join(chunks)
 
 
-def entries_to_dictfile(entries: list[Entry]) -> tuple[str, int]:
+def entries_to_dictfile(
+    entries: list[Entry],
+    *,
+    include_sidebar_aliases: bool = True,
+) -> tuple[str, int, int]:
     """Render Kobo dictgen input and return it with the alias count."""
 
-    aliases = build_aliases(entries)
+    alias_report = build_alias_report(
+        entries,
+        include_sidebar_aliases=include_sidebar_aliases,
+    )
+    aliases = alias_report.aliases
     chunks: list[str] = []
     alias_count = 0
     for entry in entries:
@@ -181,7 +190,7 @@ def entries_to_dictfile(entries: list[Entry]) -> tuple[str, int]:
         chunks.append("::")
         chunks.append(f"<html>{render_definition(entry)}")
         chunks.append("")
-    return "\n".join(chunks), alias_count
+    return "\n".join(chunks), alias_count, alias_report.omitted_alias_count
 
 
 def detect_dictgen_version(executable: str) -> str | None:
@@ -205,6 +214,7 @@ def build_kobo(
     output_dir: Path,
     *,
     output_name: str = DICTGEN_OUTPUT_NAME,
+    include_sidebar_aliases: bool = True,
 ) -> KoboBuildResult:
     """Generate a Kobo dictfile and compile it with dictgen."""
 
@@ -212,7 +222,10 @@ def build_kobo(
     if not executable:
         raise KoboValidationError("dictgen was not found")
     output_dir.mkdir(parents=True, exist_ok=True)
-    dictfile_text, alias_count = entries_to_dictfile(entries)
+    dictfile_text, alias_count, omitted_alias_count = entries_to_dictfile(
+        entries,
+        include_sidebar_aliases=include_sidebar_aliases,
+    )
     dictfile_path = output_dir / DICTFILE_NAME
     dictfile_path.write_text(dictfile_text, encoding="utf-8")
     dictzip_path = output_dir / output_name
@@ -233,6 +246,7 @@ def build_kobo(
         alias_count=alias_count,
         compiler_log=log,
         compiler_version=detect_dictgen_version(executable),
+        omitted_alias_count=omitted_alias_count,
     )
 
 
@@ -399,7 +413,7 @@ def inspect_kobo(
 def synthetic_kobo_zip(path: Path, entries: list[Entry]) -> None:
     """Write a small inspectable Kobo-like zip for tests which do not run dictgen."""
 
-    aliases = build_aliases(entries)
+    aliases = build_alias_report(entries).aliases
     grouped: dict[str, list[str]] = {}
     for entry in entries:
         variants = [normalize_kobo_variant(alias) for alias in aliases[entry.title] if alias != entry.title]
