@@ -1,0 +1,86 @@
+<!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Case study: building a multi-format e-reader dictionary</title>
+      <meta name="description" content="A technical case study about building Kindle, Kobo, and StarDict dictionaries from a MediaWiki/Fandom source.">
+      <link rel="canonical" href="https://jmcguire.github.io/dungeon-crawler-carl-dict/case-study/">
+      <meta property="og:type" content="website">
+      <meta property="og:title" content="Case study: building a multi-format e-reader dictionary">
+      <meta property="og:description" content="A technical case study about building Kindle, Kobo, and StarDict dictionaries from a MediaWiki/Fandom source.">
+      <meta property="og:url" content="https://jmcguire.github.io/dungeon-crawler-carl-dict/case-study/">
+      <meta name="twitter:card" content="summary">
+      <link rel="stylesheet" href="../styles.css">
+    </head>
+    <body>
+      <a class="skip-link" href="#main">Skip to content</a>
+      <header class="site-header">
+        <div class="container header-inner">
+          <a class="brand" href="../index.html">DCC E-reader Dictionary</a>
+
+        <nav class="site-nav" aria-label="Primary navigation">
+          <a href="../index.html">Home</a>
+          <a href="../install-kindle/">Kindle</a>
+          <a href="../install-kobo/">Kobo</a>
+          <a href="../install-koreader/">KOReader</a>
+          <a href="../spoilers/">Spoilers</a>
+          <a href="../case-study/">Case study</a>
+          <a href="https://github.com/jmcguire/dungeon-crawler-carl-dict">GitHub</a>
+        </nav>
+
+        </div>
+      </header>
+      <main id="main">
+        <section class="page-title">
+  <div class="container">
+    <p class="eyebrow">Technical case study</p>
+    <h1>Building a multi-format e-reader dictionary from a Fandom wiki</h1>
+    <p class="lede">A small fan utility turned into a format pipeline for Kindle, Kobo, and KOReader dictionaries.</p>
+    <div class="button-row">
+      <a class="button primary" href="https://github.com/jmcguire/dungeon-crawler-carl-dict">View the source code</a>
+      <a class="button" href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/release-manifest.json">View release manifest</a>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container narrow">
+    <h2>Problem</h2>
+    <p>Dungeon Crawler Carl has many characters, factions, names, and terms that readers may want to check without leaving the book. Web searches and wiki browsing are slower and can expose spoilers. E-readers already have lookup interfaces, but fictional proper nouns usually are not covered by normal dictionaries.</p>
+
+    <h2>Approach</h2>
+    <p>The project fetches selected MediaWiki/Fandom pages into SQLite, extracts conservative entry summaries, and emits multiple dictionary formats from the same stored source data. The current release flow builds Kindle, StarDict/KOReader, and Kobo editions.</p>
+
+    <h2>Pipeline</h2>
+    <ol class="steps">
+      <li><strong>Fetch:</strong> collect selected wiki pages through the MediaWiki API into <code>data/characters.sqlite</code>.</li>
+      <li><strong>Extract:</strong> preserve safe inline emphasis, strip or escape unsafe HTML, and build concise definition bullets.</li>
+      <li><strong>Alias:</strong> emit selected lookup aliases, such as suffix aliases for entries ending in <code> Box</code> or <code> Spell</code>.</li>
+      <li><strong>Build:</strong> generate Kindle XHTML/OPF, StarDict files, and Kobo dictionary source/output.</li>
+      <li><strong>Release:</strong> package tested output files, checksums, attribution, and a manifest into GitHub Release assets.</li>
+    </ol>
+
+    <h2>Format constraints</h2>
+    <p>Kindle dictionaries use XHTML with Amazon-specific <code>idx:*</code> tags plus an OPF package file. KOReader uses a StarDict bundle with files kept together in one folder. Kobo uses a compiled custom dictionary ZIP. Each target has different lookup behavior, packaging expectations, and UI limitations.</p>
+
+    <h2>Reliability work</h2>
+    <p>The test suite covers extraction, SQLite loading, Kindle XHTML/OPF generation, StarDict binary generation and inspection, aliases, release packaging, and compiler wrapper behavior. Release builds also generate checksums and a manifest so users can verify artifacts.</p>
+
+    <h2>Responsible crawling</h2>
+    <p>The crawler checks robots.txt by default, sleeps between requests with jitter, retries temporary failures with exponential backoff, records errors, and resumes previous successful fetches. The README documents that the Fandom API route is disallowed for crawlers and requires an explicit user-triggered override for this project.</p>
+
+    <h2>What this demonstrates</h2>
+    <p>This project demonstrates practical data extraction, intermediate storage design, format conversion, binary release packaging, e-reader platform constraints, automated tests, and clear user-facing documentation.</p>
+  </div>
+</section>
+
+      </main>
+      <footer class="site-footer">
+        <div class="container">
+          <p>This is an unofficial fan project. Dungeon Crawler Carl belongs to its respective rights holders. Generated dictionary text is derived from community-contributed wiki content with attribution where practical.</p>
+          <p><a href="https://github.com/jmcguire/dungeon-crawler-carl-dict">View source on GitHub</a> · <a href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/SHA256SUMS.txt">Latest checksums</a> · <a href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/release-manifest.json">Release manifest</a></p>
+        </div>
+      </footer>
+    </body>
+    </html>

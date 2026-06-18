@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://jmcguire.github.io/dungeon-crawler-carl-dict/sitemap.xml

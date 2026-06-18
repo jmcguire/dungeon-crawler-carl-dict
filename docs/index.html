@@ -1,0 +1,120 @@
+<!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Dungeon Crawler Carl E-reader Dictionary</title>
+      <meta name="description" content="A free custom Dungeon Crawler Carl lookup dictionary for Kindle, Kobo, and KOReader.">
+      <link rel="canonical" href="https://jmcguire.github.io/dungeon-crawler-carl-dict/">
+      <meta property="og:type" content="website">
+      <meta property="og:title" content="Dungeon Crawler Carl E-reader Dictionary">
+      <meta property="og:description" content="A free custom Dungeon Crawler Carl lookup dictionary for Kindle, Kobo, and KOReader.">
+      <meta property="og:url" content="https://jmcguire.github.io/dungeon-crawler-carl-dict/">
+      <meta name="twitter:card" content="summary">
+      <link rel="stylesheet" href="styles.css">
+    </head>
+    <body>
+      <a class="skip-link" href="#main">Skip to content</a>
+      <header class="site-header">
+        <div class="container header-inner">
+          <a class="brand" href="index.html">DCC E-reader Dictionary</a>
+
+        <nav class="site-nav" aria-label="Primary navigation">
+          <a href="index.html">Home</a>
+          <a href="install-kindle/">Kindle</a>
+          <a href="install-kobo/">Kobo</a>
+          <a href="install-koreader/">KOReader</a>
+          <a href="spoilers/">Spoilers</a>
+          <a href="case-study/">Case study</a>
+          <a href="https://github.com/jmcguire/dungeon-crawler-carl-dict">GitHub</a>
+        </nav>
+
+        </div>
+      </header>
+      <main id="main">
+        <section class="hero">
+  <div class="container hero-grid">
+    <div>
+      <p class="eyebrow">Free custom lookup dictionaries for e-readers</p>
+      <h1>Dungeon Crawler Carl e-reader dictionary</h1>
+      <p class="lede">Look up Dungeon Crawler Carl names and references directly inside your e-reader instead of stopping to search a wiki.</p>
+      <div class="button-row" aria-label="Download options">
+        <a class="button primary" href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.mobi">Download Kindle MOBI</a>
+        <a class="button" href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/dicthtml-dc.zip">Download Kobo ZIP</a>
+        <a class="button" href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-StarDict.zip">Download KOReader ZIP</a>
+      </div>
+      <p class="small">The latest release links always point to the newest published GitHub Release.</p>
+    </div>
+    <aside class="callout" aria-label="Supported formats">
+      <h2>Supported formats</h2>
+      <ul class="clean-list">
+        <li><strong>Kindle:</strong> sideloadable <code>.mobi</code> dictionary</li>
+        <li><strong>Kobo:</strong> custom <code>dicthtml-dc.zip</code> dictionary</li>
+        <li><strong>KOReader:</strong> StarDict dictionary bundle</li>
+      </ul>
+    </aside>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container two-column">
+    <div>
+      <h2>What this is</h2>
+      <p>This project builds Kindle, StarDict/KOReader, and Kobo lookup dictionaries from pages on a MediaWiki/Fandom wiki. The current default target is the Dungeon Crawler Carl Fandom character category, and the toolchain is designed so more categories or other Fandom wikis can be added later.</p>
+      <p>The goal is practical reading help: select a term such as <em>Carl</em>, <em>Donut</em>, or <em>Mordecai</em> while reading and get a short in-device lookup entry.</p>
+    </div>
+    <div>
+      <h2>Start here</h2>
+      <div class="card-list">
+        <a class="card" href="install-kindle/">
+          <h3>Install on Kindle</h3>
+          <p>Copy the MOBI file to the Kindle dictionaries folder and select it under English dictionaries.</p>
+        </a>
+        <a class="card" href="install-kobo/">
+          <h3>Install on Kobo</h3>
+          <p>Copy the custom dictionary ZIP into <code>.kobo/custom-dict/</code>.</p>
+        </a>
+        <a class="card" href="install-koreader/">
+          <h3>Install in KOReader</h3>
+          <p>Extract the StarDict bundle and put the folder under <code>koreader/data/dict/</code>.</p>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section muted">
+  <div class="container three-column">
+    <div>
+      <h2>Reader-friendly</h2>
+      <p>Built for lookup while reading, not as a replacement for the full wiki. Entries are intentionally short.</p>
+    </div>
+    <div>
+      <h2>Spoiler-aware, not spoiler-proof</h2>
+      <p>Entries preserve page-level spoiler warnings from the source wiki when available. The dictionary is not yet fully book-by-book spoiler-gated.</p>
+      <p><a href="spoilers/">Read the spoiler policy</a></p>
+    </div>
+    <div>
+      <h2>Open source</h2>
+      <p>Code and docs are MIT licensed. Generated dictionary content derived from Fandom wiki text is handled under CC BY-SA 3.0 with project notices.</p>
+      <p><a href="https://github.com/jmcguire/dungeon-crawler-carl-dict">See the repository</a></p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <h2>Known lookup limitations</h2>
+    <p>Kindle and other e-reader lookup interfaces can be picky about proper nouns and multiword phrases. If a full phrase does not trigger a useful result, try selecting the distinctive single word in the phrase. Some Kindle internal links work when opening the dictionary as a book but may not work inside the lookup card UI.</p>
+  </div>
+</section>
+
+      </main>
+      <footer class="site-footer">
+        <div class="container">
+          <p>This is an unofficial fan project. Dungeon Crawler Carl belongs to its respective rights holders. Generated dictionary text is derived from community-contributed wiki content with attribution where practical.</p>
+          <p><a href="https://github.com/jmcguire/dungeon-crawler-carl-dict">View source on GitHub</a> · <a href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/SHA256SUMS.txt">Latest checksums</a> · <a href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/release-manifest.json">Release manifest</a></p>
+        </div>
+      </footer>
+    </body>
+    </html>
