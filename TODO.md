@@ -34,7 +34,7 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
 ## P2 - Improve Kindle Indexing
 
-- Add inflection support for selected aliases and possessives.
+- Add inflection support for selected possessives and other true grammatical forms.
   - Example shape:
 
 ```xml
@@ -44,8 +44,8 @@ This file is prioritized by what is most likely to improve real reader lookup be
 </idx:infl>
 ```
 
-  - Use this for true inflections, not as a replacement for direct lookup aliases.
-  - Candidate cases: possessives, lowercase forms, plural forms such as `Brain Boilers`.
+  - Kindle lookup aliases now use `idx:iform` inflections instead of duplicated visible entries.
+  - Candidate next steps: possessives, lowercase forms, plural forms such as `Brain Boilers`.
 
 - Support multiple entries for one lookup word.
   - Example: `Earth` and `Earth Box`.

@@ -653,14 +653,11 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             write_xhtml(entries, output, "Test Dictionary")
 
             text = output.read_text(encoding="utf-8")
-            self.assertIn('<b><idx:orth value="Fireball Spell">Fireball Spell</idx:orth></b>', text)
-            self.assertIn('<b><idx:orth value="Fireball">Fireball Spell</idx:orth></b>', text)
-            self.assertNotIn("idx:iform", text)
-            self.assertNotIn("Fireball</idx:orth></b>", text)
-            self.assertEqual(text.count('<idx:entry name="default"'), 2)
-            canonical_end = text.index("</idx:entry>")
-            alias_start = text.index('<idx:entry name="default"', canonical_end)
-            self.assertIn("<hr />", text[canonical_end:alias_start])
+            self.assertIn('<idx:orth value="Fireball Spell"><b>Fireball Spell</b>', text)
+            self.assertIn('<idx:iform value="Fireball" />', text)
+            self.assertNotIn('value="Fireball"><b>Fireball Spell</b>', text)
+            self.assertEqual(text.count('<idx:entry name="default"'), 1)
+            self.assertEqual(text.count("<hr />"), 0)
 
     def test_write_xhtml_emits_automatic_alias_headwords(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -694,13 +691,14 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             write_xhtml(entries, output, "Test Dictionary")
 
             text = output.read_text(encoding="utf-8")
-            self.assertIn('<b><idx:orth value="Sacs">Saccathian</idx:orth></b>', text)
-            self.assertIn('<b><idx:orth value="Borant">Borant Corporation</idx:orth></b>', text)
-            self.assertIn('<b><idx:orth value="Gravy Boat">Ferdinand</idx:orth></b>', text)
-            self.assertIn('<b><idx:orth value="Valtay">Valtay Corporation</idx:orth></b>', text)
-            self.assertIn('<b><idx:orth value="The Valtay Corporation">Valtay Corporation</idx:orth></b>', text)
-            self.assertIn('<b><idx:orth value="Katia">Katia Grim</idx:orth></b>', text)
-            self.assertIn('<b><idx:orth value="Brain Boilers">Brain Boiler</idx:orth></b>', text)
+            self.assertIn('<idx:iform value="Sacs" />', text)
+            self.assertIn('<idx:iform value="Borant" />', text)
+            self.assertIn('<idx:iform value="Gravy Boat" />', text)
+            self.assertIn('<idx:iform value="Valtay" />', text)
+            self.assertIn('<idx:iform value="The Valtay Corporation" />', text)
+            self.assertIn('<idx:iform value="Katia" />', text)
+            self.assertIn('<idx:iform value="Brain Boilers" />', text)
+            self.assertNotIn('value="Sacs"><b>Saccathian</b>', text)
 
     def test_sanitize_inline_html_preserves_only_safe_emphasis(self) -> None:
         self.assertEqual(
@@ -770,6 +768,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertIn('<h1 class="letter-heading" id="letter-number">0-9</h1>', text)
             self.assertIn('<h1 class="letter-heading" id="letter-A">A</h1>', text)
             self.assertIn('<h1 class="letter-heading" id="letter-B">B</h1>', text)
+            self.assertIn('<idx:iform value="1914" />', text)
             self.assertEqual(
                 text.count("<hr />"),
                 text.count('<idx:entry name="default"') - 1,

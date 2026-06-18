@@ -78,14 +78,13 @@ class CompilationResult:
 
 def entry_to_xhtml(
     entry: Entry,
-    lookup_value: str,
     entry_id: str,
+    lookup_aliases: list[str] | None = None,
     title_to_id: dict[str, int] | None = None,
 ) -> str:
-    """Render one direct Kindle lookup headword for a dictionary entry."""
+    """Render one Kindle dictionary entry with optional hidden lookup forms."""
 
     title = html.escape(entry.title, quote=True)
-    lookup = html.escape(lookup_value, quote=True)
     definition = (
         link_definition_references(entry.definition, title_to_id, entry.title)
         if title_to_id
@@ -103,9 +102,17 @@ def entry_to_xhtml(
         for label, value in entry.details
     )
     details_block = f"\n{detail_items}" if detail_items else ""
+    inflections = ""
+    alias_values = [alias for alias in (lookup_aliases or []) if alias.casefold() != entry.title.casefold()]
+    if alias_values:
+        inflection_items = "\n".join(
+            f'            <idx:iform value="{html.escape(alias, quote=True)}" />' for alias in alias_values
+        )
+        inflections = f"\n          <idx:infl>\n{inflection_items}\n          </idx:infl>"
     return f"""<idx:entry name="default" scriptable="yes" spell="yes" id="entry-{entry_id}">
         <a id="entry-{entry_id}"></a>
-        <b><idx:orth value="{lookup}">{title}</idx:orth></b>
+        <idx:orth value="{title}"><b>{title}</b>{inflections}
+        </idx:orth>
         <idx:short>{spoiler_note}
         <ul class="definition">
           <li>{definition}</li>
@@ -141,7 +148,7 @@ def entries_to_xhtml(
     aliases: dict[str, list[str]],
     title_to_id: dict[str, int] | None = None,
 ) -> str:
-    """Render entries with alphabet page breaks and separators."""
+    """Render canonical Kindle entries with alphabet page breaks and separators."""
 
     rendered_entries: list[str] = []
     current_label: str | None = None
@@ -151,13 +158,10 @@ def entries_to_xhtml(
         if label != current_label:
             current_label = label
             section_heading = alphabet_section_to_xhtml(label)
-        lookup_values = [entry.title, *(alias for alias in aliases[entry.title] if alias != entry.title)]
-        for lookup_index, lookup_value in enumerate(lookup_values):
-            entry_id = str(index) if lookup_index == 0 else f"{index}-alias-{lookup_index}"
-            rendered = entry_to_xhtml(entry, lookup_value, entry_id, title_to_id)
-            if lookup_index == 0 and section_heading:
-                rendered = f"{section_heading}\n\n{rendered}"
-            rendered_entries.append(rendered)
+        rendered = entry_to_xhtml(entry, str(index), aliases.get(entry.title, []), title_to_id)
+        if section_heading:
+            rendered = f"{section_heading}\n\n{rendered}"
+        rendered_entries.append(rendered)
     return "\n\n      <hr />\n\n".join(rendered_entries)
 
 

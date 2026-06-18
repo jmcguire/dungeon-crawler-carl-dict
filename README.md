@@ -80,7 +80,7 @@ python3 -m dcdict.build_kindle_dictionary
 
 Definitions preserve safe inline emphasis from the wiki where possible: `<b>`/`<strong>` become bold text, and `<i>`/`<em>` become italic text. Other HTML is stripped or escaped during extraction/building.
 
-Lookup aliases are discovered conservatively from the entry data: generic ` Box` and ` Spell` suffix stripping, selected wiki sidebar aliases, recognized intro parentheticals such as `(aka Borant)` or `(actually named "Gravy Boat")`, first bold intro names that differ from the page title, and first/last names for likely human characters. For example, `1914 Box` is also indexed as `1914`, and `Saccathian (or Sacs)` is also indexed as `Sacs`. Kindle aliases are emitted as direct `idx:orth` headwords that share the canonical entry's displayed title and definition. StarDict uses `.syn` aliases, and Kobo uses variants. Ambiguous aliases are omitted rather than routed to an arbitrary entry.
+Lookup aliases are discovered conservatively from the entry data: generic ` Box` and ` Spell` suffix stripping, selected wiki sidebar aliases, recognized intro parentheticals such as `(aka Borant)` or `(actually named "Gravy Boat")`, first bold intro names that differ from the page title, and first/last names for likely human characters. For example, `1914 Box` is also indexed as `1914`, and `Saccathian (or Sacs)` is also indexed as `Sacs`. Kindle aliases are emitted as hidden `idx:iform` inflections under the canonical headword, so lookups resolve without duplicating the visible dictionary entry. StarDict uses `.syn` aliases, and Kobo uses variants. Ambiguous aliases are omitted rather than routed to an arbitrary entry.
 
 For local testing, pass `--no-sidebar-aliases` to disable aliases derived from wiki sidebars.
 
