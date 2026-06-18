@@ -59,16 +59,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
 ## P3 - Release And User Experience Polish
 
-- Improve GitHub release notes for non-expert users.
-  - Make the download choice clearer: Kindle, KOReader/StarDict, or Kobo.
-  - Keep installation steps short and device-specific.
-  - Consider whether the Kindle release should emphasize the single `.mobi` more than the ZIP.
-
-- Improve README troubleshooting for Kindle lookup tabs.
-  - Explain that the Dictionary tab sometimes disappears for multi-word phrases or proper nouns.
-  - Explain that selecting a shorter phrase may produce different tabs.
-  - Mention that X-Ray results can appear even when the custom dictionary is not searched.
-
 - Research Kobo internal links.
   - Kobo output does not currently include internal dictionary links.
   - Determine whether Kobo dicthtml supports reliable in-dictionary links before adding them.
