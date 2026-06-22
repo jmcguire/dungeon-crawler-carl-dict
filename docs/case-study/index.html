@@ -3,12 +3,12 @@
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>Case study: building a multi-format e-reader dictionary</title>
-      <meta name="description" content="A technical case study about building Kindle, Kobo, and StarDict dictionaries from a MediaWiki/Fandom source.">
+      <title>Case study: learning agentic programming by shipping a real dictionary</title>
+      <meta name="description" content="A case study about using agentic programming to build and release useful Kindle, Kobo, StarDict, and BOOX dictionaries from wiki content.">
       <link rel="canonical" href="https://jmcguire.github.io/dungeon-crawler-carl-dict/case-study/">
       <meta property="og:type" content="website">
-      <meta property="og:title" content="Case study: building a multi-format e-reader dictionary">
-      <meta property="og:description" content="A technical case study about building Kindle, Kobo, and StarDict dictionaries from a MediaWiki/Fandom source.">
+      <meta property="og:title" content="Case study: learning agentic programming by shipping a real dictionary">
+      <meta property="og:description" content="A case study about using agentic programming to build and release useful Kindle, Kobo, StarDict, and BOOX dictionaries from wiki content.">
       <meta property="og:url" content="https://jmcguire.github.io/dungeon-crawler-carl-dict/case-study/">
       <meta property="og:image" content="https://jmcguire.github.io/dungeon-crawler-carl-dict/assets/social-card.png">
       <meta name="twitter:image" content="https://jmcguire.github.io/dungeon-crawler-carl-dict/assets/social-card.png">
@@ -37,9 +37,9 @@
       <main id="main">
         <section class="page-title">
   <div class="container">
-    <p class="eyebrow">Technical case study</p>
-    <h1>Building a multi-format e-reader dictionary from a Fandom wiki</h1>
-    <p class="lede">A small fan utility turned into a format pipeline for Kindle, Kobo, and KOReader dictionaries.</p>
+    <p class="eyebrow">Agentic programming case study</p>
+    <h1>Learning agentic programming by shipping something real</h1>
+    <p class="lede">I used this project to learn how to direct an AI coding agent while building a useful e-reader dictionary people could actually install.</p>
     <div class="button-row">
       <a class="button primary" href="https://github.com/jmcguire/dungeon-crawler-carl-dict">View the source code</a>
       <a class="button" href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/release-manifest.json">View release manifest</a>
@@ -49,23 +49,49 @@
 
 <section class="section">
   <div class="container narrow">
-    <h2>Problem</h2>
-    <p>Dungeon Crawler Carl has many characters, factions, names, and terms that readers may want to check without leaving the book. Web searches and wiki browsing are slower and can expose spoilers. E-readers already have lookup interfaces, but fictional proper nouns usually are not covered by normal dictionaries.</p>
+    <h2>What this project was really about</h2>
+    <p>The visible product is a Dungeon Crawler Carl e-reader dictionary. The deeper project was learning how to collaborate with an AI coding agent on a real, messy software project: ambiguous requirements, changing direction, format-specific constraints, release packaging, tests, documentation, and user support.</p>
+
+    <p>I did not want a toy demo. I wanted something useful enough to sideload onto a Kindle, share with other readers, and maintain over time. That made the agentic workflow more interesting: the work had to survive contact with real devices, real content, real licensing questions, and real users.</p>
+
+    <h2>The useful thing we built</h2>
+    <p>Dungeon Crawler Carl has many characters, factions, items, spells, races, achievements, and other references that readers may want to check without leaving the book. Web searches and wiki browsing are slower and can expose spoilers. E-readers already have lookup interfaces, but fictional proper nouns usually are not covered by normal dictionaries.</p>
 
     <h2>Approach</h2>
-    <p>The project fetches selected MediaWiki/Fandom pages into SQLite, extracts conservative entry summaries, and emits multiple dictionary formats from the same stored source data. The current release flow builds Kindle, StarDict/KOReader, and Kobo editions.</p>
+    <p>The project fetches selected MediaWiki/Fandom pages into SQLite, extracts conservative entry summaries, and emits multiple dictionary formats from the same stored source data. The current release flow builds Kindle, StarDict for KOReader and BOOX, and Kobo editions.</p>
+
+    <h2>How the agentic workflow changed</h2>
+    <p>At the beginning, I was learning how to use Codex at all: what files were needed, whether an empty repo mattered, how to ask for architecture before implementation, and how much context to provide. Over time, the interaction became more precise. I started giving explicit goals, constraints, acceptance criteria, commit boundaries, and verification steps.</p>
+
+    <p>That shift mattered. The agent could do a lot of implementation work, but the best results came when I stayed responsible for product direction: what counted as useful, what was too noisy, what should be automated, what should stay simple, and when a technically plausible answer did not match the reader experience I wanted.</p>
+
+    <h2>Where I pushed back</h2>
+    <p>Several important decisions came from disagreeing with the agent's first direction or revisiting a decision after testing.</p>
+
+    <ul class="steps">
+      <li><strong>Aliases:</strong> the project moved from direct duplicate Kindle entries, to hidden Kindle inflections, to a shared lookup model that can also represent duplicate meanings such as a canonical entry plus a matching box or spell alias.</li>
+      <li><strong>Manual cleanup:</strong> I rejected a manually curated alias list as the default path and pushed for automatic discovery from wiki text, bold intro names, parentheticals, sidebar aliases, and conservative human-name rules.</li>
+      <li><strong>Badges and automation:</strong> I chose local tracked badge JSON over a GitHub Actions workflow that would create badge-only commits, because clean history mattered more for this solo project.</li>
+      <li><strong>Scope control:</strong> I repeatedly split large work into separate commits, especially when release packaging, output formats, and architecture changes could otherwise have become one hard-to-revert change.</li>
+      <li><strong>User support:</strong> the docs grew from installation instructions into reader-focused support paths, including BOOX notes and a help page for non-technical users.</li>
+    </ul>
 
     <h2>Pipeline</h2>
     <ol class="steps">
       <li><strong>Fetch:</strong> collect selected wiki pages through the MediaWiki API into <code>data/characters.sqlite</code>.</li>
       <li><strong>Extract:</strong> preserve safe inline emphasis, strip or escape unsafe HTML, and build concise definition bullets.</li>
-      <li><strong>Alias:</strong> emit selected lookup aliases, such as suffix aliases for entries ending in <code> Box</code> or <code> Spell</code>.</li>
+      <li><strong>Resolve lookups:</strong> discover aliases and handle duplicate lookup names without randomly choosing one meaning.</li>
       <li><strong>Build:</strong> generate Kindle XHTML/OPF, StarDict files, and Kobo dictionary source/output.</li>
       <li><strong>Release:</strong> package tested output files, checksums, attribution, and a manifest into GitHub Release assets.</li>
     </ol>
 
+    <h2>The commit history tells the story</h2>
+    <p>The commit history starts with a single Kindle builder, then adds licensing, tests, extraction quality, inline formatting, spoiler notes, sidebar metadata, and release packaging. Later commits add KOReader/StarDict, local badge management, Kobo support, GitHub Pages documentation, BOOX support, help links, and a more robust lookup model.</p>
+
+    <p>That history is not perfectly linear, and that is part of the point. I changed my mind after testing. I backed out of overly broad aliasing. I moved from "make this work" to "make this releasable." The final project is better because the workflow treated the agent as a capable collaborator, not an autopilot.</p>
+
     <h2>Format constraints</h2>
-    <p>Kindle dictionaries use XHTML with Amazon-specific <code>idx:*</code> tags plus an OPF package file. KOReader uses a StarDict bundle with files kept together in one folder. Kobo uses a compiled custom dictionary ZIP. Each target has different lookup behavior, packaging expectations, and UI limitations.</p>
+    <p>Kindle dictionaries use XHTML with Amazon-specific <code>idx:*</code> tags plus an OPF package file. KOReader and BOOX use a StarDict bundle with files kept together in one folder. Kobo uses a compiled custom dictionary ZIP. Each target has different lookup behavior, packaging expectations, and UI limitations.</p>
 
     <h2>Reliability work</h2>
     <p>The test suite covers extraction, SQLite loading, Kindle XHTML/OPF generation, StarDict binary generation and inspection, aliases, release packaging, and compiler wrapper behavior. Release builds also generate checksums and a manifest so users can verify artifacts.</p>
@@ -74,7 +100,7 @@
     <p>The crawler checks robots.txt by default, sleeps between requests with jitter, retries temporary failures with exponential backoff, records errors, and resumes previous successful fetches. The README documents that the Fandom API route is disallowed for crawlers and requires an explicit user-triggered override for this project.</p>
 
     <h2>What this demonstrates</h2>
-    <p>This project demonstrates practical data extraction, intermediate storage design, format conversion, binary release packaging, e-reader platform constraints, automated tests, and clear user-facing documentation.</p>
+    <p>This project demonstrates more than code generation. It shows product judgment, human-in-the-loop AI direction, source attribution and licensing care, practical data extraction, intermediate storage design, format conversion, binary release packaging, e-reader platform constraints, automated tests, and user-facing documentation.</p>
   </div>
 </section>
 
