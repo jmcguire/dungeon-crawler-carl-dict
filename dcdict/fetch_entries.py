@@ -59,6 +59,7 @@ DEFAULT_CATEGORIES = (
     "Achievements",
     "Races",
     "Items",
+    "Mob_Types",
 )
 DEFAULT_USER_AGENT = "KindleDictionaryCreationCrawler/0.1"
 LOGGER = logging.getLogger(__name__)

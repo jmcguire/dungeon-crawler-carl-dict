@@ -44,7 +44,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
 </idx:infl>
 ```
 
-  - Kindle lookup aliases now use `idx:iform` inflections instead of duplicated visible entries.
   - Candidate next steps: possessives, lowercase forms, plural forms such as `Brain Boilers`.
 
 - Revisit additional suffix/prefix alias rules.
