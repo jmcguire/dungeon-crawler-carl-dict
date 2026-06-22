@@ -13,7 +13,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Iterable
 
-from dcdict.entries import Entry, build_alias_report, sanitize_inline_html
+from dcdict.entries import Entry, build_lookup_report, sanitize_inline_html
 
 
 DICTGEN_OUTPUT_NAME = "dicthtml-dc.zip"
@@ -35,6 +35,7 @@ class KoboBuildResult:
     alias_count: int
     compiler_log: str
     compiler_version: str | None
+    multi_lookup_count: int = 0
     omitted_alias_count: int = 0
 
 
@@ -167,18 +168,33 @@ def render_definition(entry: Entry) -> str:
     return "".join(chunks)
 
 
+def render_combined_definition(targets: tuple[str, ...], entries_by_title: dict[str, Entry]) -> str:
+    """Render multiple canonical entries as one Kobo lookup result."""
+
+    chunks = ['<div class="multi-lookup">']
+    for target in targets:
+        chunks.append(render_definition(entries_by_title[target]))
+    chunks.append("</div>")
+    return "".join(chunks)
+
+
 def entries_to_dictfile(
     entries: list[Entry],
     *,
     include_sidebar_aliases: bool = True,
-) -> tuple[str, int, int]:
-    """Render Kobo dictgen input and return it with the alias count."""
+) -> tuple[str, int, int, int]:
+    """Render Kobo dictgen input and return it with lookup counts."""
 
-    alias_report = build_alias_report(
+    lookup_report = build_lookup_report(
         entries,
         include_sidebar_aliases=include_sidebar_aliases,
     )
-    aliases = alias_report.aliases
+    aliases = lookup_report.aliases
+    entries_by_title = {entry.title: entry for entry in entries}
+    combined_definitions = {
+        lookup.word: render_combined_definition(lookup.targets, entries_by_title)
+        for lookup in lookup_report.multi_target_lookups
+    }
     chunks: list[str] = []
     alias_count = 0
     for entry in entries:
@@ -188,9 +204,19 @@ def entries_to_dictfile(
                 chunks.append(f"& {alias}")
                 alias_count += 1
         chunks.append("::")
-        chunks.append(f"<html>{render_definition(entry)}")
+        chunks.append(f"<html>{combined_definitions.get(entry.title, render_definition(entry))}")
         chunks.append("")
-    return "\n".join(chunks), alias_count, alias_report.omitted_alias_count
+    for word in sorted(set(combined_definitions) - set(entries_by_title), key=str.casefold):
+        chunks.append(f"@ {word}")
+        chunks.append("::")
+        chunks.append(f"<html>{combined_definitions[word]}")
+        chunks.append("")
+    return (
+        "\n".join(chunks),
+        alias_count,
+        lookup_report.multi_target_lookup_count,
+        lookup_report.omitted_alias_count,
+    )
 
 
 def detect_dictgen_version(executable: str) -> str | None:
@@ -222,7 +248,7 @@ def build_kobo(
     if not executable:
         raise KoboValidationError("dictgen was not found")
     output_dir.mkdir(parents=True, exist_ok=True)
-    dictfile_text, alias_count, omitted_alias_count = entries_to_dictfile(
+    dictfile_text, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(
         entries,
         include_sidebar_aliases=include_sidebar_aliases,
     )
@@ -246,6 +272,7 @@ def build_kobo(
         alias_count=alias_count,
         compiler_log=log,
         compiler_version=detect_dictgen_version(executable),
+        multi_lookup_count=multi_lookup_count,
         omitted_alias_count=omitted_alias_count,
     )
 
@@ -413,25 +440,40 @@ def inspect_kobo(
 def synthetic_kobo_zip(path: Path, entries: list[Entry]) -> None:
     """Write a small inspectable Kobo-like zip for tests which do not run dictgen."""
 
-    aliases = build_alias_report(entries).aliases
+    lookup_report = build_lookup_report(entries)
+    aliases = lookup_report.aliases
+    entries_by_title = {entry.title: entry for entry in entries}
+    combined_definitions = {
+        lookup.word: render_combined_definition(lookup.targets, entries_by_title)
+        for lookup in lookup_report.multi_target_lookups
+    }
     grouped: dict[str, list[str]] = {}
-    for entry in entries:
-        variants = [normalize_kobo_variant(alias) for alias in aliases[entry.title] if alias != entry.title]
+    words = set(entries_by_title) | set(combined_definitions)
+
+    def add_word(headword: str, definition: str, variants: list[str]) -> None:
         word_html = (
             "<w>"
-            f'<p><a name="{html.escape(normalize_kobo_headword(entry.title), quote=True)}" />'
-            f"<b>{html.escape(entry.title, quote=False)}</b></p>"
+            f'<p><a name="{html.escape(normalize_kobo_headword(headword), quote=True)}" />'
+            f"<b>{html.escape(headword, quote=False)}</b></p>"
             "<var>"
             + "".join(f'<variant name="{html.escape(variant, quote=True)}"/>' for variant in variants)
             + "</var>"
-            + render_definition(entry)
+            + definition
             + "</w>"
         )
-        prefixes = {kobo_prefix(entry.title), *(kobo_prefix(variant) for variant in variants)}
+        prefixes = {kobo_prefix(headword), *(kobo_prefix(variant) for variant in variants)}
         for prefix in prefixes:
             grouped.setdefault(prefix, []).append(word_html)
+        words.update(variants)
+
+    for entry in entries:
+        variants = [normalize_kobo_variant(alias) for alias in aliases[entry.title] if alias != entry.title]
+        definition = combined_definitions.get(entry.title, render_definition(entry))
+        add_word(entry.title, definition, variants)
+    for word in sorted(set(combined_definitions) - set(entries_by_title), key=str.casefold):
+        add_word(word, combined_definitions[word], [])
+
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        words = sorted({entry.title for entry in entries} | {alias for forms in aliases.values() for alias in forms})
-        archive.writestr("words", "\n".join(words).encode("utf-8"))
+        archive.writestr("words", "\n".join(sorted(words, key=str.casefold)).encode("utf-8"))
         for prefix, word_entries in grouped.items():
             archive.writestr(f"{prefix}.html", "<html>" + "".join(word_entries) + "</html>")

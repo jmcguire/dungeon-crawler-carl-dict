@@ -16,7 +16,7 @@ from typing import Iterable
 
 from dcdict.entries import (
     Entry,
-    build_alias_report,
+    build_lookup_report,
     link_definition_references,
     sanitize_inline_html,
 )
@@ -48,6 +48,7 @@ class StarDictBuildResult:
     css_path: Path
     entry_count: int
     alias_count: int
+    multi_lookup_count: int = 0
     omitted_alias_count: int = 0
 
     @property
@@ -193,6 +194,22 @@ def render_definition(
     return "".join(chunks)
 
 
+def render_combined_definition(
+    targets: tuple[str, ...],
+    entries_by_title: dict[str, Entry],
+    known_titles: set[str],
+    *,
+    link_entries: bool,
+) -> str:
+    """Render multiple canonical entries as one lookup result."""
+
+    chunks = ['<div class="multi-lookup">']
+    for target in targets:
+        chunks.append(render_definition(entries_by_title[target], known_titles, link_entries=link_entries))
+    chunks.append("</div>")
+    return "".join(chunks)
+
+
 def _validate_headword(word: str) -> None:
     encoded = word.encode("utf-8")
     if not encoded or len(encoded) >= 256 or b"\0" in encoded or "\n" in word or "\r" in word:
@@ -212,11 +229,11 @@ def build_stardict(
     """Generate a StarDict 2.4.2 bundle from normalized entries."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    alias_report = build_alias_report(
+    lookup_report = build_lookup_report(
         entries,
         include_sidebar_aliases=include_sidebar_aliases,
     )
-    aliases = alias_report.aliases
+    aliases = lookup_report.aliases
     entries_by_title = {entry.title: entry for entry in entries}
     if len(entries_by_title) != len(entries):
         raise StarDictValidationError("canonical entry titles must be unique")
@@ -224,18 +241,30 @@ def build_stardict(
     if len(set(folded_titles)) != len(folded_titles):
         raise StarDictValidationError("canonical entry titles must be case-insensitively unique")
 
-    ordered_titles = _sorted_words(entries_by_title)
     known_titles = set(entries_by_title)
+    combined_definitions = {
+        lookup.word: render_combined_definition(
+            lookup.targets,
+            entries_by_title,
+            known_titles,
+            link_entries=link_entries,
+        )
+        for lookup in lookup_report.multi_target_lookups
+    }
+    ordered_titles = _sorted_words(set(entries_by_title) | set(combined_definitions))
     dict_chunks: list[bytes] = []
     index_records: list[tuple[str, int, int]] = []
     offset = 0
     for word in ordered_titles:
         _validate_headword(word)
-        definition = render_definition(
-            entries_by_title[word],
-            known_titles,
-            link_entries=link_entries,
-        ).encode("utf-8")
+        definition_html = combined_definitions.get(word)
+        if definition_html is None:
+            definition_html = render_definition(
+                entries_by_title[word],
+                known_titles,
+                link_entries=link_entries,
+            )
+        definition = definition_html.encode("utf-8")
         if not definition:
             raise StarDictValidationError(f"empty definition for {word!r}")
         dict_chunks.append(definition)
@@ -301,7 +330,8 @@ def build_stardict(
         css_path=css_path,
         entry_count=len(index_records),
         alias_count=len(synonym_records),
-        omitted_alias_count=alias_report.omitted_alias_count,
+        multi_lookup_count=lookup_report.multi_target_lookup_count,
+        omitted_alias_count=lookup_report.omitted_alias_count,
     )
 
 

@@ -470,8 +470,9 @@ def package_release(
                 release_version=version.tag,
             )
             LOGGER.info(
-                "Kindle aliases: %s accepted, %s omitted",
+                "Kindle aliases: %s accepted, %s multi-target, %s omitted",
                 kindle_build.alias_count,
+                kindle_build.multi_lookup_count,
                 kindle_build.omitted_alias_count,
             )
             compilation = compile_with_kindlegen(kindle_build.opf_path, dont_append_source=True)
@@ -497,6 +498,7 @@ def package_release(
                 },
                 "smoke_tests": mobi_inspection.manifest_data(),
                 "alias_count": kindle_build.alias_count,
+                "multi_lookup_count": kindle_build.multi_lookup_count,
                 "omitted_alias_count": kindle_build.omitted_alias_count,
             }
 
@@ -510,8 +512,9 @@ def package_release(
                 include_sidebar_aliases=include_sidebar_aliases,
             )
             LOGGER.info(
-                "StarDict aliases: %s accepted, %s omitted",
+                "StarDict aliases: %s accepted, %s multi-target, %s omitted",
                 stardict_build.alias_count,
+                stardict_build.multi_lookup_count,
                 stardict_build.omitted_alias_count,
             )
             stardict_inspection = inspect_stardict(
@@ -529,6 +532,7 @@ def package_release(
                 "generator": "Python standard library",
                 "smoke_tests": stardict_inspection.manifest_data(),
                 "alias_count": stardict_build.alias_count,
+                "multi_lookup_count": stardict_build.multi_lookup_count,
                 "omitted_alias_count": stardict_build.omitted_alias_count,
             }
 
@@ -539,8 +543,9 @@ def package_release(
                 include_sidebar_aliases=include_sidebar_aliases,
             )
             LOGGER.info(
-                "Kobo aliases: %s accepted, %s omitted",
+                "Kobo aliases: %s accepted, %s multi-target, %s omitted",
                 kobo_build.alias_count,
+                kobo_build.multi_lookup_count,
                 kobo_build.omitted_alias_count,
             )
             kobo_inspection = inspect_kobo(
@@ -561,6 +566,7 @@ def package_release(
                 },
                 "smoke_tests": kobo_inspection.manifest_data(),
                 "alias_count": kobo_build.alias_count,
+                "multi_lookup_count": kobo_build.multi_lookup_count,
                 "omitted_alias_count": kobo_build.omitted_alias_count,
             }
 

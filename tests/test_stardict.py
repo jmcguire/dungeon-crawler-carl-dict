@@ -74,6 +74,27 @@ class StarDictTests(unittest.TestCase):
             canonical = {syn.word: inspection.entries[syn.original_index].word for syn in inspection.synonyms}
             self.assertEqual(canonical, {"1914": "1914 Box", "Fire Fingers": "Fire Fingers Spell"})
 
+    def test_multi_target_lookup_uses_combined_canonical_result(self) -> None:
+        entries = [
+            Entry("Earth", "https://example/Earth", "Earth is a planet."),
+            Entry("Earth Box", "https://example/Earth_Box", "Earth Box is a reward."),
+        ]
+        with TemporaryDirectory() as tmp_dir:
+            result = build_stardict(entries, Path(tmp_dir), "Test Dictionary", "Test Author")
+            inspection = inspect_stardict(
+                result.ifo_path,
+                required_headwords=("Earth", "Earth Box"),
+                check_sdcv=False,
+            )
+
+        self.assertEqual(result.alias_count, 0)
+        self.assertEqual(result.multi_lookup_count, 1)
+        earth_lookup = inspection.lookup("Earth") or ""
+        self.assertIn("Earth is a planet.", earth_lookup)
+        self.assertIn("Earth Box is a reward.", earth_lookup)
+        self.assertEqual(inspection.canonical_word("Earth"), "Earth")
+        self.assertEqual(inspection.canonical_word("Earth Box"), "Earth Box")
+
     def test_automatic_aliases_resolve_to_canonical_entries(self) -> None:
         entries = [
             Entry("Saccathian", "https://example/Saccathian", "<b>Saccathian</b> (or <b>Sacs</b>) are common."),

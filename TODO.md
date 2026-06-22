@@ -47,11 +47,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - Kindle lookup aliases now use `idx:iform` inflections instead of duplicated visible entries.
   - Candidate next steps: possessives, lowercase forms, plural forms such as `Brain Boilers`.
 
-- Support multiple entries for one lookup word.
-  - Example: `Earth` and `Earth Box`.
-  - Today ambiguous aliases are omitted; that is safe but can hide useful lookup results.
-  - Research how Kindle, StarDict, and Kobo should represent multiple definitions under one lookup.
-
 - Revisit additional suffix/prefix alias rules.
   - Possible suffixes: ` Achievement`, ` Potion`.
   - Possible prefix: `Potion of ...`.

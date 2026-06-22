@@ -61,8 +61,9 @@ class KoboTests(unittest.TestCase):
                 self.assertEqual(kobo_prefix(word), prefix)
 
     def test_dictfile_preserves_formatting_and_suffix_alias_variants(self) -> None:
-        dictfile, alias_count, omitted_alias_count = entries_to_dictfile(self.sample_entries())
+        dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(self.sample_entries())
         self.assertEqual(alias_count, 2)
+        self.assertEqual(multi_lookup_count, 0)
         self.assertGreaterEqual(omitted_alias_count, 0)
         self.assertIn("@ 1914 Box\n& 1914\n::\n<html>", dictfile)
         self.assertIn("@ Fire Fingers Spell\n& Fire Fingers\n::\n<html>", dictfile)
@@ -87,6 +88,32 @@ class KoboTests(unittest.TestCase):
             self.assertIn("<b>loot box</b>", inspection.lookup("1914") or "")
             self.assertIn("<i>Donut</i>", inspection.lookup("Carl") or "")
             self.assertEqual(inspection.alias_count, 2)
+
+    def test_multi_target_lookup_uses_combined_canonical_result(self) -> None:
+        entries = [
+            Entry("Earth", "https://example/Earth", "Earth is a planet."),
+            Entry("Earth Box", "https://example/Earth_Box", "Earth Box is a reward."),
+        ]
+        dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(entries)
+
+        self.assertEqual(alias_count, 0)
+        self.assertEqual(multi_lookup_count, 1)
+        self.assertEqual(omitted_alias_count, 0)
+        self.assertIn("@ Earth\n::\n<html>", dictfile)
+        self.assertIn("<b>Earth</b>", dictfile)
+        self.assertIn("<b>Earth Box</b>", dictfile)
+        self.assertNotIn("& Earth\n", dictfile)
+
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
+            synthetic_kobo_zip(path, entries)
+            inspection = inspect_kobo(path, required_headwords=("Earth", "Earth Box"))
+
+        earth_lookup = inspection.lookup("Earth") or ""
+        self.assertIn("Earth is a planet.", earth_lookup)
+        self.assertIn("Earth Box is a reward.", earth_lookup)
+        self.assertEqual(inspection.canonical_word("Earth"), "Earth")
+        self.assertEqual(inspection.canonical_word("Earth Box"), "Earth Box")
 
     def test_automatic_aliases_become_variants(self) -> None:
         entries = [

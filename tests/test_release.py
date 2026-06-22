@@ -327,6 +327,7 @@ class ReleaseTests(unittest.TestCase):
             manifest = json.loads((release_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
             self.assertEqual(set(manifest["formats"]), {"stardict"})
             self.assertEqual(manifest["formats"]["stardict"]["smoke_tests"]["alias_count"], 2)
+            self.assertEqual(manifest["formats"]["stardict"]["multi_lookup_count"], 0)
 
     def test_kobo_only_release_packages_only_kobo_assets(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -394,6 +395,7 @@ class ReleaseTests(unittest.TestCase):
             manifest = json.loads((release_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
             self.assertEqual(set(manifest["formats"]), {"kobo"})
             self.assertEqual(manifest["formats"]["kobo"]["smoke_tests"]["alias_count"], 2)
+            self.assertEqual(manifest["formats"]["kobo"]["multi_lookup_count"], 0)
 
     def test_kindle_release_passes_version_tag_to_opf_builder(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -433,7 +435,14 @@ class ReleaseTests(unittest.TestCase):
                 xhtml_path = output_dir / "dictionary.xhtml"
                 opf_path.write_text("<package />", encoding="utf-8")
                 xhtml_path.write_text("<html />", encoding="utf-8")
-                return BuildResult(xhtml_path, opf_path, len(entries), 0, 0)
+                return BuildResult(
+                    xhtml_path=xhtml_path,
+                    opf_path=opf_path,
+                    entry_count=len(entries),
+                    alias_count=0,
+                    multi_lookup_count=0,
+                    omitted_alias_count=0,
+                )
 
             def fake_compile(opf_path, **_kwargs):
                 mobi_path = opf_path.with_suffix(".mobi")
