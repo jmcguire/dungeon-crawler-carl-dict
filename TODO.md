@@ -57,11 +57,26 @@ This file is prioritized by what is most likely to improve real reader lookup be
 - Test the crawler/build pipeline against a different Fandom wiki.
   - Goal: produce a good-but-not-refined dictionary without DCC-specific assumptions.
   - Identify which extraction or alias rules need fandom-specific configuration.
+  - see iceandfire for an example. There are some hardcoded values for DCC.
+    - it also has a lot of parenthetical values, like "Baelon Targaryen (son of Aerys)". we should automaticall get rid of those, it'll be useful in all dictionaries.
+    - there is a big feature here to let people program in some of their own title munging methods. like a fandom-specific plugin that's a piece of code.
+    - why is "Ermesande Hayford" so long and everything else is too short?
+    - should look into history if the entry is too short
+    - it has custom prefixes ("House AAAA")
+  - add configurable sidebar attributes to look at
+  - these values are becoming unweildy to type on the command line. we might want to build a config file that can be used in both commands
+  - write up a guide for doing this with another fandom
+    - mention that Special:Category page has some good starting points.
+    - mention categories don't recursively descend into other categories by default, but here's how to do it, but note that many fandoms just have pages in multiple categories (characters and kings and deceased)
+  - change all outputs to have the fandomn ame built in. fandom.sqlite, build/fandom/, etc
+  - maybe make aliases to split FirstName LastName to also be searchable on FirstName?
 
 - Research other dictionary tooling when useful.
   - Review `kindling`: <https://github.com/ciscoriordan/kindling>
   - Look for Kindle XHTML/indexing tricks that could improve lookup reliability.
   - Future format candidates should be justified by reader demand and side-loading practicality.
+
+- Should rename dcdict.build_kindle_dictionary to dcdict.build_dictionaries
 
 ## Reference Notes
 

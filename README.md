@@ -367,16 +367,31 @@ Re-run paragraph extraction from already stored raw HTML, without touching the n
 python3 -m dcdict.fetch_entries --output data/characters.sqlite --reextract-only
 ```
 
-Example for a different Fandom wiki:
+This tool was built for Dungeon Crawler Carl, but it's generic enough to work (mostly) with other fandoms. For example, it works pretty well with the Ice and Fire fandom:
 
 ```sh
 python3 -m dcdict.fetch_entries \
-  --fandom example \
+  -fandom iceandfire \
   --category Characters \
-  --category Groups \
-  --category Items \
-  --output data/example.sqlite
+  --category Battles \
+  --category Noble_houses \
+  --category Nations \
+  --category Locations \
+  --category Geography \
+  --category Historical \
+  --category Cities \
+  --output data/iceandfire.sqlite \
+  --ignore-robots
+
+python3 -m dcdict.build_kindle_dictionary \
+  --input data/iceandfire.sqlite \
+  --output-dir build/iceandfire \
+  --title "Ice and Fire Dictionary" \
+  --author "You" \
+  --no-sidebar-aliases
 ```
+
+You'll notice it still has some hardcoded values for Dungeon Crawler Carl. It's not perfect. Fixing these is on the TODO list.
 
 ## Kindle Notes
 
