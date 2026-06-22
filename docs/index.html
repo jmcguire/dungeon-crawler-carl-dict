@@ -4,11 +4,11 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <title>Dungeon Crawler Carl E-reader Dictionary</title>
-      <meta name="description" content="A free custom Dungeon Crawler Carl lookup dictionary for Kindle, Kobo, and KOReader.">
+      <meta name="description" content="A free custom Dungeon Crawler Carl lookup dictionary for Kindle, Kobo, KOReader, and BOOX.">
       <link rel="canonical" href="https://jmcguire.github.io/dungeon-crawler-carl-dict/">
       <meta property="og:type" content="website">
       <meta property="og:title" content="Dungeon Crawler Carl E-reader Dictionary">
-      <meta property="og:description" content="A free custom Dungeon Crawler Carl lookup dictionary for Kindle, Kobo, and KOReader.">
+      <meta property="og:description" content="A free custom Dungeon Crawler Carl lookup dictionary for Kindle, Kobo, KOReader, and BOOX.">
       <meta property="og:url" content="https://jmcguire.github.io/dungeon-crawler-carl-dict/">
       <meta property="og:image" content="https://jmcguire.github.io/dungeon-crawler-carl-dict/assets/social-card.png">
       <meta name="twitter:image" content="https://jmcguire.github.io/dungeon-crawler-carl-dict/assets/social-card.png">
@@ -20,8 +20,8 @@
         "@type": "SoftwareApplication",
         "name": "Dungeon Crawler Carl E-reader Dictionary",
         "applicationCategory": "ReferenceApplication",
-        "operatingSystem": "Kindle, Kobo, KOReader",
-        "description": "A free custom Dungeon Crawler Carl lookup dictionary for Kindle, Kobo, and KOReader.",
+        "operatingSystem": "Kindle, Kobo, KOReader, BOOX",
+        "description": "A free custom Dungeon Crawler Carl lookup dictionary for Kindle, Kobo, KOReader, and BOOX.",
         "url": "https://jmcguire.github.io/dungeon-crawler-carl-dict/",
         "downloadUrl": "https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest",
         "softwareVersion": "latest",
@@ -46,8 +46,8 @@
           <a href="install-kindle/">Kindle</a>
           <a href="install-kobo/">Kobo</a>
           <a href="install-koreader/">KOReader</a>
+          <a href="install-boox/">BOOX</a>
           <a href="spoilers/">Spoilers</a>
-          <a href="case-study/">Case study</a>
           <a href="https://github.com/jmcguire/dungeon-crawler-carl-dict">GitHub</a>
         </nav>
 
@@ -63,7 +63,7 @@
       <div class="button-row" aria-label="Download options">
         <a class="button primary" href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.mobi">Download Kindle MOBI</a>
         <a class="button" href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/dicthtml-dc.zip">Download Kobo ZIP</a>
-        <a class="button" href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-StarDict.zip">Download KOReader ZIP</a>
+        <a class="button" href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-StarDict.zip">Download KOReader and BOOX ZIP</a>
       </div>
       <p class="small">The latest release links always point to the newest published GitHub Release.</p>
     </div>
@@ -73,6 +73,7 @@
         <li><strong>Kindle:</strong> sideloadable <code>.mobi</code> dictionary</li>
         <li><strong>Kobo:</strong> custom <code>dicthtml-dc.zip</code> dictionary</li>
         <li><strong>KOReader:</strong> StarDict dictionary bundle</li>
+        <li><strong>BOOX:</strong> StarDict dictionary bundle</li>
       </ul>
     </aside>
   </div>
@@ -82,7 +83,7 @@
   <div class="container two-column">
     <div>
       <h2>What this is</h2>
-      <p>This project builds Kindle, StarDict/KOReader, and Kobo lookup dictionaries from pages on a MediaWiki/Fandom wiki. The current default target is the Dungeon Crawler Carl Fandom character category, and the toolchain is designed so more categories or other Fandom wikis can be added later.</p>
+      <p>This project builds Kindle, StarDict for KOReader and BOOX, and Kobo lookup dictionaries from pages on a MediaWiki/Fandom wiki. The current default target is the Dungeon Crawler Carl Fandom character category, and the toolchain is designed so more categories or other Fandom wikis can be added later.</p>
       <p>The goal is practical reading help: select a term such as <em>Carl</em>, <em>Donut</em>, or <em>Mordecai</em> while reading and get a short in-device lookup entry.</p>
     </div>
     <div>
@@ -99,6 +100,10 @@
         <a class="card" href="install-koreader/">
           <h3>Install in KOReader</h3>
           <p>Extract the StarDict bundle and put the folder under <code>koreader/data/dict/</code>.</p>
+        </a>
+        <a class="card" href="install-boox/">
+          <h3>Install on BOOX</h3>
+          <p>Extract the StarDict bundle and import or copy it into your BOOX dictionary library.</p>
         </a>
       </div>
     </div>
