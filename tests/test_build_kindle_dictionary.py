@@ -13,6 +13,7 @@ from dcdict.kindle import (
     Entry,
     build_alias_report,
     build_aliases,
+    build_lookup_report,
     build_dictionary_sources,
     compile_with_kindlegen,
     forwarding_target_from_definition,
@@ -510,15 +511,19 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertIn("Fireball", aliases["Fireball Spell"])
         self.assertIn("Goblin", aliases["Goblin Box"])
 
-    def test_build_aliases_skips_suffix_stripped_alias_when_title_already_exists(self) -> None:
+    def test_lookup_report_tracks_suffix_alias_when_title_already_exists(self) -> None:
         entries = [
             Entry("Fireball", "https://example/wiki/Fireball", "A thing."),
             Entry("Fireball Spell", "https://example/wiki/Fireball_Spell", "A spell."),
         ]
 
         aliases = build_aliases(entries)
+        report = build_lookup_report(entries)
 
         self.assertNotIn("Fireball", aliases["Fireball Spell"])
+        self.assertEqual(len(report.multi_target_lookups), 1)
+        self.assertEqual(report.multi_target_lookups[0].word, "Fireball")
+        self.assertEqual(report.multi_target_lookups[0].targets, ("Fireball", "Fireball Spell"))
 
     def test_build_aliases_skips_case_insensitive_canonical_and_generated_collisions(self) -> None:
         entries = [
@@ -623,13 +628,16 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             Entry("Carl Smith", "https://example/wiki/Carl_Smith", "A crawler.", details=(("Race", "Human"),)),
         ]
 
-        report = build_alias_report(entries)
+        report = build_lookup_report(entries)
 
         self.assertIn("Katia", report.aliases["Katia Grim"])
         self.assertIn("Grim", report.aliases["Katia Grim"])
         self.assertNotIn("Carl", report.aliases["Carl Smith"])
         self.assertIn("Smith", report.aliases["Carl Smith"])
-        self.assertIn("canonical-collision", {omission.reason for omission in report.omissions})
+        self.assertEqual(len(report.multi_target_lookups), 1)
+        self.assertEqual(report.multi_target_lookups[0].word, "Carl")
+        self.assertEqual(report.multi_target_lookups[0].targets, ("Carl", "Carl Smith"))
+        self.assertNotIn("canonical-collision", {omission.reason for omission in report.omissions})
 
     def test_build_alias_report_omits_ambiguous_aliases(self) -> None:
         entries = [

@@ -72,6 +72,47 @@ class AliasReport:
 
 
 @dataclass(frozen=True)
+class LookupForm:
+    """One lookup word and the canonical entries it should show."""
+
+    word: str
+    targets: tuple[str, ...]
+
+    @property
+    def is_multi_target(self) -> bool:
+        """Return whether this lookup word should show multiple definitions."""
+
+        return len(self.targets) > 1
+
+
+@dataclass(frozen=True)
+class LookupReport:
+    """Resolved lookup words, aliases, and omitted candidates for one entry set."""
+
+    aliases: dict[str, list[str]]
+    multi_target_lookups: tuple[LookupForm, ...] = ()
+    omissions: tuple[AliasOmission, ...] = ()
+
+    @property
+    def single_target_alias_count(self) -> int:
+        """Return accepted non-canonical aliases with one target."""
+
+        return sum(max(0, len(forms) - 1) for forms in self.aliases.values())
+
+    @property
+    def multi_target_lookup_count(self) -> int:
+        """Return lookup words that intentionally show multiple entries."""
+
+        return len(self.multi_target_lookups)
+
+    @property
+    def omitted_alias_count(self) -> int:
+        """Return the number of alias candidates rejected."""
+
+        return len(self.omissions)
+
+
+@dataclass(frozen=True)
 class _AliasCandidate:
     target: str
     alias: str
@@ -587,13 +628,13 @@ def resolve_forwarding_entries(entries: list[Entry]) -> list[Entry]:
     return [resolve_entry(entry, set()) or entry for entry in entries]
 
 
-def suffix_stripped_alias(title: str, folded_titles: set[str]) -> str | None:
+def suffix_stripped_alias(title: str, folded_titles: set[str] | None = None) -> str | None:
     """Return a lookup alias with a generic suffix removed, when safe."""
 
     for suffix in (" Spell", " Box"):
         if title.endswith(suffix):
             alias = title[: -len(suffix)].strip()
-            if alias and alias.casefold() not in folded_titles:
+            if alias:
                 return alias
     return None
 
@@ -766,13 +807,13 @@ def alias_candidate_is_usable(alias: str) -> tuple[bool, str]:
     return True, ""
 
 
-def build_alias_report(
+def build_lookup_report(
     entries: list[Entry],
     *,
     include_sidebar_aliases: bool = True,
     include_human_name_aliases: bool = True,
-) -> AliasReport:
-    """Build unique aliases from titles, descriptions, sidebars, and names."""
+) -> LookupReport:
+    """Build lookup forms from titles, aliases, and collision-safe groups."""
 
     folded_titles = {entry.title.casefold(): entry.title for entry in entries}
     raw_candidates: list[_AliasCandidate] = []
@@ -789,6 +830,7 @@ def build_alias_report(
 
     owners: dict[str, set[str]] = {}
     candidate_map: dict[tuple[str, str], _AliasCandidate] = {}
+    canonical_collisions: dict[str, tuple[str, dict[str, str]]] = {}
     for candidate in raw_candidates:
         alias = normalize_text(candidate.alias)
         usable, reason = alias_candidate_is_usable(alias)
@@ -801,7 +843,11 @@ def build_alias_report(
             continue
         canonical_collision = folded_titles.get(alias.casefold())
         if canonical_collision and canonical_collision != candidate.target:
-            omissions.append(AliasOmission(alias, candidate.target, candidate.source, "canonical-collision"))
+            display_alias, targets = canonical_collisions.setdefault(
+                alias.casefold(),
+                (alias, {canonical_collision.casefold(): canonical_collision}),
+            )
+            targets[candidate.target.casefold()] = candidate.target
             continue
         key = (candidate.target, alias.casefold())
         if key not in candidate_map:
@@ -822,6 +868,18 @@ def build_alias_report(
                 )
             )
 
+    multi_target_lookups: list[LookupForm] = []
+    for _folded_alias, (alias, target_map) in canonical_collisions.items():
+        canonical_title = folded_titles[alias.casefold()]
+        targets = [canonical_title]
+        targets.extend(
+            title
+            for title in sorted(target_map.values(), key=lambda value: value.casefold())
+            if title.casefold() != canonical_title.casefold()
+        )
+        multi_target_lookups.append(LookupForm(alias, tuple(targets)))
+    multi_target_lookups.sort(key=lambda lookup: lookup.word.casefold())
+
     aliases: dict[str, list[str]] = {}
     for entry in entries:
         forms = [entry.title]
@@ -831,7 +889,27 @@ def build_alias_report(
                 forms.append(alias)
                 seen.add(alias.casefold())
         aliases[entry.title] = forms
-    return AliasReport(aliases=aliases, omissions=tuple(omissions))
+    return LookupReport(
+        aliases=aliases,
+        multi_target_lookups=tuple(multi_target_lookups),
+        omissions=tuple(omissions),
+    )
+
+
+def build_alias_report(
+    entries: list[Entry],
+    *,
+    include_sidebar_aliases: bool = True,
+    include_human_name_aliases: bool = True,
+) -> AliasReport:
+    """Build unique single-target aliases from titles, descriptions, sidebars, and names."""
+
+    report = build_lookup_report(
+        entries,
+        include_sidebar_aliases=include_sidebar_aliases,
+        include_human_name_aliases=include_human_name_aliases,
+    )
+    return AliasReport(aliases=report.aliases, omissions=report.omissions)
 
 
 def build_aliases(

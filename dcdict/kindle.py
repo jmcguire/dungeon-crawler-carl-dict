@@ -29,6 +29,7 @@ from dcdict.entries import (
     biographical_details_from_html,
     build_aliases,
     build_alias_report,
+    build_lookup_report,
     compile_title_pattern,
     filter_low_quality_entries,
     forwarding_target_from_definition,
