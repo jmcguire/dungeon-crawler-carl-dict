@@ -1,0 +1,59 @@
+name: Help or Dictionary Report
+description: Get help installing the dictionaryo, or report something missing, wrong, or broken.
+title: "[Help] "
+labels:
+  - help
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If something is missing, wrong, or does not work, just describe what you noticed.
+
+        Plain language is perfect.
+
+        Thanks for taking the time to report this. I can't guarantee I can fix everything, but I'll try.
+  - type: dropdown
+    id: report-kind
+    attributes:
+      label: What kind of help or report is this?
+      options:
+        - Installation help
+        - Missing dictionary entry
+        - Wrong or confusing dictionary entry
+        - Lookup does not work
+        - Download problem
+        - Just need help
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device or app
+      options:
+        - Kindle
+        - Kobo
+        - KOReader
+        - BOOX
+        - Other or not sure
+    validations:
+      required: true
+  - type: textarea
+    id: noticed
+    attributes:
+      label: What did you notice?
+      description: Tell me what happened, what looks wrong, or what seems to be missing.
+      placeholder: I selected "Valtay" but did not get a dictionary result.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: A short sentence is enough.
+      placeholder: I expected it to show the Valtay Corporation entry.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, page location, device details, or extra context can go here.
