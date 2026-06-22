@@ -139,7 +139,7 @@ python3 -m dcdict.build_kindle_dictionary
 
 Definitions preserve safe inline emphasis from the wiki where possible: `<b>`/`<strong>` become bold text, and `<i>`/`<em>` become italic text. Other HTML is stripped or escaped during extraction/building.
 
-Lookup aliases are discovered conservatively from the entry data: generic ` Box` and ` Spell` suffix stripping, selected wiki sidebar aliases, recognized intro parentheticals such as `(aka Borant)` or `(actually named "Gravy Boat")`, first bold intro names that differ from the page title, and first/last names for likely human characters. For example, `1914 Box` is also indexed as `1914`, and `Saccathian (or Sacs)` is also indexed as `Sacs`.
+Lookup aliases are discovered conservatively from the entry data: trusted title rules such as ` Box`, ` Spell`, ` Achievement`, ` Potion`, and ` Scroll` suffix stripping plus `Potion of ...`, `Scroll of ...`, `Ring of ...`, and `Wand of ...` prefix stripping; selected wiki sidebar aliases; recognized intro parentheticals such as `(aka Borant)` or `(actually named "Gravy Boat")`; first bold intro names that differ from the page title; and first/last names for likely human characters. For example, `1914 Box` is also indexed as `1914`, `Crybaby Achievement` as `Crybaby`, and `Saccathian (or Sacs)` as `Sacs`.
 
 Kindle single-target aliases are emitted as hidden `idx:iform` inflections under the canonical headword, so lookups resolve without duplicating the visible dictionary entry. StarDict uses `.syn` aliases, and Kobo uses variants. If an alias collides with a real entry name, the generated dictionaries keep both meanings: Kindle emits multiple lookup entries, while StarDict and Kobo use one combined lookup result. Ambiguous alias-only collisions are still omitted rather than routed to an arbitrary entry. For local testing, pass `--no-sidebar-aliases` to disable aliases derived from wiki sidebars.
 
@@ -345,7 +345,7 @@ Current Kobo firmware supports `.kobo/custom-dict` for custom dictionaries.
 The default crawler target is:
 
 - API: `https://dungeon-crawler-carl.fandom.com/api.php`
-- Categories: `Category:Characters`, `Category:Groups`, `Category:Spells`, `Category:Achievements`, `Category:Races`, `Category:Items`
+- Categories: `Category:Characters`, `Category:Groups`, `Category:Spells`, `Category:Achievements`, `Category:Races`, `Category:Items`, `Category:Mob_Types`
 - User-Agent: `KindleDictionaryCreationCrawler/0.1`
 
 The crawler:

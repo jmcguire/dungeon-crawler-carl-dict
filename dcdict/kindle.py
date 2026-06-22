@@ -158,10 +158,11 @@ def entries_to_xhtml(
 
     aliases = lookup_report.aliases
     entries_by_title = {entry.title: entry for entry in entries}
-    multi_by_primary_target: dict[str, list[tuple[int, LookupForm]]] = {}
+    multi_by_primary_target: dict[str, list[tuple[int, LookupForm, bool]]] = {}
     for lookup_index, lookup in enumerate(lookup_report.multi_target_lookups, 1):
         if lookup.targets:
-            multi_by_primary_target.setdefault(lookup.targets[0], []).append((lookup_index, lookup))
+            reuse_primary = lookup.word.casefold() == lookup.targets[0].casefold()
+            multi_by_primary_target.setdefault(lookup.targets[0], []).append((lookup_index, lookup, reuse_primary))
 
     rendered_entries: list[str] = []
     current_label: str | None = None
@@ -175,12 +176,18 @@ def entries_to_xhtml(
         if section_heading:
             rendered = f"{section_heading}\n\n{rendered}"
         rendered_entries.append(rendered)
-        for lookup_index, lookup in multi_by_primary_target.get(entry.title, []):
-            for target_index, target_title in enumerate(lookup.targets[1:], 1):
+        for lookup_index, lookup, reuse_primary in multi_by_primary_target.get(entry.title, []):
+            if reuse_primary:
+                duplicate_targets = lookup.targets[1:]
+                start_index = 1
+            else:
+                duplicate_targets = lookup.targets
+                start_index = 0
+            for offset, target_title in enumerate(duplicate_targets, start_index):
                 rendered_entries.append(
                     entry_to_xhtml(
                         entries_by_title[target_title],
-                        f"{index}-lookup-{lookup_index}-{target_index}",
+                        f"{index}-lookup-{lookup_index}-{offset}",
                         [],
                         title_to_id,
                         lookup.word,

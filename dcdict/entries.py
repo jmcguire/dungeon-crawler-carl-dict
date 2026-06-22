@@ -118,6 +118,12 @@ class _AliasCandidate:
     alias: str
     source: str
 
+    @property
+    def is_title_rule(self) -> bool:
+        """Return whether this alias came from a trusted title-shape rule."""
+
+        return self.source.startswith("title-")
+
 
 def normalize_text(text: str) -> str:
     """Normalize Unicode and collapse whitespace."""
@@ -628,14 +634,45 @@ def resolve_forwarding_entries(entries: list[Entry]) -> list[Entry]:
     return [resolve_entry(entry, set()) or entry for entry in entries]
 
 
-def suffix_stripped_alias(title: str, folded_titles: set[str] | None = None) -> str | None:
-    """Return a lookup alias with a generic suffix removed, when safe."""
+TITLE_SUFFIX_ALIASES = (
+    (" Spell", "title-suffix-spell"),
+    (" Box", "title-suffix-box"),
+    (" Achievement", "title-suffix-achievement"),
+    (" Potion", "title-suffix-potion"),
+    (" Scroll", "title-suffix-scroll"),
+)
+TITLE_PREFIX_ALIASES = (
+    ("Potion of ", "title-prefix-potion-of"),
+    ("Scroll of ", "title-prefix-scroll-of"),
+    ("Ring of ", "title-prefix-ring-of"),
+    ("Wand of ", "title-prefix-wand-of"),
+)
 
-    for suffix in (" Spell", " Box"):
+
+def title_alias_candidates(title: str) -> list[_AliasCandidate]:
+    """Return trusted title-shape aliases derived directly from the headword."""
+
+    candidates: list[_AliasCandidate] = []
+    for suffix, source in TITLE_SUFFIX_ALIASES:
         if title.endswith(suffix):
             alias = title[: -len(suffix)].strip()
             if alias:
-                return alias
+                candidates.append(_AliasCandidate(title, alias, source))
+    for prefix, source in TITLE_PREFIX_ALIASES:
+        if title.startswith(prefix):
+            alias = title[len(prefix) :].strip()
+            if alias:
+                candidates.append(_AliasCandidate(title, alias, source))
+    return candidates
+
+
+def suffix_stripped_alias(title: str, folded_titles: set[str] | None = None) -> str | None:
+    """Compatibility wrapper returning the first legacy suffix-based alias."""
+
+    del folded_titles
+    for candidate in title_alias_candidates(title):
+        if candidate.source in {"title-suffix-spell", "title-suffix-box"}:
+            return candidate.alias
     return None
 
 
@@ -819,18 +856,16 @@ def build_lookup_report(
     raw_candidates: list[_AliasCandidate] = []
     omissions: list[AliasOmission] = []
     for entry in entries:
-        alias = suffix_stripped_alias(entry.title, folded_titles)
-        if alias:
-            raw_candidates.append(_AliasCandidate(entry.title, alias, "suffix"))
+        raw_candidates.extend(title_alias_candidates(entry.title))
         raw_candidates.extend(description_alias_candidates(entry))
         if include_sidebar_aliases:
             raw_candidates.extend(sidebar_alias_candidates(entry))
         if include_human_name_aliases:
             raw_candidates.extend(human_name_alias_candidates(entry))
 
-    owners: dict[str, set[str]] = {}
     candidate_map: dict[tuple[str, str], _AliasCandidate] = {}
     canonical_collisions: dict[str, tuple[str, dict[str, str]]] = {}
+    alias_collisions: dict[str, tuple[str, dict[str, str]]] = {}
     for candidate in raw_candidates:
         alias = normalize_text(candidate.alias)
         usable, reason = alias_candidate_is_usable(alias)
@@ -852,13 +887,26 @@ def build_lookup_report(
         key = (candidate.target, alias.casefold())
         if key not in candidate_map:
             candidate_map[key] = _AliasCandidate(candidate.target, alias, candidate.source)
-            owners.setdefault(alias.casefold(), set()).add(candidate.target)
+
+    grouped_candidates: dict[str, list[_AliasCandidate]] = {}
+    for candidate in candidate_map.values():
+        grouped_candidates.setdefault(candidate.alias.casefold(), []).append(candidate)
 
     accepted: dict[str, list[str]] = {entry.title: [] for entry in entries}
-    for candidate in candidate_map.values():
-        if owners[candidate.alias.casefold()] == {candidate.target}:
+    for alias_key, grouped in grouped_candidates.items():
+        if len(grouped) == 1:
+            candidate = grouped[0]
             accepted[candidate.target].append(candidate.alias)
-        else:
+            continue
+        if all(candidate.is_title_rule for candidate in grouped):
+            display_alias, targets = alias_collisions.setdefault(
+                alias_key,
+                (grouped[0].alias, {}),
+            )
+            for candidate in grouped:
+                targets[candidate.target.casefold()] = candidate.target
+            continue
+        for candidate in grouped:
             omissions.append(
                 AliasOmission(
                     candidate.alias,
@@ -877,6 +925,9 @@ def build_lookup_report(
             for title in sorted(target_map.values(), key=lambda value: value.casefold())
             if title.casefold() != canonical_title.casefold()
         )
+        multi_target_lookups.append(LookupForm(alias, tuple(targets)))
+    for _folded_alias, (alias, target_map) in alias_collisions.items():
+        targets = sorted(target_map.values(), key=lambda value: value.casefold())
         multi_target_lookups.append(LookupForm(alias, tuple(targets)))
     multi_target_lookups.sort(key=lambda lookup: lookup.word.casefold())
 

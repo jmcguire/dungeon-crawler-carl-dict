@@ -585,7 +585,7 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         self.assertIsNone(args.categories)
         self.assertEqual(
             DEFAULT_CATEGORIES,
-            ("Characters", "Groups", "Spells", "Achievements", "Races", "Items"),
+            ("Characters", "Groups", "Spells", "Achievements", "Races", "Items", "Mob_Types"),
         )
 
     def test_main_uses_normal_dcc_categories_when_none_are_passed(self) -> None:

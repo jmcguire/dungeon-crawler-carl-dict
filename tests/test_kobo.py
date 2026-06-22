@@ -115,6 +115,28 @@ class KoboTests(unittest.TestCase):
         self.assertEqual(inspection.canonical_word("Earth"), "Earth")
         self.assertEqual(inspection.canonical_word("Earth Box"), "Earth Box")
 
+    def test_title_rule_multi_target_lookup_uses_combined_result(self) -> None:
+        entries = [
+            Entry("Heal Pet Potion", "https://example/Heal_Pet_Potion", "A potion that helps pets."),
+            Entry("Heal Pet Spell", "https://example/Heal_Pet_Spell", "A spell that helps pets."),
+        ]
+        dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(entries)
+
+        self.assertEqual(alias_count, 0)
+        self.assertEqual(multi_lookup_count, 1)
+        self.assertEqual(omitted_alias_count, 0)
+        self.assertIn("@ Heal Pet\n::\n<html>", dictfile)
+        self.assertNotIn("& Heal Pet\n", dictfile)
+
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
+            synthetic_kobo_zip(path, entries)
+            inspection = inspect_kobo(path, required_headwords=("Heal Pet", "Heal Pet Potion", "Heal Pet Spell"))
+
+        heal_pet_lookup = inspection.lookup("Heal Pet") or ""
+        self.assertIn("A potion that helps pets.", heal_pet_lookup)
+        self.assertIn("A spell that helps pets.", heal_pet_lookup)
+
     def test_automatic_aliases_become_variants(self) -> None:
         entries = [
             Entry("Saccathian", "https://example/Saccathian", "<b>Saccathian</b> (or <b>Sacs</b>) are common."),
@@ -158,6 +180,40 @@ class KoboTests(unittest.TestCase):
         self.assertEqual(inspection.canonical_word("Katia"), "Katia Grim")
         self.assertEqual(inspection.canonical_word("Grim"), "Katia Grim")
         self.assertEqual(inspection.canonical_word("Brain Boilers"), "Brain Boiler")
+
+    def test_title_rule_aliases_become_variants_or_multi_lookup(self) -> None:
+        entries = [
+            Entry("Crybaby Achievement", "https://example/Crybaby_Achievement", "An achievement."),
+            Entry("Mana Potion", "https://example/Mana_Potion", "A potion."),
+            Entry("Potion of Bloodlust", "https://example/Potion_of_Bloodlust", "Another potion."),
+            Entry("Heal Scroll", "https://example/Heal_Scroll", "A scroll."),
+            Entry("Scroll of Water Breathing", "https://example/Scroll_of_Water_Breathing", "A scroll."),
+            Entry("Ring of Water Breathing", "https://example/Ring_of_Water_Breathing", "A ring."),
+            Entry("Wand of Nighty Night", "https://example/Wand_of_Nighty_Night", "A wand."),
+        ]
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
+            synthetic_kobo_zip(path, entries)
+            inspection = inspect_kobo(
+                path,
+                required_headwords=(
+                    "Crybaby",
+                    "Mana",
+                    "Bloodlust",
+                    "Heal",
+                    "Water Breathing",
+                    "Nighty Night",
+                ),
+            )
+
+        self.assertEqual(inspection.canonical_word("Crybaby"), "Crybaby Achievement")
+        self.assertEqual(inspection.canonical_word("Mana"), "Mana Potion")
+        self.assertEqual(inspection.canonical_word("Bloodlust"), "Potion of Bloodlust")
+        self.assertEqual(inspection.canonical_word("Heal"), "Heal Scroll")
+        self.assertEqual(inspection.canonical_word("Nighty Night"), "Wand of Nighty Night")
+        water_breathing_lookup = inspection.lookup("Water Breathing") or ""
+        self.assertIn("A scroll.", water_breathing_lookup)
+        self.assertIn("A ring.", water_breathing_lookup)
 
     def test_inspector_accepts_gzipped_dicthtml_members(self) -> None:
         with TemporaryDirectory() as tmp_dir:

@@ -498,11 +498,18 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertEqual(aliases["José Sanchez"], ["José Sanchez"])
         self.assertEqual(aliases["Under_score"], ["Under_score"])
 
-    def test_build_aliases_adds_suffix_stripped_lookup_aliases(self) -> None:
+    def test_build_aliases_adds_title_rule_lookup_aliases(self) -> None:
         entries = [
             Entry("1914 Box", "https://example/wiki/1914_Box", "A box."),
             Entry("Fireball Spell", "https://example/wiki/Fireball_Spell", "A spell."),
             Entry("Goblin Box", "https://example/wiki/Goblin_Box", "A box."),
+            Entry("Crybaby Achievement", "https://example/wiki/Crybaby_Achievement", "An achievement."),
+            Entry("Mana Potion", "https://example/wiki/Mana_Potion", "A potion."),
+            Entry("Potion of Bloodlust", "https://example/wiki/Potion_of_Bloodlust", "A potion."),
+            Entry("Heal Scroll", "https://example/wiki/Heal_Scroll", "A scroll."),
+            Entry("Scroll of Water Breathing", "https://example/wiki/Scroll_of_Water_Breathing", "A scroll."),
+            Entry("Ring of Water Breathing", "https://example/wiki/Ring_of_Water_Breathing", "A ring."),
+            Entry("Wand of Nighty Night", "https://example/wiki/Wand_of_Nighty_Night", "A wand."),
         ]
 
         aliases = build_aliases(entries)
@@ -510,6 +517,11 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertIn("1914", aliases["1914 Box"])
         self.assertIn("Fireball", aliases["Fireball Spell"])
         self.assertIn("Goblin", aliases["Goblin Box"])
+        self.assertIn("Crybaby", aliases["Crybaby Achievement"])
+        self.assertIn("Mana", aliases["Mana Potion"])
+        self.assertIn("Bloodlust", aliases["Potion of Bloodlust"])
+        self.assertIn("Heal", aliases["Heal Scroll"])
+        self.assertIn("Nighty Night", aliases["Wand of Nighty Night"])
 
     def test_lookup_report_tracks_suffix_alias_when_title_already_exists(self) -> None:
         entries = [
@@ -525,12 +537,47 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertEqual(report.multi_target_lookups[0].word, "Fireball")
         self.assertEqual(report.multi_target_lookups[0].targets, ("Fireball", "Fireball Spell"))
 
+    def test_lookup_report_tracks_title_rule_alias_collisions_as_multi_lookup(self) -> None:
+        entries = [
+            Entry("Heal Pet Potion", "https://example/wiki/Heal_Pet_Potion", "A potion."),
+            Entry("Heal Pet Spell", "https://example/wiki/Heal_Pet_Spell", "A spell."),
+        ]
+
+        aliases = build_aliases(entries)
+        report = build_lookup_report(entries)
+
+        self.assertNotIn("Heal Pet", aliases["Heal Pet Potion"])
+        self.assertNotIn("Heal Pet", aliases["Heal Pet Spell"])
+        self.assertEqual(len(report.multi_target_lookups), 1)
+        self.assertEqual(report.multi_target_lookups[0].word, "Heal Pet")
+        self.assertEqual(report.multi_target_lookups[0].targets, ("Heal Pet Potion", "Heal Pet Spell"))
+
+    def test_lookup_report_tracks_prefix_title_alias_collisions_as_multi_lookup(self) -> None:
+        entries = [
+            Entry("Scroll of Water Breathing", "https://example/wiki/Scroll_of_Water_Breathing", "A scroll."),
+            Entry("Ring of Water Breathing", "https://example/wiki/Ring_of_Water_Breathing", "A ring."),
+        ]
+
+        aliases = build_aliases(entries)
+        report = build_lookup_report(entries)
+
+        self.assertNotIn("Water Breathing", aliases["Scroll of Water Breathing"])
+        self.assertNotIn("Water Breathing", aliases["Ring of Water Breathing"])
+        self.assertEqual(len(report.multi_target_lookups), 1)
+        self.assertEqual(report.multi_target_lookups[0].word, "Water Breathing")
+        self.assertEqual(
+            report.multi_target_lookups[0].targets,
+            ("Ring of Water Breathing", "Scroll of Water Breathing"),
+        )
+
     def test_build_aliases_skips_case_insensitive_canonical_and_generated_collisions(self) -> None:
         entries = [
             Entry("Fireball", "https://example/wiki/Fireball", "A thing."),
             Entry("FIREBALL Spell", "https://example/wiki/Fireball_Spell", "A spell."),
             Entry("Fire Box", "https://example/wiki/Fire_Box", "A box."),
             Entry("Fire Spell", "https://example/wiki/Fire_Spell", "A spell."),
+            Entry("Red Beret", "https://example/wiki/Red_Beret", "An item."),
+            Entry("Reaper Spider Minion Patch", "https://example/wiki/Reaper_Patch", "A patch."),
         ]
 
         aliases = build_aliases(entries)
@@ -538,6 +585,8 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertNotIn("FIREBALL", aliases["FIREBALL Spell"])
         self.assertNotIn("Fire", aliases["Fire Box"])
         self.assertNotIn("Fire", aliases["Fire Spell"])
+        self.assertEqual(aliases["Red Beret"], ["Red Beret"])
+        self.assertEqual(aliases["Reaper Spider Minion Patch"], ["Reaper Spider Minion Patch"])
 
     def test_build_alias_report_adds_parenthetical_description_aliases(self) -> None:
         entries = [
@@ -684,6 +733,23 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertNotIn('<idx:iform value="Fireball" />', text)
             self.assertIn('id="entry-1-lookup-1-1"', text)
             self.assertIn("<hr />", text)
+            ET.parse(output)
+
+    def test_write_xhtml_emits_duplicate_entry_for_title_rule_multi_lookup(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry("Heal Pet Potion", "https://example/wiki/Heal_Pet_Potion", "A potion."),
+                Entry("Heal Pet Spell", "https://example/wiki/Heal_Pet_Spell", "A spell."),
+            ]
+
+            write_xhtml(entries, output, "Test Dictionary")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertEqual(text.count('<idx:orth value="Heal Pet">'), 2)
+            self.assertIn('<idx:orth value="Heal Pet"><b>Heal Pet Potion</b>', text)
+            self.assertIn('<idx:orth value="Heal Pet"><b>Heal Pet Spell</b>', text)
+            self.assertNotIn('<idx:iform value="Heal Pet" />', text)
             ET.parse(output)
 
     def test_write_xhtml_emits_automatic_alias_headwords(self) -> None:

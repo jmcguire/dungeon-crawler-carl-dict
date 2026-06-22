@@ -46,11 +46,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
   - Candidate next steps: possessives, lowercase forms, plural forms such as `Brain Boilers`.
 
-- Revisit additional suffix/prefix alias rules.
-  - Possible suffixes: ` Achievement`, ` Potion`.
-  - Possible prefix: `Potion of ...`.
-  - Only add these after collision tests and manual spot checks; previous broad aliasing created bad one-word aliases.
-
 ## P3 - Release And User Experience Polish
 
 - Research Kobo internal links.
