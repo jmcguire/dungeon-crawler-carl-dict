@@ -16,6 +16,8 @@ from dcdict.entries import (
     AliasReport,
     BIOGRAPHICAL_FIELD_LABELS,
     LINKABLE_INLINE_TAGS,
+    LookupForm,
+    LookupReport,
     SIDEBAR_FIELD_LABELS,
     BiographicalInfoParser,
     Entry,
@@ -63,6 +65,7 @@ class BuildResult:
     opf_path: Path
     entry_count: int
     alias_count: int = 0
+    multi_lookup_count: int = 0
     omitted_alias_count: int = 0
 
 
@@ -82,10 +85,12 @@ def entry_to_xhtml(
     entry_id: str,
     lookup_aliases: list[str] | None = None,
     title_to_id: dict[str, int] | None = None,
+    lookup_value: str | None = None,
 ) -> str:
     """Render one Kindle dictionary entry with optional hidden lookup forms."""
 
     title = html.escape(entry.title, quote=True)
+    lookup = html.escape(lookup_value or entry.title, quote=True)
     definition = (
         link_definition_references(entry.definition, title_to_id, entry.title)
         if title_to_id
@@ -112,7 +117,7 @@ def entry_to_xhtml(
         inflections = f"\n          <idx:infl>\n{inflection_items}\n          </idx:infl>"
     return f"""<idx:entry name="default" scriptable="yes" spell="yes" id="entry-{entry_id}">
         <a id="entry-{entry_id}"></a>
-        <idx:orth value="{title}"><b>{title}</b>{inflections}
+        <idx:orth value="{lookup}"><b>{title}</b>{inflections}
         </idx:orth>
         <idx:short>{spoiler_note}
         <ul class="definition">
@@ -146,10 +151,17 @@ def alphabet_section_to_xhtml(label: str) -> str:
 
 def entries_to_xhtml(
     entries: list[Entry],
-    aliases: dict[str, list[str]],
+    lookup_report: LookupReport,
     title_to_id: dict[str, int] | None = None,
 ) -> str:
     """Render canonical Kindle entries with alphabet page breaks and separators."""
+
+    aliases = lookup_report.aliases
+    entries_by_title = {entry.title: entry for entry in entries}
+    multi_by_primary_target: dict[str, list[tuple[int, LookupForm]]] = {}
+    for lookup_index, lookup in enumerate(lookup_report.multi_target_lookups, 1):
+        if lookup.targets:
+            multi_by_primary_target.setdefault(lookup.targets[0], []).append((lookup_index, lookup))
 
     rendered_entries: list[str] = []
     current_label: str | None = None
@@ -163,6 +175,17 @@ def entries_to_xhtml(
         if section_heading:
             rendered = f"{section_heading}\n\n{rendered}"
         rendered_entries.append(rendered)
+        for lookup_index, lookup in multi_by_primary_target.get(entry.title, []):
+            for target_index, target_title in enumerate(lookup.targets[1:], 1):
+                rendered_entries.append(
+                    entry_to_xhtml(
+                        entries_by_title[target_title],
+                        f"{index}-lookup-{lookup_index}-{target_index}",
+                        [],
+                        title_to_id,
+                        lookup.word,
+                    )
+                )
     return "\n\n      <hr />\n\n".join(rendered_entries)
 
 
@@ -178,16 +201,15 @@ def write_xhtml_with_options(
     title: str,
     link_entries: bool,
     include_sidebar_aliases: bool = True,
-) -> AliasReport:
+) -> LookupReport:
     """Write the Kindle dictionary XHTML source file with build options."""
 
-    alias_report = build_alias_report(
+    lookup_report = build_lookup_report(
         entries,
         include_sidebar_aliases=include_sidebar_aliases,
     )
-    aliases = alias_report.aliases
     title_to_id = {entry.title: index for index, entry in enumerate(entries, 1)} if link_entries else None
-    body = entries_to_xhtml(entries, aliases, title_to_id)
+    body = entries_to_xhtml(entries, lookup_report, title_to_id)
     output.write_text(
         f"""<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
@@ -215,7 +237,7 @@ def write_xhtml_with_options(
 """,
         encoding="utf-8",
     )
-    return alias_report
+    return lookup_report
 
 
 def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier: str) -> None:
@@ -297,7 +319,7 @@ def build_dictionary_sources(
     opf_path = output_dir / "dictionary.opf"
     identifier = kindle_identifier(title, release_version)
 
-    alias_report = write_xhtml_with_options(
+    lookup_report = write_xhtml_with_options(
         entries,
         xhtml_path,
         title,
@@ -312,8 +334,9 @@ def build_dictionary_sources(
         xhtml_path=xhtml_path,
         opf_path=opf_path,
         entry_count=len(entries),
-        alias_count=alias_report.accepted_alias_count,
-        omitted_alias_count=alias_report.omitted_alias_count,
+        alias_count=lookup_report.single_target_alias_count,
+        multi_lookup_count=lookup_report.multi_target_lookup_count,
+        omitted_alias_count=lookup_report.omitted_alias_count,
     )
 
 

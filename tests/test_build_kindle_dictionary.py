@@ -667,6 +667,25 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertEqual(text.count('<idx:entry name="default"'), 1)
             self.assertEqual(text.count("<hr />"), 0)
 
+    def test_write_xhtml_emits_duplicate_entry_for_multi_target_lookup(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry("Fireball", "https://example/wiki/Fireball", "A standalone thing."),
+                Entry("Fireball Spell", "https://example/wiki/Fireball_Spell", "A spell."),
+            ]
+
+            write_xhtml(entries, output, "Test Dictionary")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertEqual(text.count('<idx:orth value="Fireball">'), 2)
+            self.assertIn('<idx:orth value="Fireball"><b>Fireball</b>', text)
+            self.assertIn('<idx:orth value="Fireball"><b>Fireball Spell</b>', text)
+            self.assertNotIn('<idx:iform value="Fireball" />', text)
+            self.assertIn('id="entry-1-lookup-1-1"', text)
+            self.assertIn("<hr />", text)
+            ET.parse(output)
+
     def test_write_xhtml_emits_automatic_alias_headwords(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             output = Path(tmp_dir) / "dictionary.xhtml"

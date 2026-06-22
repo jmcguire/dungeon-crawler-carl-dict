@@ -68,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"wrote {result.opf_path}")
     print(f"entries: {result.entry_count}")
     print(f"aliases: {result.alias_count}")
+    print(f"multi-target lookups: {result.multi_lookup_count}")
     print(f"omitted aliases: {result.omitted_alias_count}")
 
     if args.compile:
