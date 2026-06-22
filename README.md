@@ -15,6 +15,8 @@ The easiest starting point is the project site:
 
 **Project site:** <https://jmcguire.github.io/dungeon-crawler-carl-dict/>
 
+**Case study:** <https://jmcguire.github.io/dungeon-crawler-carl-dict/case-study/> explains how this project used agentic programming to build and release something real.
+
 ## Download
 
 Download the file for your device or reading app from the latest GitHub Release.
