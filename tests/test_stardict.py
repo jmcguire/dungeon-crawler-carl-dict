@@ -114,6 +114,30 @@ class StarDictTests(unittest.TestCase):
         self.assertIn("A potion that helps pets.", heal_pet_lookup)
         self.assertIn("A spell that helps pets.", heal_pet_lookup)
 
+    def test_character_first_name_multi_target_lookup_uses_combined_result(self) -> None:
+        entries = [
+            Entry("Aegon Frey", "https://example/Aegon_Frey", "One Aegon.", source_categories=("Characters",)),
+            Entry(
+                "Aegon Targaryen",
+                "https://example/Aegon_Targaryen",
+                "Another Aegon.",
+                source_categories=("Characters",),
+            ),
+        ]
+        with TemporaryDirectory() as tmp_dir:
+            result = build_stardict(entries, Path(tmp_dir), "Test Dictionary", "Test Author")
+            inspection = inspect_stardict(
+                result.ifo_path,
+                required_headwords=("Aegon", "Aegon Frey", "Aegon Targaryen"),
+                check_sdcv=False,
+            )
+
+        self.assertEqual(result.alias_count, 0)
+        self.assertEqual(result.multi_lookup_count, 1)
+        aegon_lookup = inspection.lookup("Aegon") or ""
+        self.assertIn("One Aegon.", aegon_lookup)
+        self.assertIn("Another Aegon.", aegon_lookup)
+
     def test_automatic_aliases_resolve_to_canonical_entries(self) -> None:
         entries = [
             Entry("Saccathian", "https://example/Saccathian", "<b>Saccathian</b> (or <b>Sacs</b>) are common."),

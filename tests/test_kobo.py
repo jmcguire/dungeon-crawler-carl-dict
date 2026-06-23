@@ -137,6 +137,33 @@ class KoboTests(unittest.TestCase):
         self.assertIn("A potion that helps pets.", heal_pet_lookup)
         self.assertIn("A spell that helps pets.", heal_pet_lookup)
 
+    def test_character_first_name_multi_target_lookup_uses_combined_result(self) -> None:
+        entries = [
+            Entry("Aegon Frey", "https://example/Aegon_Frey", "One Aegon.", source_categories=("Characters",)),
+            Entry(
+                "Aegon Targaryen",
+                "https://example/Aegon_Targaryen",
+                "Another Aegon.",
+                source_categories=("Characters",),
+            ),
+        ]
+        dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(entries)
+
+        self.assertEqual(alias_count, 0)
+        self.assertEqual(multi_lookup_count, 1)
+        self.assertEqual(omitted_alias_count, 0)
+        self.assertIn("@ Aegon\n::\n<html>", dictfile)
+        self.assertNotIn("& Aegon\n", dictfile)
+
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
+            synthetic_kobo_zip(path, entries)
+            inspection = inspect_kobo(path, required_headwords=("Aegon", "Aegon Frey", "Aegon Targaryen"))
+
+        aegon_lookup = inspection.lookup("Aegon") or ""
+        self.assertIn("One Aegon.", aegon_lookup)
+        self.assertIn("Another Aegon.", aegon_lookup)
+
     def test_automatic_aliases_become_variants(self) -> None:
         entries = [
             Entry("Saccathian", "https://example/Saccathian", "<b>Saccathian</b> (or <b>Sacs</b>) are common."),

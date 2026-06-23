@@ -87,12 +87,72 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             entries = load_entries(db_path, min_definition_length=8)
 
         self.assertEqual([entry.title for entry in entries], ["Carl", "Donut"])
+        self.assertEqual(entries[1].source_categories, ("Characters", "Groups"))
         self.assertEqual(entries[1].definition, "<b>Princess Donut</b> is royalty.")
         self.assertEqual(entries[1].spoiler_notice, "This article contains unmarked spoilers for Book 2.")
         self.assertEqual(
             entries[1].details,
             (("Aliases", "GC, BWR, NW Princess Donut"), ("Origin", "Earth: Seattle, WA")),
         )
+
+    def test_load_entries_tolerates_missing_source_category_column(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO pages VALUES (?, ?, ?, '', 'ok')",
+                ("Katia Grim", "https://example/wiki/Katia_Grim", "Katia is a crawler."),
+            )
+            conn.commit()
+            conn.close()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        self.assertEqual(entries[0].title, "Katia Grim")
+        self.assertEqual(entries[0].source_categories, ())
+
+    def test_load_entries_parses_category_prefixed_source_categories(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, '', 'ok')",
+                (
+                    "Katia Grim",
+                    "https://example/wiki/Katia_Grim",
+                    "Category:Characters, Groups, Characters",
+                    "Katia is a crawler.",
+                ),
+            )
+            conn.commit()
+            conn.close()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        self.assertEqual(entries[0].source_categories, ("Characters", "Groups"))
 
     def test_load_entries_strips_collision_free_parenthetical_title(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -703,6 +763,59 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertNotIn("Gravy Boat", default_report.aliases["Ferdinand"])
         self.assertIn("Gravy Boat", custom_report.aliases["Ferdinand"])
 
+    def test_character_first_name_alias_requires_characters_category(self) -> None:
+        entries = [
+            Entry("Katia Grim", "https://example/wiki/Katia_Grim", "A crawler.", source_categories=("Characters",)),
+            Entry("Lucia Mar", "https://example/wiki/Lucia_Mar", "A crawler.", source_categories=("Groups",)),
+        ]
+
+        report = build_lookup_report(entries)
+
+        self.assertIn("Katia", report.aliases["Katia Grim"])
+        self.assertNotIn("Lucia", report.aliases["Lucia Mar"])
+
+    def test_character_first_name_alias_skips_honorific_first_words(self) -> None:
+        entries = [
+            Entry("Princess Donut", "https://example/wiki/Princess_Donut", "A crawler.", source_categories=("Characters",)),
+            Entry("Ser Addison", "https://example/wiki/Ser_Addison", "A knight.", source_categories=("Characters",)),
+        ]
+
+        report = build_lookup_report(entries)
+
+        self.assertNotIn("Princess", report.aliases["Princess Donut"])
+        self.assertNotIn("Ser", report.aliases["Ser Addison"])
+
+    def test_character_first_name_alias_collisions_become_multi_target_lookup(self) -> None:
+        entries = [
+            Entry("Aegon Frey", "https://example/wiki/Aegon_Frey", "One Aegon.", source_categories=("Characters",)),
+            Entry(
+                "Aegon Targaryen",
+                "https://example/wiki/Aegon_Targaryen",
+                "Another Aegon.",
+                source_categories=("Characters",),
+            ),
+        ]
+
+        report = build_lookup_report(entries)
+
+        self.assertNotIn("Aegon", report.aliases["Aegon Frey"])
+        self.assertEqual(len(report.multi_target_lookups), 1)
+        self.assertEqual(report.multi_target_lookups[0].word, "Aegon")
+        self.assertEqual(report.multi_target_lookups[0].targets, ("Aegon Frey", "Aegon Targaryen"))
+
+    def test_character_first_name_alias_canonical_collision_includes_canonical_first(self) -> None:
+        entries = [
+            Entry("Katia", "https://example/wiki/Katia", "The canonical Katia."),
+            Entry("Katia Grim", "https://example/wiki/Katia_Grim", "Another Katia.", source_categories=("Characters",)),
+        ]
+
+        report = build_lookup_report(entries)
+
+        self.assertNotIn("Katia", report.aliases["Katia Grim"])
+        self.assertEqual(len(report.multi_target_lookups), 1)
+        self.assertEqual(report.multi_target_lookups[0].word, "Katia")
+        self.assertEqual(report.multi_target_lookups[0].targets, ("Katia", "Katia Grim"))
+
     def test_build_aliases_skips_case_insensitive_canonical_and_generated_collisions(self) -> None:
         entries = [
             Entry("Fireball", "https://example/wiki/Fireball", "A thing."),
@@ -849,6 +962,21 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertEqual(text.count('<idx:entry name="default"'), 1)
             self.assertEqual(text.count("<hr />"), 0)
 
+    def test_write_xhtml_emits_character_first_name_alias_as_inflection(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry("Katia Grim", "https://example/wiki/Katia_Grim", "A crawler.", source_categories=("Characters",)),
+            ]
+
+            write_xhtml(entries, output, "Test Dictionary")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertIn('<idx:orth value="Katia Grim"><b>Katia Grim</b>', text)
+            self.assertIn('<idx:iform value="Katia" />', text)
+            self.assertEqual(text.count('<idx:entry name="default"'), 1)
+            ET.parse(output)
+
     def test_write_xhtml_emits_duplicate_entry_for_multi_target_lookup(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             output = Path(tmp_dir) / "dictionary.xhtml"
@@ -883,6 +1011,28 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertIn('<idx:orth value="Heal Pet"><b>Heal Pet Potion</b>', text)
             self.assertIn('<idx:orth value="Heal Pet"><b>Heal Pet Spell</b>', text)
             self.assertNotIn('<idx:iform value="Heal Pet" />', text)
+            ET.parse(output)
+
+    def test_write_xhtml_emits_duplicate_entry_for_character_first_name_multi_lookup(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry("Aegon Frey", "https://example/wiki/Aegon_Frey", "One Aegon.", source_categories=("Characters",)),
+                Entry(
+                    "Aegon Targaryen",
+                    "https://example/wiki/Aegon_Targaryen",
+                    "Another Aegon.",
+                    source_categories=("Characters",),
+                ),
+            ]
+
+            write_xhtml(entries, output, "Test Dictionary")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertEqual(text.count('<idx:orth value="Aegon">'), 2)
+            self.assertIn('<idx:orth value="Aegon"><b>Aegon Frey</b>', text)
+            self.assertIn('<idx:orth value="Aegon"><b>Aegon Targaryen</b>', text)
+            self.assertNotIn('<idx:iform value="Aegon" />', text)
             ET.parse(output)
 
     def test_write_xhtml_emits_automatic_alias_headwords(self) -> None:

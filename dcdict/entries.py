@@ -33,6 +33,28 @@ DEFAULT_SIDEBAR_FIELDS = tuple(
     SidebarField(source=source, label=label, alias=(label == "Aliases"))
     for source, label in SIDEBAR_FIELD_LABELS.items()
 )
+CHARACTER_CATEGORY = "Characters"
+FIRST_NAME_SKIP_WORDS = {
+    "A",
+    "An",
+    "Captain",
+    "Commander",
+    "Count",
+    "Crown",
+    "Doctor",
+    "Dr",
+    "Duchess",
+    "Duke",
+    "King",
+    "Lady",
+    "Lord",
+    "Prince",
+    "Princess",
+    "Queen",
+    "Ser",
+    "Sir",
+    "The",
+}
 
 
 @dataclass(frozen=True)
@@ -44,6 +66,7 @@ class Entry:
     definition: str
     spoiler_notice: str | None = None
     details: tuple[tuple[str, str], ...] = ()
+    source_categories: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -128,6 +151,12 @@ class _AliasCandidate:
         """Return whether this alias came from a trusted title-shape rule."""
 
         return self.source.startswith("title-")
+
+    @property
+    def allows_multi_target_lookup(self) -> bool:
+        """Return whether collisions should become multi-definition lookups."""
+
+        return self.is_title_rule or self.source == "character-first-name"
 
 
 def normalize_text(text: str) -> str:
@@ -544,6 +573,23 @@ def ascii_fold(text: str) -> str:
     return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
 
 
+def parse_source_categories(value: str | None) -> tuple[str, ...]:
+    """Parse the crawler's comma-separated source-category field."""
+
+    if not value:
+        return ()
+    categories = []
+    seen = set()
+    for chunk in value.split(","):
+        category = normalize_text(chunk)
+        if category.startswith("Category:"):
+            category = category.removeprefix("Category:").strip()
+        if category and category.casefold() not in seen:
+            seen.add(category.casefold())
+            categories.append(category)
+    return tuple(categories)
+
+
 def load_entries(
     db_path: Path,
     min_definition_length: int,
@@ -556,9 +602,11 @@ def load_entries(
 
     conn = sqlite3.connect(db_path)
     try:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(pages)").fetchall()}
+        source_category_expression = "source_category" if "source_category" in columns else "NULL AS source_category"
         rows = conn.execute(
-            """
-            SELECT title, url, first_paragraph, raw_html
+            f"""
+            SELECT title, url, first_paragraph, raw_html, {source_category_expression}
             FROM pages
             WHERE status = 'ok' AND COALESCE(first_paragraph, '') != ''
             ORDER BY lower(title)
@@ -567,7 +615,7 @@ def load_entries(
     finally:
         conn.close()
     entries = []
-    for title, url, first_paragraph, raw_html in rows:
+    for title, url, first_paragraph, raw_html, source_category in rows:
         definition = sanitize_inline_html(clean_wiki_text_artifacts(first_paragraph))
         if max_summary_length:
             from dcdict.extraction import trim_inline_html_to_plain_length
@@ -582,6 +630,7 @@ def load_entries(
                     definition=definition,
                     spoiler_notice=spoiler_notice_from_html(raw_html),
                     details=details,
+                    source_categories=parse_source_categories(source_category),
                 )
             )
     entries = apply_title_munging(entries, strip_parenthetical_disambiguation=strip_parenthetical_disambiguation)
@@ -615,6 +664,7 @@ def apply_title_munging(entries: list[Entry], *, strip_parenthetical_disambiguat
                     definition=entry.definition,
                     spoiler_notice=entry.spoiler_notice,
                     details=entry.details,
+                    source_categories=entry.source_categories,
                 )
             )
         else:
@@ -690,6 +740,7 @@ def resolve_forwarding_entries(entries: list[Entry]) -> list[Entry]:
             definition=resolved_target.definition,
             spoiler_notice=resolved_target.spoiler_notice,
             details=resolved_target.details,
+            source_categories=entry.source_categories,
         )
         cache[entry.title] = resolved
         return resolved
@@ -909,6 +960,36 @@ def is_likely_human_name_entry(entry: Entry) -> bool:
     return any("human" in value.casefold() for value in race_values)
 
 
+def character_first_name_alias_candidates(entry: Entry) -> list[_AliasCandidate]:
+    """Return first-name aliases for simple titles from the Characters category."""
+
+    if not entry_is_from_characters_category(entry):
+        return []
+    words = entry.title.split()
+    if len(words) != 2:
+        return []
+    first, last = words
+    if first in FIRST_NAME_SKIP_WORDS:
+        return []
+    if not (is_person_name_token(first) and is_person_name_token(last)):
+        return []
+    return [_AliasCandidate(entry.title, first, "character-first-name")]
+
+
+def entry_is_from_characters_category(entry: Entry) -> bool:
+    """Return true when an entry was reached from the Characters category."""
+
+    return any(category.casefold() == CHARACTER_CATEGORY.casefold() for category in entry.source_categories)
+
+
+def is_person_name_token(value: str) -> bool:
+    """Return true for a conservative single name token."""
+
+    if len(value) < 2 or not value[0].isupper():
+        return False
+    return all(char.isalpha() or char in "'-" for char in value)
+
+
 def alias_candidate_is_usable(alias: str) -> tuple[bool, str]:
     """Validate an alias candidate before collision checks."""
 
@@ -956,6 +1037,7 @@ def build_lookup_report(
         raw_candidates.extend(description_alias_candidates(entry))
         if include_sidebar_aliases:
             raw_candidates.extend(sidebar_alias_candidates(entry, sidebar_alias_labels))
+        raw_candidates.extend(character_first_name_alias_candidates(entry))
         if include_human_name_aliases:
             raw_candidates.extend(human_name_alias_candidates(entry))
 
@@ -994,7 +1076,7 @@ def build_lookup_report(
             candidate = grouped[0]
             accepted[candidate.target].append(candidate.alias)
             continue
-        if all(candidate.is_title_rule for candidate in grouped):
+        if all(candidate.allows_multi_target_lookup for candidate in grouped):
             display_alias, targets = alias_collisions.setdefault(
                 alias_key,
                 (grouped[0].alias, {}),
