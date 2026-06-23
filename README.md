@@ -1,413 +1,244 @@
 # Dungeon Crawler Carl E-reader Dictionaries
 
 [![Release](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Frelease.json)](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases)
-[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fcoverage.json)](#tests)
-[![Python](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fpython.json)](#requirements)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fcoverage.json)](#tests-and-badges)
+[![Python](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fpython.json)](#developer-tools)
 [![Formats](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fformats.json)](#supported-formats)
-[![Licenses](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Flicenses.json)](#licensing)
-[![Output](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Foutput.json)](#create-a-release)
+[![Licenses](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Flicenses.json)](#license-and-attribution)
+[![Output](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Foutput.json)](#release-workflow)
 
 A free custom e-reader dictionary for *Dungeon Crawler Carl*.
 
-This project lets you look up Dungeon Crawler Carl characters, factions, races, spells, achievements, items, and other terms directly from an e-reader dictionary panel. It is meant for readers who do not want to stop reading, search the web, or risk wandering through spoiler-heavy wiki pages just to remember who or what something is.
+This project lets you look up Dungeon Crawler Carl characters, factions, races, spells, achievements, items, and other terms directly from an e-reader dictionary panel.
 
-The easiest starting point is the project site:
+## Just Want The Dictionary?
 
-**Project site:** <https://jmcguire.github.io/dungeon-crawler-carl-dict/>
+Go here first:
+
+**Install and download guide:** <https://jmcguire.github.io/dungeon-crawler-carl-dict/>
+
+That site has the reader-facing instructions for Kindle, Kobo, KOReader, and BOOX. This README is mostly developer notes for crawling, building, testing, and releasing the dictionary.
+
+For release files directly, use the latest GitHub Release:
+
+- Kindle: <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.mobi>
+- Kindle bundle: <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.zip>
+- KOReader / BOOX / StarDict: <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-StarDict.zip>
+- Kobo: <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/dicthtml-dc.zip>
+- Kobo bundle: <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-Kobo.zip>
 
 **Case study:** <https://jmcguire.github.io/dungeon-crawler-carl-dict/case-study/> explains how this project used agentic programming to build and release something real.
 
-## Download
+## Supported Formats
 
-Download the file for your device or reading app from the latest GitHub Release.
+This repository builds:
 
-| Reader | Download | Use this if |
-|---|---|---|
-| Kindle | [Dungeon-Crawler-Carl-Dictionary.mobi](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.mobi) | You want to sideload the dictionary onto a Kindle device. |
-| Kindle bundle | [Dungeon-Crawler-Carl-Dictionary.zip](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.zip) | You want the Kindle dictionary plus license, attribution, and install notes. |
-| KOReader / StarDict | [Dungeon-Crawler-Carl-Dictionary-StarDict.zip](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-StarDict.zip) | You read in KOReader or another StarDict-compatible reader. |
-| Kobo | [dicthtml-dc.zip](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/dicthtml-dc.zip) | You want the Kobo custom dictionary file. |
-| Kobo bundle | [Dungeon-Crawler-Carl-Dictionary-Kobo.zip](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-Kobo.zip) | You want the Kobo dictionary plus license, attribution, and install notes. |
-| Checksums | [SHA256SUMS.txt](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/SHA256SUMS.txt) | You want to verify downloaded files. |
+- Kindle `.mobi`
+- StarDict for KOReader and BOOX
+- Kobo `dicthtml`
+- Release ZIPs with install notes, license, attribution, checksums, and build metadata
 
-Full release history is here: <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases>
+## Spoiler And Fan-Project Notes
 
-## Supported formats
+This dictionary is intended to be less risky than opening a wiki while reading, but it is not guaranteed to be spoiler-free. If a source wiki page has a page-level spoiler warning, the generated entry puts a spoiler note above the definition. The wiki generally does not mark smaller spoiler phrases inside normal sentences.
 
-This repository currently builds:
+This is an unofficial fan project. It is not affiliated with, authorized by, endorsed by, or sponsored by Matt Dinniman, the Dungeon Crawler Carl rights holders, Amazon, Kindle, Kobo, KOReader, BOOX, Fandom, or any related publisher or platform.
 
-- Kindle `.mobi` dictionary files
-- StarDict dictionaries for KOReader
-- Kobo `dicthtml` custom dictionaries
-- Release ZIP files with installation notes, license files, attribution, and build metadata
+This project has been approved by the Dungeon Crawler Carl fandom admins.
 
-The default dictionary source is the Dungeon Crawler Carl Fandom wiki. The crawler and converter are intentionally generic enough to point at another Fandom wiki and category later, but this repository is currently focused on Dungeon Crawler Carl.
+## Developer Tools
 
-## Spoiler caveat
+Required:
 
-This dictionary is intended to be less risky than opening a wiki while reading, but it is not guaranteed to be spoiler-free.
-
-If a source wiki page has a page-level spoiler warning banner, the generated dictionary entry places a spoiler note above the definition so the reader has a chance to stop before reading further. The warning is page-level. The wiki generally does not mark smaller spoiler phrases inside otherwise normal sentences, so some entries may still reveal details from later books.
-
-## Fan-project disclaimer
-
-This is an unofficial fan project. It is not affiliated with, authorized by, endorsed by, or sponsored by Matt Dinniman, the Dungeon Crawler Carl rights holders, Amazon, Kindle, Kobo, KOReader, Fandom, or any related publisher or platform.
-
-Generated dictionary entries are derived from community-contributed Dungeon Crawler Carl Wiki text on Fandom, with source page links included where practical. See [Licensing](#licensing), `CONTENT_LICENSE`, and `NOTICE` for details.
-
-## For developers
-
-This project builds Kindle, StarDict/KOReader, and Kobo lookup dictionaries from pages on a MediaWiki/Fandom wiki.
-
-The technical workflow is:
-
-1. Fetch selected wiki pages into SQLite.
-2. Extract short dictionary definitions and conservative aliases.
-3. Build Kindle XHTML/OPF source, StarDict files, and Kobo dictionary source.
-4. Optionally compile Kindle and Kobo device-ready outputs.
-5. Package tested release artifacts for GitHub Releases.
-
-Developer build, test, release, licensing, and sideloading details are below.
-
-## Requirements
-
-- macOS for Kindle MOBI compilation; StarDict and Kobo source builds work anywhere Python does
 - Python 3.11 or newer recommended
-- No Python package dependencies
+- No Python package dependencies for the core tooling
+- Git
 
-Optional:
+Optional, depending on what you are building:
 
-- Kindle Previewer 3 if you want the converter to compile a `.mobi` file automatically.
-- `dictgen` from [pgaskin/dictutil](https://github.com/pgaskin/dictutil) if you want to compile a Kobo `dicthtml` dictionary.
-
-## Licensing
-
-This repository uses a split-license model:
-
-- Code and documentation are licensed under the MIT License. See `LICENSE`.
-- Generated dictionary content that incorporates Fandom wiki text is licensed under CC BY-SA 3.0. See `CONTENT_LICENSE`.
-- Fan-project and rights-holder notices are in `NOTICE`.
-
-Generated dictionary entries are derived from community-contributed Dungeon Crawler Carl Wiki text on Fandom, with source page links included where practical.
-
-## Install Kindle Previewer
-
-Amazon no longer offers `kindlegen` as a separate supported download. Install Kindle Previewer instead:
-
-1. Go to Amazon's Kindle Previewer page: <https://kdp.amazon.com/en_US/help/topic/G202131170>
-2. Download the macOS installer.
-3. Open `KindlePreviewerInstaller.pkg`.
-4. Follow the installer prompts.
-
-On macOS, Kindle Previewer 3 installs here:
-
-```text
-/Applications/Kindle Previewer 3.app
-```
-
-The app bundle includes a legacy `kindlegen` compiler here:
+- Kindle Previewer 3 for Kindle `.mobi` compilation. Amazon no longer distributes `kindlegen` as a separate supported download; Kindle Previewer includes it at:
 
 ```text
 /Applications/Kindle Previewer 3.app/Contents/lib/fc/bin/kindlegen
 ```
 
-The build script checks that location automatically when you pass `--compile`.
+- `dictgen` from [pgaskin/dictutil](https://github.com/pgaskin/dictutil) for Kobo `dicthtml` compilation.
+- GitHub CLI `gh` for publishing tagged GitHub Releases.
 
 ## Workflow
 
-Fetch raw character page data into SQLite:
+The default workflow builds the official Dungeon Crawler Carl dictionary from `configs/dungeon-crawler-carl.json`.
+
+Fetch DCC wiki pages into SQLite:
 
 ```sh
 python3 -m dcdict.fetch_entries --ignore-robots
 ```
 
-The default config is `configs/dungeon-crawler-carl.json`. It sets the Fandom slug, normal categories, output database, dictionary title, sidebar fields, alias rules, and build directories for the DCC dictionary.
-
-To override categories for an experiment, use repeated `--category` flags:
+Build local outputs:
 
 ```sh
-python3 -m dcdict.fetch_entries --category Characters --category Groups --category Spells --category Achievements --category Races --category Items --category Mob_Types --ignore-robots
-```
-
-For this DCC Fandom wiki, `robots.txt` disallows `/api.php` for crawlers. The script respects that by default and will stop unless you pass `--ignore-robots`.
-
-Use that override only for a user-triggered, polite fetch like this project: low rate, small scope, no indexing, no training, and no repeated hammering.
-
-Build Kindle dictionary source files:
-
-```sh
-python3 -m dcdict.build_kindle_dictionary
-```
-
-Definitions preserve safe inline emphasis from the wiki where possible: `<b>`/`<strong>` become bold text, and `<i>`/`<em>` become italic text. Other HTML is stripped or escaped during extraction/building.
-
-Lookup aliases are discovered conservatively from the entry data: trusted title rules such as ` Box`, ` Spell`, ` Achievement`, ` Potion`, and ` Scroll` suffix stripping plus `Potion of ...`, `Scroll of ...`, `Ring of ...`, and `Wand of ...` prefix stripping; selected wiki sidebar aliases; recognized intro parentheticals such as `(aka Borant)` or `(actually named "Gravy Boat")`; first bold intro names that differ from the page title; first names for simple two-word entries from the `Characters` category; and first/last names for likely human characters. For example, `1914 Box` is also indexed as `1914`, `Crybaby Achievement` as `Crybaby`, `Katia Grim` as `Katia`, and `Saccathian (or Sacs)` as `Sacs`.
-
-Kindle single-target aliases are emitted as hidden `idx:iform` inflections under the canonical headword, so lookups resolve without duplicating the visible dictionary entry. StarDict uses `.syn` aliases, and Kobo uses variants. If an alias collides with a real entry name, the generated dictionaries keep both meanings: Kindle emits multiple lookup entries, while StarDict and Kobo use one combined lookup result. Ambiguous alias-only collisions are still omitted rather than routed to an arbitrary entry. For local testing, pass `--no-sidebar-aliases` to disable aliases derived from wiki sidebars.
-
-Definitions are rendered as a short bullet list.
-
-If the source wiki page has a page-level spoiler warning banner, the generated entry places a spoiler note above the bullet so a reader has a chance to stop before reading the summary. The warning is page-level; the wiki generally does not mark smaller spoiler phrases inside otherwise normal sentences.
-
-When present in the page sidebar's BIOGRAPHICAL INFO section, the dictionary adds a few conservative detail bullets below the summary: aliases, origin, race, and first scene.
-
-Noisy or more spoilery sidebar fields such as class, crawler number, crawler ID, and occupation are intentionally omitted.
-
-Optionally add internal cross-links between known dictionary entries:
-
-```sh
-python3 -m dcdict.build_kindle_dictionary --link-entries
-```
-
-For example, if the `Carl` definition mentions `Donut`, the generated XHTML links `Donut` to Donut's dictionary entry with an internal anchor.
-
-The linker only touches text nodes, preserves bold/italic markup, skips self-links, and avoids very short single-word titles to reduce noisy false positives.
-
-Kindle caveat: these links work when opening the dictionary directly as a book, but may not work inside the Kindle lookup popup/card UI. That appears to be a Kindle interface limitation rather than a dictionary build error.
-
-Build the StarDict dictionary used by KOReader:
-
-```sh
+python3 -m dcdict.build_kindle_dictionary --link-entries --compile
 python3 -m dcdict.build_stardict_dictionary --link-entries
-```
-
-StarDict is a small group of files rather than one native dictionary file. The builder writes the `.ifo`, `.idx`, `.dict`, `.syn`, and `.css` files together under `build/dungeon-crawler-carl/stardict/`. Its `.syn` file provides the same aliases as the Kindle edition. With `--link-entries`, recognized entry names use KOReader's supported `bword://` links.
-
-Build the Kobo dictionary:
-
-```sh
 python3 -m dcdict.build_kobo_dictionary
 ```
 
-Kobo dictionaries are compiled with the external `dictgen` tool. The builder writes `build/dungeon-crawler-carl/kobo/dictionary.df` as an intermediate file and `build/dungeon-crawler-carl/kobo/dicthtml-dc.zip` as the Kobo dictionary file. The same shared aliases are emitted as Kobo variants.
-
-Try to compile with `kindlegen` if it is installed:
-
-```sh
-python3 -m dcdict.build_kindle_dictionary --compile
-```
-
-On macOS, the build script also checks for the `kindlegen` binary bundled inside Kindle Previewer 3:
-
-```text
-/Applications/Kindle Previewer 3.app/Contents/lib/fc/bin/kindlegen
-```
-
-Outputs:
-
-- `data/dungeon-crawler-carl.sqlite`: raw crawl output
-- `build/dungeon-crawler-carl/kindle/dictionary.xhtml`: Kindle dictionary content source
-- `build/dungeon-crawler-carl/kindle/dictionary.opf`: Kindle package metadata
-- `build/dungeon-crawler-carl/kindle/dictionary.mobi`: compiled Kindle file, only when `kindlegen` is available
-- `build/dungeon-crawler-carl/stardict/`: StarDict files for KOReader
-- `build/dungeon-crawler-carl/kobo/dicthtml-dc.zip`: compiled Kobo dictionary file, only when `dictgen` is available
-
-## Tests
-
-Run the focused standard-library test suite:
+Run tests and update badges:
 
 ```sh
 python3 -m unittest discover -s tests
+python3 -m dcdict.badges --version 0.7.0
 ```
 
-The tests cover extraction, SQLite loading, Kindle XHTML/OPF generation, StarDict binary generation and inspection, aliases, release packaging, and the Kindle Previewer/`kindlegen` compile wrapper.
-
-Update the tracked README badge metadata before a release-prep commit:
+Create a local release bundle:
 
 ```sh
-python3 -m dcdict.badges --version 0.5.0
+python3 -m dcdict.release --version 0.7.0 --link-entries
 ```
 
-The badge command runs the test suite with Python's standard-library `trace` tool, computes line coverage for `dcdict/`, counts usable dictionary entries, and writes Shields endpoint JSON files under `badges/`. Badge updates are committed with normal project changes; there is no badge-only GitHub Actions commit.
-
-## Create A Release
-
-The release command builds a complete, tested bundle from the current stored database:
+Publish and tag the release on GitHub:
 
 ```sh
-python3 -m dcdict.release --version 0.5.0 --link-entries
+python3 -m dcdict.release --version 0.7.0 --link-entries --publish
 ```
 
-By default the command builds Kindle, StarDict, and Kobo editions.
+Notes:
 
-It requires a clean Git worktree and `data/dungeon-crawler-carl.sqlite`; Kindle builds additionally require the `kindlegen` binary included with Kindle Previewer, and Kobo builds require Patrick Gaskin's `dictgen` tool from [dictutil](https://github.com/pgaskin/dictutil) on your `PATH`. It makes a SQLite snapshot, re-extracts descriptions from stored HTML without crawling, runs the complete test suite and entry audit, and performs binary smoke tests on all finished dictionaries.
+- The release command is currently DCC-specific.
+- The fetch/build commands work with other Fandom configs via `--config`.
+- `--publish` requires `gh`, an authenticated GitHub session, and `HEAD == origin/main`.
+- Release tags are the public dictionary version. The Python package itself does not have a separate version.
 
-For a faster local format-specific build, use `--format kindle`, `--format stardict`, or `--format kobo`. StarDict-only builds do not require Kindle Previewer or `dictgen`; Kobo-only builds do not require Kindle Previewer. Published releases must use the default `--format all` so every tagged release remains complete.
+## Using Another Fandom
 
-Successful output is written atomically to `dist/v1.0.0/`:
-
-- `Dungeon-Crawler-Carl-Dictionary.mobi` (Kindle)
-- `Dungeon-Crawler-Carl-Dictionary.zip` (Kindle bundle)
-- `Dungeon-Crawler-Carl-Dictionary-StarDict.zip` (KOReader bundle)
-- `dicthtml-dc.zip` (Kobo)
-- `Dungeon-Crawler-Carl-Dictionary-Kobo.zip` (Kobo bundle)
-- `SHA256SUMS.txt`
-- `release-manifest.json`
-
-Each ZIP includes format-specific installation instructions and the project's license and attribution files.
-
-The schema 2 manifest records shared provenance plus separate Kindle, StarDict, and Kobo build and smoke-test results. Existing version directories are protected; pass `--overwrite` only when intentionally rebuilding the same local version.
-
-To publish the same assets as a tagged GitHub Release, install and authenticate the [GitHub CLI](https://cli.github.com/):
+Copy an existing config and pass it to the crawler and builders:
 
 ```sh
-brew install gh
-gh auth login
-python3 -m dcdict.release --version 0.5.0 --link-entries --publish
+python3 -m dcdict.fetch_entries --config examples/iceandfire.json --ignore-robots
+python3 -m dcdict.build_kindle_dictionary --config examples/iceandfire.json --link-entries
+python3 -m dcdict.build_stardict_dictionary --config examples/iceandfire.json --link-entries
+python3 -m dcdict.build_kobo_dictionary --config examples/iceandfire.json
 ```
 
-Publishing additionally requires `HEAD` to match `origin/main`, and refuses to replace an existing tag or release. After upload, the command downloads every asset again and verifies its SHA-256 hash before fetching the new tag locally.
+Start from a Fandom wiki's `Special:Categories` page and choose broad direct page categories first, such as `Characters`, `Items`, `Locations`, or wiki-specific equivalents. Categories do not recursively descend by default. Many Fandom pages already appear in several direct categories, so recursive traversal is often unnecessary.
 
-These permanent URLs always point to the assets from the newest GitHub Release:
+The generic path should produce a good-but-not-refined dictionary. Fandom-specific executable code, via plugins, is not supported yet.
 
-- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.mobi>
-- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.zip>
-- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-StarDict.zip>
-- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/dicthtml-dc.zip>
-- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-Kobo.zip>
-- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/SHA256SUMS.txt>
-- <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/release-manifest.json>
+## Config Basics
 
-## Sideload To Kindle
+Configs are standard JSON files. The DCC config lives at `configs/dungeon-crawler-carl.json`; `examples/iceandfire.json` is a working alternate-fandom example.
 
-After building `build/dungeon-crawler-carl/kindle/dictionary.mobi`, connect the Kindle to the Mac with USB.
+Important fields:
 
-It should mount under `/Volumes`, usually as:
+- `fandom`: Fandom slug, such as `dungeon-crawler-carl` or `iceandfire`.
+- `title`, `author`, `source_name`: output metadata and source labels.
+- `categories`: MediaWiki category names to fetch.
+- `database_path`: SQLite crawl output.
+- `build_dir`: root build directory for Kindle, StarDict, and Kobo outputs.
+- `sidebar_fields`: infobox fields to extract, with alias fields marked by `"alias": true`.
+- `title_aliases`: safe suffix/prefix lookup rules and parenthetical stripping.
+- `max_summary_length`: optional summary trim length.
+- `smoke_headwords`: representative lookups for format inspectors.
+- `kobo_output_name`: Kobo dictionary ZIP filename.
 
-```text
-/Volumes/Kindle
+Minimal shape:
+
+```json
+{
+  "fandom": "dungeon-crawler-carl",
+  "title": "Dungeon Crawler Carl Dictionary",
+  "author": "Generated from Dungeon Crawler Carl Wiki contributors",
+  "source_name": "Dungeon Crawler Carl Wiki",
+  "categories": ["Characters", "Groups", "Spells"],
+  "database_path": "data/dungeon-crawler-carl.sqlite",
+  "build_dir": "build/dungeon-crawler-carl",
+  "sidebar_fields": [
+    {"source": "aliases", "label": "Aliases", "alias": true},
+    {"source": "race", "label": "Race"}
+  ],
+  "title_aliases": {
+    "suffixes": [" Spell", " Box"],
+    "prefixes": ["Potion of "],
+    "strip_parenthetical": true
+  },
+  "max_summary_length": 600,
+  "smoke_headwords": ["Carl", "Donut", "Mordecai"],
+  "kobo_output_name": "dicthtml-dc.zip"
+}
 ```
 
-Copy the dictionary into the Kindle dictionaries folder:
+## Build Behavior Notes
 
-```sh
-cp build/dungeon-crawler-carl/kindle/dictionary.mobi "/Volumes/Kindle/documents/dictionaries/Dungeon_Crawler_Carl_Dictionary.mobi"
-```
+The crawler uses the MediaWiki API, records pages in SQLite, respects `robots.txt` unless `--ignore-robots` is passed, sleeps between requests with jitter, retries temporary HTTP failures with exponential backoff, records errors, and resumes previous successful fetches unless `--refresh` is passed.
 
-Verify the copy:
-
-```sh
-cmp -s build/dungeon-crawler-carl/kindle/dictionary.mobi "/Volumes/Kindle/documents/dictionaries/Dungeon_Crawler_Carl_Dictionary.mobi"
-```
-
-Safely eject the Kindle:
-
-```sh
-diskutil eject /Volumes/Kindle
-```
-
-Unplug the Kindle and give it a moment to index the new file.
-
-Then check:
-
-```text
-Settings -> Language & Dictionaries -> Dictionaries
-```
-
-Look for `Dungeon Crawler Carl Dictionary` under English. Select it as the English dictionary, then try looking up names such as `Carl`, `Donut`, or `Mordecai` inside a book.
-
-## Install In KOReader
-
-Download and extract `Dungeon-Crawler-Carl-Dictionary-StarDict.zip`. Keep the extracted `Dungeon-Crawler-Carl-Dictionary` folder and all of its files together, then copy that folder into:
-
-```text
-koreader/data/dict/
-```
-
-Restart KOReader.
-
-If the dictionary is not enabled automatically, open **Dictionary settings -> Manage dictionaries** and enable `Dungeon Crawler Carl Dictionary`.
-
-To make it the default lookup result globally, use **Dictionary settings -> Manage dictionaries** to move `Dungeon Crawler Carl Dictionary` above your other dictionaries, then accept/save the order. KOReader uses that order as dictionary priority.
-
-To make it the priority dictionary for one book only, open that book and use **Dictionary settings -> Set dictionary priority for this book**. Select `Dungeon Crawler Carl Dictionary` so it appears first in the preferred list.
-
-With the linked release build, tapping a referenced dictionary entry should open that entry inside KOReader.
-
-## Install On Kobo
-
-Download `dicthtml-dc.zip`.
-
-Connect the Kobo to the Mac with USB and copy the file into:
-
-```text
-KOBOeReader/.kobo/custom-dict/
-```
-
-If `custom-dict` does not exist, create it.
-
-Safely eject and restart the Kobo. Open a book, select a word, and open the dictionary panel. Use the dictionary selector in the lookup panel to choose the custom dictionary named for the `dc` locale.
-
-On older Kobo firmware, custom dictionaries may require ExtraLocales or a custom dictionary patch before they can be selected.
-
-Current Kobo firmware supports `.kobo/custom-dict` for custom dictionaries.
-
-## Crawler Defaults
-
-The default crawler target is:
-
-- API: `https://dungeon-crawler-carl.fandom.com/api.php`
-- Categories: `Category:Characters`, `Category:Groups`, `Category:Spells`, `Category:Achievements`, `Category:Races`, `Category:Items`, `Category:Mob_Types`
-- User-Agent: `KindleDictionaryCreationCrawler/0.1`
-
-The crawler:
-
-- Uses the MediaWiki API instead of scraping rendered category pages.
-- Accepts a Fandom wiki slug with `--fandom`, such as `dungeon-crawler-carl`.
-- Accepts one or more categories with repeated `--category` flags.
-- Restricts category members to namespace `0`, which skips subcategory pages.
-- Canonicalizes and de-duplicates the category queue, which defensively avoids repeated traversal if duplicate or reintroduced category names appear.
-- Checks `robots.txt` before crawling unless `--ignore-robots` is passed.
-- Sleeps between requests with jitter.
-- Retries temporary HTTP failures with exponential backoff.
-- Records errors and keeps going.
-- Resumes previous successful fetches unless `--refresh` is passed.
-
-Re-run paragraph extraction from already stored raw HTML, without touching the network:
+Re-extract definitions from stored HTML without touching the network:
 
 ```sh
 python3 -m dcdict.fetch_entries --reextract-only
 ```
 
-## Using Another Fandom
+The entry pipeline extracts the first useful summary text, strips wiki maintenance boxes and citation markers, preserves safe bold/italic inline formatting, adds conservative sidebar details, repairs forwarding-only entries, trims overlong summaries, and skips low-quality final definitions while preserving raw crawled data.
 
-This tool was built for Dungeon Crawler Carl, but it can now run against another Fandom wiki with a JSON config. Start by copying `examples/iceandfire.json` and changing the Fandom slug, title, categories, sidebar fields, alias rules, smoke headwords, and output paths.
+Aliases are discovered from safe title rules, selected sidebar aliases, recognized intro parentheticals, first bold intro names, first names for simple two-word `Characters` entries, and a small older human-name heuristic. Single-target Kindle aliases are emitted as `idx:iform` inflections. StarDict uses `.syn` aliases, and Kobo uses variants. If a lookup collides with a real entry, Kindle emits multiple lookup entries while StarDict and Kobo use one combined result.
 
-The Fandom `Special:Categories` page is usually the best place to find starting categories. Pick broad page categories first, such as `Characters`, `Items`, `Locations`, or wiki-specific equivalents. Categories do not recursively descend into subcategories by default; this crawler intentionally fetches the category pages you name. Many Fandom wikis already put one page in several direct categories, so a character may appear in `Characters`, `Kings`, and `Deceased` without needing recursive traversal.
+With `--link-entries`, known entry names inside definitions become internal links. Kindle links work when opening the dictionary directly as a book, but may not work inside Kindle's lookup popup UI.
 
-For example, the Ice and Fire example config can be used like this:
+Default DCC outputs:
 
-```sh
-python3 -m dcdict.fetch_entries \
-  --config examples/iceandfire.json \
-  --ignore-robots
+- `data/dungeon-crawler-carl.sqlite`
+- `build/dungeon-crawler-carl/kindle/dictionary.xhtml`
+- `build/dungeon-crawler-carl/kindle/dictionary.opf`
+- `build/dungeon-crawler-carl/kindle/dictionary.mobi`
+- `build/dungeon-crawler-carl/stardict/`
+- `build/dungeon-crawler-carl/kobo/dicthtml-dc.zip`
 
-python3 -m dcdict.build_kindle_dictionary \
-  --config examples/iceandfire.json
+## Release Workflow
 
-python3 -m dcdict.build_stardict_dictionary \
-  --config examples/iceandfire.json
+The release command snapshots the current SQLite database, re-extracts descriptions from stored HTML, runs tests and entry audit, builds the selected formats, smoke-tests finished artifacts, writes checksums, and packages assets atomically into `dist/vX.Y.Z/`.
 
-python3 -m dcdict.build_kobo_dictionary \
-  --config examples/iceandfire.json
-```
-
-The config controls source attribution labels, sidebar fields, title alias rules such as `House ...`, and overlong-summary trimming. Fandom-specific executable plugins are not supported yet; keep custom behavior in data config until there is a real second use case that needs code hooks.
-
-## Kindle Notes
-
-Kindle dictionaries are built from XHTML content with Amazon-specific `idx:*` tags plus an OPF package file.
-
-The converter writes those source files. Amazon's older documented compiler command is:
+By default it builds all formats. For faster local checks:
 
 ```sh
-kindlegen dictionary.opf -c2 -verbose -dont_append_source
+python3 -m dcdict.release --version 0.7.0 --link-entries --format kindle
+python3 -m dcdict.release --version 0.7.0 --link-entries --format stardict
+python3 -m dcdict.release --version 0.7.0 --link-entries --format kobo
 ```
 
-For this project, the bundled Kindle Previewer compiler successfully produces a classic MOBI v7 dictionary when run without `-c2`. The Python build script handles that detail for you.
+But a published release must use all formats, so the latest-download links stay complete.
 
-Kindle tooling has changed over the years, so the source files are the stable artifact this project controls, and `build/dungeon-crawler-carl/kindle/dictionary.mobi` is the sideloadable artifact to try on the device.
+Release assets:
 
-## Attribution
+- `Dungeon-Crawler-Carl-Dictionary.mobi`
+- `Dungeon-Crawler-Carl-Dictionary.zip`
+- `Dungeon-Crawler-Carl-Dictionary-StarDict.zip`
+- `dicthtml-dc.zip`
+- `Dungeon-Crawler-Carl-Dictionary-Kobo.zip`
+- `SHA256SUMS.txt`
+- `release-manifest.json`
 
-The generated entries include source links back to the configured Fandom wiki pages. Fandom community content is generally licensed under CC BY-SA unless otherwise noted on the source wiki.
+Each bundle includes format-specific installation notes, `LICENSE`, and `ATTRIBUTION.md`.
+
+## Tests And Badges
+
+Run tests:
+
+```sh
+python3 -m unittest discover -s tests
+```
+
+Update tracked Shields badge JSON:
+
+```sh
+python3 -m dcdict.badges --version 0.7.0
+```
+
+Badge files are committed with normal project changes. There is intentionally no GitHub Actions badge-only commit workflow.
+
+## License And Attribution
+
+This repository uses a split-license model:
+
+- Code and documentation are licensed under the MIT License. See `LICENSE`.
+- Generated dictionary content that incorporates Fandom wiki text is licensed under CC BY-SA 3.0. See `ATTRIBUTION.md`.
+
+Generated entries include source links back to the configured Fandom wiki pages where practical.

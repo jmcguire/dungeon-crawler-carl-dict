@@ -158,7 +158,7 @@ class ReleaseTests(unittest.TestCase):
     def test_release_zip_checksums_and_manifest(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
-            for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+            for name in ("ATTRIBUTION.md", "LICENSE"):
                 (root / name).write_text(name, encoding="utf-8")
             mobi = root / MOBI_NAME
             mobi.write_bytes(b"test mobi")
@@ -167,7 +167,7 @@ class ReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(archive) as bundle:
                 self.assertEqual(
                     set(bundle.namelist()),
-                    {MOBI_NAME, "INSTALL.txt", "NOTICE", "CONTENT_LICENSE", "LICENSE"},
+                    {MOBI_NAME, "INSTALL.txt", "ATTRIBUTION.md", "LICENSE"},
                 )
 
             stardict_build = build_stardict(
@@ -189,8 +189,7 @@ class ReleaseTests(unittest.TestCase):
                         prefix + "Dungeon-Crawler-Carl-Dictionary.syn",
                         prefix + "Dungeon-Crawler-Carl-Dictionary.css",
                         prefix + "INSTALL-KOREADER.txt",
-                        prefix + "NOTICE",
-                        prefix + "CONTENT_LICENSE",
+                        prefix + "ATTRIBUTION.md",
                         prefix + "LICENSE",
                     },
                 )
@@ -215,7 +214,7 @@ class ReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(kobo_archive) as bundle:
                 self.assertEqual(
                     set(bundle.namelist()),
-                    {DICTGEN_OUTPUT_NAME, "INSTALL-KOBO.txt", "NOTICE", "CONTENT_LICENSE", "LICENSE"},
+                    {DICTGEN_OUTPUT_NAME, "INSTALL-KOBO.txt", "ATTRIBUTION.md", "LICENSE"},
                 )
                 instructions = bundle.read("INSTALL-KOBO.txt").decode("utf-8")
                 self.assertIn(".kobo/custom-dict", instructions)
@@ -277,7 +276,7 @@ class ReleaseTests(unittest.TestCase):
     def test_stardict_only_release_packages_only_stardict_assets(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
-            for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+            for name in ("ATTRIBUTION.md", "LICENSE"):
                 (root / name).write_text(name, encoding="utf-8")
             write_badge_files(
                 root / "badges",
@@ -332,7 +331,7 @@ class ReleaseTests(unittest.TestCase):
     def test_kobo_only_release_packages_only_kobo_assets(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
-            for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+            for name in ("ATTRIBUTION.md", "LICENSE"):
                 (root / name).write_text(name, encoding="utf-8")
             write_badge_files(
                 root / "badges",
@@ -400,7 +399,7 @@ class ReleaseTests(unittest.TestCase):
     def test_kindle_release_passes_version_tag_to_opf_builder(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
-            for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+            for name in ("ATTRIBUTION.md", "LICENSE"):
                 (root / name).write_text(name, encoding="utf-8")
             write_badge_files(
                 root / "badges",
@@ -477,7 +476,7 @@ class ReleaseTests(unittest.TestCase):
     def test_package_release_rejects_stale_badge_metadata(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
-            for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+            for name in ("ATTRIBUTION.md", "LICENSE"):
                 (root / name).write_text(name, encoding="utf-8")
             write_badge_files(
                 root / "badges",

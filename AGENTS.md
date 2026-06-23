@@ -38,7 +38,7 @@ These instructions are for AI agents working in this repository. Follow them unl
 - The SQLite database is source material for builds and releases. Do not delete crawled page data just because an entry is omitted from one output format.
 - Dictionary quality filters should skip bad generated entries at render/build time while retaining raw crawled data for later improvement.
 - Preserve useful inline formatting such as bold and italics where supported by the target format.
-- Treat wiki text as CC BY-SA content. Keep `NOTICE`, `CONTENT_LICENSE`, source links, and attribution behavior intact.
+- Treat wiki text as CC BY-SA content. Keep `ATTRIBUTION.md`, source links, and attribution behavior intact.
 
 ## Testing And Verification
 

@@ -263,7 +263,7 @@ def installation_text() -> str:
    Dungeon Crawler Carl Dictionary for English.
 
 The dictionary content is derived from Dungeon Crawler Carl Wiki contributors
-and is distributed under CC BY-SA 3.0. See CONTENT_LICENSE and NOTICE.
+and is distributed under CC BY-SA 3.0. See ATTRIBUTION.md.
 """
 
 
@@ -273,7 +273,7 @@ def write_release_zip(zip_path: Path, mobi_path: Path, repo_root: Path) -> None:
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.write(mobi_path, MOBI_NAME)
         archive.writestr("INSTALL.txt", installation_text())
-        for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+        for name in ("ATTRIBUTION.md", "LICENSE"):
             archive.write(repo_root / name, name)
 
 
@@ -296,7 +296,7 @@ def koreader_installation_text() -> str:
    Dungeon Crawler Carl Dictionary so it appears first in the preferred list.
 
 The dictionary content is derived from Dungeon Crawler Carl Wiki contributors
-and is distributed under CC BY-SA 3.0. See CONTENT_LICENSE and NOTICE.
+and is distributed under CC BY-SA 3.0. See ATTRIBUTION.md.
 """
 
 
@@ -312,7 +312,7 @@ def write_stardict_zip(
         for path in build.files:
             archive.write(path, f"{folder}/{path.name}")
         archive.writestr(f"{folder}/INSTALL-KOREADER.txt", koreader_installation_text())
-        for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+        for name in ("ATTRIBUTION.md", "LICENSE"):
             archive.write(repo_root / name, f"{folder}/{name}")
 
 
@@ -334,7 +334,7 @@ custom dictionary patch before they can be selected. Current Kobo firmware
 supports .kobo/custom-dict for custom dictionaries.
 
 The dictionary content is derived from Dungeon Crawler Carl Wiki contributors
-and is distributed under CC BY-SA 3.0. See CONTENT_LICENSE and NOTICE.
+and is distributed under CC BY-SA 3.0. See ATTRIBUTION.md.
 """
 
 
@@ -348,7 +348,7 @@ def write_kobo_zip(
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.write(build.dictzip_path, DICTGEN_OUTPUT_NAME)
         archive.writestr("INSTALL-KOBO.txt", kobo_installation_text())
-        for name in ("NOTICE", "CONTENT_LICENSE", "LICENSE"):
+        for name in ("ATTRIBUTION.md", "LICENSE"):
             archive.write(repo_root / name, name)
 
 
