@@ -13,11 +13,11 @@ This project lets you look up Dungeon Crawler Carl characters, factions, races, 
 
 ## Just Want The Dictionary?
 
-Go here:
+Go here for a download and installation guide: <https://jmcguire.github.io/dungeon-crawler-carl-dict/>
 
-**Install and download guide:** <https://jmcguire.github.io/dungeon-crawler-carl-dict/>
+That site has the reader-facing instructions for Kindle, Kobo, KOReader, and BOOX.
 
-That site has the reader-facing instructions for Kindle, Kobo, KOReader, and BOOX. This README is mostly developer notes for crawling, building, testing, and releasing the dictionary.
+This README is for developers, with notes on crawling, building, testing, and releasing the dictionary.
 
 ## Supported Formats
 
@@ -27,14 +27,6 @@ This repository builds:
 - StarDict for KOReader and BOOX
 - Kobo `dicthtml`
 - Release ZIPs with install notes, license, attribution, checksums, and build metadata
-
-## Spoiler And Fan-Project Notes
-
-This dictionary is intended to be less risky than opening a wiki while reading, but it is not guaranteed to be spoiler-free. If a source wiki page has a page-level spoiler warning, the generated entry puts a spoiler note above the definition. The wiki generally does not mark smaller spoiler phrases inside normal sentences.
-
-This is an unofficial fan project. It is not affiliated with, authorized by, endorsed by, or sponsored by Matt Dinniman, the Dungeon Crawler Carl rights holders, Amazon, Kindle, Kobo, KOReader, BOOX, Fandom, or any related publisher or platform.
-
-This project has been approved by the Dungeon Crawler Carl fandom admins.
 
 ## Developer Tools
 
@@ -54,6 +46,14 @@ Optional, depending on what you are building:
 
 - `dictgen` from [pgaskin/dictutil](https://github.com/pgaskin/dictutil) for Kobo `dicthtml` compilation.
 - GitHub CLI `gh` for publishing tagged GitHub Releases.
+
+## How it basically works
+
+ - **fetch_entries** crawls specific categories of a specific fandom page, and it stores the results in a SQLite database. It stores the entire page and some meta information. This way you don't have to recrawl it everytime you update some rules in the builder.
+ - optional **build_kindle** builds a kindle dictionary from the entries in the SQLite database. Now you can test it in your local e-reader.
+ - **release** builds the dictionaries (you don't have to do the build commands, this does it for you) and creates a release. You do have to manage the version numbers on your own. Since this is a personal project, I'm the only one who'll be doing a release for now. But feel free to fork this and do your own thing.
+
+That's the core of it. The SQLite database is in data/. Build artifacts are in build/.
 
 ## Workflow
 
@@ -213,6 +213,12 @@ Release assets:
 
 Each bundle includes format-specific installation notes, `LICENSE`, and `ATTRIBUTION.md`.
 
+## Fan-Project Notes
+
+This is an unofficial fan project. It is not affiliated with, authorized by, endorsed by, or sponsored by Matt Dinniman, the Dungeon Crawler Carl rights holders, Amazon, Kindle, Kobo, KOReader, BOOX, Fandom, or any related publisher or platform.
+
+This project *has* been approved by the Dungeon Crawler Carl fandom admins.
+
 ## License And Attribution
 
 This repository uses a split-license model:
@@ -221,3 +227,4 @@ This repository uses a split-license model:
 - Generated dictionary content that incorporates Fandom wiki text is licensed under CC BY-SA 3.0. See `ATTRIBUTION.md`.
 
 Generated entries include source links back to the configured Fandom wiki pages where practical.
+
