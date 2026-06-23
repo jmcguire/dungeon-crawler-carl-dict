@@ -715,12 +715,6 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             crawl_config = load_members.call_args.args[1]
             self.assertEqual(crawl_config.categories, ("Battles", "Cities"))
 
-    def test_fetch_characters_wrapper_reexports_main(self) -> None:
-        from dcdict import fetch_characters
-        from dcdict import fetch_entries
-
-        self.assertIs(fetch_characters.main, fetch_entries.main)
-
     def test_wiki_page_url_uses_api_origin_and_encoded_title(self) -> None:
         self.assertEqual(
             wiki_page_url("example-fandom", "Popov Brothers (Maxim & Dmitri)"),
