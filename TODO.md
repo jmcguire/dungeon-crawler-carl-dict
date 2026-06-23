@@ -94,6 +94,17 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
 - when building the different dictionaries, why does kindle and kobo have 1205 but stardict has 1212. they have the same number of aliases
 
+- clean up the build directory
+
+- the names of the dictionaries, the ones that get dragged into the ebook folder, should be more descriptive than "dictionary.mobi" it should have the fandom name or a title with - separators.
+
+The following are not even triggering a dictionary:
+ - Gwendolyn Duet
+ - Desperado Club
+ - dirigible gnomes
+
+if i want to start releasing dictionaries for other fandoms, how do i organize that? can i still do it on a github.io page, or should i start with my own domain? how would i reorganize the processes and the builds and the releases? what's the information architecture? at what point to a run afoul of copywrite? i want to make sure the original authors are respected on each fandom page. does that mean individual buy-in? probably? maybe a contact page for an admin to request a fandom be added, then a separate page for an individual to ask for a one-off build, just for them (that i won't publish).
+
 
 ## Reference Notes
 
