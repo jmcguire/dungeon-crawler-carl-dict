@@ -3,7 +3,6 @@
 [![Release](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Frelease.json)](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fcoverage.json)](#tests-and-badges)
 [![Python](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fpython.json)](#developer-tools)
-[![Formats](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fformats.json)](#supported-formats)
 [![Licenses](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Flicenses.json)](#license-and-attribution)
 [![Output](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Foutput.json)](#release-workflow)
 

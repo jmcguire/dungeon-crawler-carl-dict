@@ -40,7 +40,6 @@ class BadgeTests(unittest.TestCase):
         self.assertEqual(badges["coverage"]["message"], "80% lines")
         self.assertEqual(badges["coverage"]["color"], "green")
         self.assertEqual(badges["python"]["message"], "3.11+")
-        self.assertEqual(badges["formats"]["message"], "Kindle + StarDict + Kobo")
         self.assertEqual(badges["licenses"]["message"], "MIT + CC BY-SA 3.0")
         self.assertEqual(badges["output"]["message"], "1,133 entries")
 
