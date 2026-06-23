@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from dcdict.config import load_project_config
+from fandom_dict.config import load_project_config
 
 
 class ProjectConfigTests(unittest.TestCase):

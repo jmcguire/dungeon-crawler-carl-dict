@@ -13,8 +13,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Callable, Mapping
 
-from dcdict.config import SidebarField
-from dcdict.text import clean_wiki_text_artifacts
+from fandom_dict.config import SidebarField
+from fandom_dict.text import clean_wiki_text_artifacts
 
 
 ALLOWED_INLINE_TAGS = {"b": "b", "strong": "b", "i": "i", "em": "i"}
@@ -618,7 +618,7 @@ def load_entries(
     for title, url, first_paragraph, raw_html, source_category in rows:
         definition = sanitize_inline_html(clean_wiki_text_artifacts(first_paragraph))
         if max_summary_length:
-            from dcdict.extraction import trim_inline_html_to_plain_length
+            from fandom_dict.extraction import trim_inline_html_to_plain_length
 
             definition = trim_inline_html_to_plain_length(definition, max_summary_length)
         details = sidebar_details_from_html(raw_html, sidebar_fields)

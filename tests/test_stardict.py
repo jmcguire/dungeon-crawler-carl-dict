@@ -3,9 +3,9 @@ from functools import cmp_to_key
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from dcdict.build_stardict_dictionary import parse_args
-from dcdict.entries import Entry
-from dcdict.stardict import (
+from fandom_dict.cli.build_stardict_dictionary import parse_args
+from fandom_dict.entries import Entry
+from fandom_dict.formats.stardict import (
     BASE_NAME,
     StarDictValidationError,
     build_stardict,

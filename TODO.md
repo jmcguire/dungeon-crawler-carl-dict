@@ -70,9 +70,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
 ## Unsorted Stuff
 
-- i think we've gone far enough that we should use folders in the dcdict.
-  - and also, the dcdict should be renamed to something more generic, like fandom-dictionary-creation, or something like that.
-
 - when building the different dictionaries, why does kindle and kobo have 1205 but stardict has 1212. they have the same number of aliases
 
 - i want to know how the code files relate to each other. which one uses which?
@@ -99,6 +96,6 @@ if i want to start releasing dictionaries for other fandoms, how do i organize t
 
 ```sh
 grep idx:orth build/dungeon-crawler-carl/kindle/dictionary.xhtml | perl -nE'/value="([^"]+)"/; say $1'
-python3 -m dcdict.build_kindle_dictionary --link-entries --compile
-python3 -m dcdict.release --version 0.5.0 --link-entries --format all --overwrite
+./bin/build_kindle_dictionary --link-entries --compile
+./bin/release --version 0.5.0 --link-entries --format all --overwrite
 ```

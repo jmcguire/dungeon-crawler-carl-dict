@@ -7,10 +7,10 @@ import argparse
 import logging
 from pathlib import Path
 
-from dcdict.config import DEFAULT_CONFIG_PATH, load_project_config
-from dcdict.entries import load_entries
-from dcdict.kindle import *  # noqa: F403 - preserve the old module's import surface.
-from dcdict.kindle import (
+from fandom_dict.config import DEFAULT_CONFIG_PATH, load_project_config
+from fandom_dict.entries import load_entries
+from fandom_dict.formats.kindle import *  # noqa: F403 - preserve the old module's import surface.
+from fandom_dict.formats.kindle import (
     DEFAULT_AUTHOR,
     DEFAULT_TITLE,
     build_dictionary_sources,
@@ -107,7 +107,7 @@ def normalize_release_version(value: str | None) -> str:
 
     if value is None:
         return "dev"
-    from dcdict.release import ReleaseError, parse_version
+    from fandom_dict.cli.release import ReleaseError, parse_version
 
     try:
         return parse_version(value).tag

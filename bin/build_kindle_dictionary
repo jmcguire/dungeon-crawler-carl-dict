@@ -1,0 +1,2 @@
+#!/usr/bin/env sh
+exec python3 -m fandom_dict.cli.build_kindle_dictionary "$@"

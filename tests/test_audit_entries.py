@@ -1,7 +1,7 @@
 import unittest
 
-from dcdict.audit_entries import audit_entries
-from dcdict.kindle import Entry
+from fandom_dict.cli.audit_entries import audit_entries
+from fandom_dict.formats.kindle import Entry
 
 
 class AuditEntriesTests(unittest.TestCase):

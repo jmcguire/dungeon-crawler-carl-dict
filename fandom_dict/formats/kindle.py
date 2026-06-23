@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
-from dcdict.entries import (
+from fandom_dict.entries import (
     ALLOWED_INLINE_TAGS,
     AliasReport,
     BIOGRAPHICAL_FIELD_LABELS,

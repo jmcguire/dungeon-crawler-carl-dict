@@ -6,7 +6,7 @@ import html as html_lib
 import re
 from html.parser import HTMLParser
 
-from dcdict.text import clean_wiki_text_artifacts, collapse_whitespace
+from fandom_dict.text import clean_wiki_text_artifacts, collapse_whitespace
 
 
 SHORT_DESCRIPTION_THRESHOLD = 100

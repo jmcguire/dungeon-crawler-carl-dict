@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dcdict.config import DEFAULT_CONFIG_PATH, load_default_project_config, load_project_config
-from dcdict.extraction import (
+from fandom_dict.config import DEFAULT_CONFIG_PATH, load_default_project_config, load_project_config
+from fandom_dict.extraction import (
     SHORT_DESCRIPTION_THRESHOLD,
     FirstParagraphParser,
     InfoboxSummaryParser,
@@ -37,7 +37,7 @@ from dcdict.extraction import (
     summary_from_infobox,
     text_from_inline_html,
 )
-from dcdict.mediawiki import (
+from fandom_dict.wiki.mediawiki import (
     MediaWikiClient,
     PageRef,
     RequestConfig,

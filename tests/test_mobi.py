@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from dcdict.mobi import MobiValidationError, inspect_mobi
+from fandom_dict.formats.mobi import MobiValidationError, inspect_mobi
 
 
 TITLE = "Dungeon Crawler Carl Dictionary"

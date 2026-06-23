@@ -7,9 +7,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from dcdict.audit_entries import AuditFinding
-from dcdict.badges import CoverageResult, build_badges, parse_version as parse_badge_version, write_badge_files
-from dcdict.kindle import (
+from fandom_dict.cli.audit_entries import AuditFinding
+from fandom_dict.cli.badges import CoverageResult, build_badges, parse_version as parse_badge_version, write_badge_files
+from fandom_dict.formats.kindle import (
     DEFAULT_AUTHOR,
     DEFAULT_TITLE,
     BuildResult,
@@ -19,8 +19,8 @@ from dcdict.kindle import (
     compile_with_kindlegen,
     find_kindlegen,
 )
-from dcdict.mobi import inspect_mobi
-from dcdict.release import (
+from fandom_dict.formats.mobi import inspect_mobi
+from fandom_dict.cli.release import (
     ALL_FORMATS,
     CHECKSUMS_NAME,
     DICTGEN_OUTPUT_NAME,
@@ -48,8 +48,8 @@ from dcdict.release import (
     write_release_zip,
     write_stardict_zip,
 )
-from dcdict.stardict import build_stardict
-from dcdict.kobo import KoboBuildResult, synthetic_kobo_zip
+from fandom_dict.formats.stardict import build_stardict
+from fandom_dict.formats.kobo import KoboBuildResult, synthetic_kobo_zip
 
 
 VALID_COMPILER_LOG = """Amazon kindlegen(MAC OSX) V2.9 build 0000
@@ -106,8 +106,8 @@ class ReleaseTests(unittest.TestCase):
                     return CommandResult(0, "")
                 return CommandResult(0, "abc123\n")
 
-            with mock.patch("dcdict.release.find_kindlegen", return_value=None), mock.patch(
-                "dcdict.release.find_dictgen", return_value=None
+            with mock.patch("fandom_dict.cli.release.find_kindlegen", return_value=None), mock.patch(
+                "fandom_dict.cli.release.find_dictgen", return_value=None
             ):
                 commit = preflight_local(
                     root,
@@ -305,8 +305,8 @@ class ReleaseTests(unittest.TestCase):
             conn.commit()
             conn.close()
 
-            with mock.patch("dcdict.release.run_unit_tests"), mock.patch(
-                "dcdict.release.reextract_first_paragraphs", return_value=5
+            with mock.patch("fandom_dict.cli.release.run_unit_tests"), mock.patch(
+                "fandom_dict.cli.release.reextract_first_paragraphs", return_value=5
             ):
                 release_dir = package_release(
                     version=Version("1.2.3", "v1.2.3"),
@@ -373,9 +373,9 @@ class ReleaseTests(unittest.TestCase):
                     compiler_version="test-dictgen",
                 )
 
-            with mock.patch("dcdict.release.run_unit_tests"), mock.patch(
-                "dcdict.release.reextract_first_paragraphs", return_value=5
-            ), mock.patch("dcdict.release.build_kobo", side_effect=fake_build_kobo):
+            with mock.patch("fandom_dict.cli.release.run_unit_tests"), mock.patch(
+                "fandom_dict.cli.release.reextract_first_paragraphs", return_value=5
+            ), mock.patch("fandom_dict.cli.release.build_kobo", side_effect=fake_build_kobo):
                 release_dir = package_release(
                     version=Version("1.2.3", "v1.2.3"),
                     repo_root=root,
@@ -452,13 +452,13 @@ class ReleaseTests(unittest.TestCase):
             inspection.checks = ("valid MOBI",)
             inspection.manifest_data.return_value = {"checks": ["valid MOBI"]}
 
-            with mock.patch("dcdict.release.run_unit_tests"), mock.patch(
-                "dcdict.release.reextract_first_paragraphs", return_value=3
+            with mock.patch("fandom_dict.cli.release.run_unit_tests"), mock.patch(
+                "fandom_dict.cli.release.reextract_first_paragraphs", return_value=3
             ), mock.patch(
-                "dcdict.release.build_dictionary_sources",
+                "fandom_dict.cli.release.build_dictionary_sources",
                 side_effect=fake_build_dictionary_sources,
-            ), mock.patch("dcdict.release.compile_with_kindlegen", side_effect=fake_compile), mock.patch(
-                "dcdict.release.inspect_mobi", return_value=inspection
+            ), mock.patch("fandom_dict.cli.release.compile_with_kindlegen", side_effect=fake_compile), mock.patch(
+                "fandom_dict.cli.release.inspect_mobi", return_value=inspection
             ):
                 package_release(
                     version=Version("1.2.3", "v1.2.3"),
@@ -505,8 +505,8 @@ class ReleaseTests(unittest.TestCase):
             conn.commit()
             conn.close()
 
-            with mock.patch("dcdict.release.run_unit_tests"), mock.patch(
-                "dcdict.release.reextract_first_paragraphs", return_value=5
+            with mock.patch("fandom_dict.cli.release.run_unit_tests"), mock.patch(
+                "fandom_dict.cli.release.reextract_first_paragraphs", return_value=5
             ), self.assertRaisesRegex(ReleaseError, "badge metadata is stale"):
                 package_release(
                     version=Version("1.2.3", "v1.2.3"),
@@ -545,7 +545,7 @@ class ReleaseTests(unittest.TestCase):
                         shutil.copy2(release_dir / name, destination / name)
                 return CommandResult(0, "ok")
 
-            with mock.patch("dcdict.release.shutil.which", return_value="/usr/local/bin/gh"):
+            with mock.patch("fandom_dict.cli.release.shutil.which", return_value="/usr/local/bin/gh"):
                 publish_release(release_dir, Version("1.0.0", "v1.0.0"), "abc123", root, runner)
 
         create = next(command for command in commands if command[:3] == ("gh", "release", "create"))

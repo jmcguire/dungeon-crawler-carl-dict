@@ -8,8 +8,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from dcdict.config import DEFAULT_CONFIG_PATH, load_project_config
-from dcdict.entries import (
+from fandom_dict.config import DEFAULT_CONFIG_PATH, load_project_config
+from fandom_dict.entries import (
     Entry,
     forwarding_target_from_definition,
     load_entries,

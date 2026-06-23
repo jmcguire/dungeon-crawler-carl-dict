@@ -13,7 +13,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Iterable
 
-from dcdict.entries import Entry, build_lookup_report, sanitize_inline_html
+from fandom_dict.entries import Entry, build_lookup_report, sanitize_inline_html
 
 
 DICTGEN_OUTPUT_NAME = "dicthtml-dc.zip"

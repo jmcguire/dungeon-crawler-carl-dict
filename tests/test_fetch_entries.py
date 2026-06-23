@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from dcdict.extraction import (
+from fandom_dict.extraction import (
     ai_description_paragraph_from_html,
     expand_small_description,
     extract_summary_status,
@@ -19,7 +19,7 @@ from dcdict.extraction import (
     summary_from_infobox,
     trim_inline_html_to_plain_length,
 )
-from dcdict.fetch_entries import (
+from fandom_dict.cli.fetch_entries import (
     CrawlConfig,
     DEFAULT_CATEGORIES,
     init_db,
@@ -28,7 +28,7 @@ from dcdict.fetch_entries import (
     reextract_first_paragraphs,
     upsert_page,
 )
-from dcdict.mediawiki import (
+from fandom_dict.wiki.mediawiki import (
     PageRef,
     fandom_api_url,
     wiki_category_title,
@@ -619,12 +619,12 @@ class FetchCharacterExtractionTests(unittest.TestCase):
                     captured["fandom"] = fandom
                     captured["request_config"] = request_config
 
-            with mock.patch("dcdict.fetch_entries.MediaWikiClient", StubClient), mock.patch(
-                "dcdict.fetch_entries.load_category_members", return_value=[]
-            ) as load_members, mock.patch("dcdict.fetch_entries.crawl_pages"), mock.patch(
-                "dcdict.fetch_entries.print_crawl_summary"
-            ), mock.patch("dcdict.fetch_entries.assert_robots_allowed"):
-                from dcdict.fetch_entries import main
+            with mock.patch("fandom_dict.cli.fetch_entries.MediaWikiClient", StubClient), mock.patch(
+                "fandom_dict.cli.fetch_entries.load_category_members", return_value=[]
+            ) as load_members, mock.patch("fandom_dict.cli.fetch_entries.crawl_pages"), mock.patch(
+                "fandom_dict.cli.fetch_entries.print_crawl_summary"
+            ), mock.patch("fandom_dict.cli.fetch_entries.assert_robots_allowed"):
+                from fandom_dict.cli.fetch_entries import main
 
                 self.assertEqual(main(["--output", str(db_path)]), 0)
 
@@ -662,12 +662,12 @@ class FetchCharacterExtractionTests(unittest.TestCase):
                     captured["fandom"] = fandom
                     captured["request_config"] = request_config
 
-            with mock.patch("dcdict.fetch_entries.MediaWikiClient", StubClient), mock.patch(
-                "dcdict.fetch_entries.load_category_members", return_value=[]
-            ) as load_members, mock.patch("dcdict.fetch_entries.crawl_pages"), mock.patch(
-                "dcdict.fetch_entries.print_crawl_summary"
-            ), mock.patch("dcdict.fetch_entries.assert_robots_allowed"):
-                from dcdict.fetch_entries import main
+            with mock.patch("fandom_dict.cli.fetch_entries.MediaWikiClient", StubClient), mock.patch(
+                "fandom_dict.cli.fetch_entries.load_category_members", return_value=[]
+            ) as load_members, mock.patch("fandom_dict.cli.fetch_entries.crawl_pages"), mock.patch(
+                "fandom_dict.cli.fetch_entries.print_crawl_summary"
+            ), mock.patch("fandom_dict.cli.fetch_entries.assert_robots_allowed"):
+                from fandom_dict.cli.fetch_entries import main
 
                 self.assertEqual(main(["--config", str(config_path)]), 0)
 
@@ -700,12 +700,12 @@ class FetchCharacterExtractionTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with mock.patch("dcdict.fetch_entries.MediaWikiClient"), mock.patch(
-                "dcdict.fetch_entries.load_category_members", return_value=[]
-            ) as load_members, mock.patch("dcdict.fetch_entries.crawl_pages"), mock.patch(
-                "dcdict.fetch_entries.print_crawl_summary"
-            ), mock.patch("dcdict.fetch_entries.assert_robots_allowed"):
-                from dcdict.fetch_entries import main
+            with mock.patch("fandom_dict.cli.fetch_entries.MediaWikiClient"), mock.patch(
+                "fandom_dict.cli.fetch_entries.load_category_members", return_value=[]
+            ) as load_members, mock.patch("fandom_dict.cli.fetch_entries.crawl_pages"), mock.patch(
+                "fandom_dict.cli.fetch_entries.print_crawl_summary"
+            ), mock.patch("fandom_dict.cli.fetch_entries.assert_robots_allowed"):
+                from fandom_dict.cli.fetch_entries import main
 
                 self.assertEqual(
                     main(["--config", str(config_path), "--category", "Battles", "--category", "Cities"]),

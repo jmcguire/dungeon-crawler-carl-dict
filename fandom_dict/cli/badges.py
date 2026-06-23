@@ -14,8 +14,8 @@ import trace
 from dataclasses import dataclass
 from pathlib import Path
 
-from dcdict.config import DEFAULT_CONFIG_PATH, load_project_config
-from dcdict.entries import load_entries
+from fandom_dict.config import DEFAULT_CONFIG_PATH, load_project_config
+from fandom_dict.entries import load_entries
 
 
 BADGE_NAMES = ("release", "coverage", "python", "formats", "licenses", "output")
@@ -115,11 +115,11 @@ def format_count(value: int) -> str:
 
 
 def parse_trace_summary(output: str, repo_root: Path) -> CoverageResult:
-    """Parse ``python -m trace --summary`` output for files in ``dcdict``."""
+    """Parse ``python -m trace --summary`` output for files in ``fandom_dict``."""
 
     covered_lines = 0
     executable_lines = 0
-    dcdict_root = (repo_root / "dcdict").resolve()
+    package_root = (repo_root / "fandom_dict").resolve()
     pattern = re.compile(r"^\s*(\d+)\s+(\d+(?:\.\d+)?)%\s+\S+\s+\((.+)\)\s*$")
     for line in output.splitlines():
         match = pattern.match(line)
@@ -129,21 +129,25 @@ def parse_trace_summary(output: str, repo_root: Path) -> CoverageResult:
         percent = float(match.group(2))
         path = Path(match.group(3)).resolve()
         try:
-            path.relative_to(dcdict_root)
+            path.relative_to(package_root)
         except ValueError:
             continue
         executable_lines += lines
         covered_lines += round(lines * percent / 100)
     if executable_lines == 0:
-        raise RuntimeError("trace output did not include any dcdict modules")
+        raise RuntimeError("trace output did not include any fandom_dict modules")
     return CoverageResult(covered_lines=covered_lines, executable_lines=executable_lines)
 
 
 def project_python_files(repo_root: Path) -> list[Path]:
     """Return tracked project modules that should count toward coverage."""
 
-    dcdict_root = repo_root / "dcdict"
-    return sorted(path for path in dcdict_root.glob("*.py") if path.name != "__main__.py")
+    package_root = repo_root / "fandom_dict"
+    return sorted(
+        path
+        for path in package_root.rglob("*.py")
+        if path.name != "__main__.py" and "__pycache__" not in path.parts
+    )
 
 
 def project_executable_line_count(repo_root: Path) -> int:
@@ -155,14 +159,14 @@ def project_executable_line_count(repo_root: Path) -> int:
         # helper gives us the same executable-line model for files with 0 hits.
         total += len(trace._find_executable_linenos(str(path)))
     if total == 0:
-        raise RuntimeError("no executable lines found in dcdict modules")
+        raise RuntimeError("no executable lines found in fandom_dict modules")
     return total
 
 
 def run_trace_coverage(repo_root: Path) -> CoverageResult:
     """Run the test suite with stdlib trace and return project line coverage."""
 
-    with tempfile.TemporaryDirectory(prefix="dcdict-trace-") as cover_dir:
+    with tempfile.TemporaryDirectory(prefix="fandom_dict-trace-") as cover_dir:
         command = (
             sys.executable,
             "-m",

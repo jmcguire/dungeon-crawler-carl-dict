@@ -13,21 +13,11 @@ This project lets you look up Dungeon Crawler Carl characters, factions, races, 
 
 ## Just Want The Dictionary?
 
-Go here first:
+Go here:
 
 **Install and download guide:** <https://jmcguire.github.io/dungeon-crawler-carl-dict/>
 
 That site has the reader-facing instructions for Kindle, Kobo, KOReader, and BOOX. This README is mostly developer notes for crawling, building, testing, and releasing the dictionary.
-
-For release files directly, use the latest GitHub Release:
-
-- Kindle: <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.mobi>
-- Kindle bundle: <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary.zip>
-- KOReader / BOOX / StarDict: <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-StarDict.zip>
-- Kobo: <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/dicthtml-dc.zip>
-- Kobo bundle: <https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/Dungeon-Crawler-Carl-Dictionary-Kobo.zip>
-
-**Case study:** <https://jmcguire.github.io/dungeon-crawler-carl-dict/case-study/> explains how this project used agentic programming to build and release something real.
 
 ## Supported Formats
 
@@ -68,38 +58,39 @@ Optional, depending on what you are building:
 ## Workflow
 
 The default workflow builds the official Dungeon Crawler Carl dictionary from `configs/dungeon-crawler-carl.json`.
+The `bin/` commands are small repo-local wrappers around the Python modules, so no package installation step is required.
 
 Fetch DCC wiki pages into SQLite:
 
 ```sh
-python3 -m dcdict.fetch_entries --ignore-robots
+./bin/fetch_entries --ignore-robots
 ```
 
-Build local outputs:
+Build local outputs to test on your own devices:
 
 ```sh
-python3 -m dcdict.build_kindle_dictionary --link-entries --compile
-python3 -m dcdict.build_stardict_dictionary --link-entries
-python3 -m dcdict.build_kobo_dictionary
+./bin/build_kindle_dictionary --link-entries --compile
+./bin/build_stardict_dictionary --link-entries
+./bin/build_kobo_dictionary
 ```
 
 Run tests and update badges:
 
 ```sh
 python3 -m unittest discover -s tests
-python3 -m dcdict.badges --version 0.7.0
+./bin/badges --version 0.7.0
 ```
 
 Create a local release bundle:
 
 ```sh
-python3 -m dcdict.release --version 0.7.0 --link-entries
+./bin/release --version 0.7.0 --link-entries
 ```
 
-Publish and tag the release on GitHub:
+Create a release bundle, tag it, and publish it on GitHub (requires **gh**):
 
 ```sh
-python3 -m dcdict.release --version 0.7.0 --link-entries --publish
+./bin/release --version 0.7.0 --link-entries --publish
 ```
 
 Notes:
@@ -111,16 +102,18 @@ Notes:
 
 ## Using Another Fandom
 
-Copy an existing config and pass it to the crawler and builders:
+This project has been tested with the Ice and Fire fandom, and the config is included in this repo. You can see how it works with these commands:
 
 ```sh
-python3 -m dcdict.fetch_entries --config examples/iceandfire.json --ignore-robots
-python3 -m dcdict.build_kindle_dictionary --config examples/iceandfire.json --link-entries
-python3 -m dcdict.build_stardict_dictionary --config examples/iceandfire.json --link-entries
-python3 -m dcdict.build_kobo_dictionary --config examples/iceandfire.json
+./bin/fetch_entries --config examples/iceandfire.json --ignore-robots
+./bin/build_kindle_dictionary --config examples/iceandfire.json --link-entries
+./bin/build_stardict_dictionary --config examples/iceandfire.json --link-entries
+./bin/build_kobo_dictionary --config examples/iceandfire.json
 ```
 
-Start from a Fandom wiki's `Special:Categories` page and choose broad direct page categories first, such as `Characters`, `Items`, `Locations`, or wiki-specific equivalents. Categories do not recursively descend by default. Many Fandom pages already appear in several direct categories, so recursive traversal is often unnecessary.
+To use it any fandom, I recommend copying a config file, editing it to your needs, and passing that in to the commands. You can use command-line options for almost all of it, but those get unweildy, so I recommend building the config.
+
+The most important step will be finding good categories to crawl. Start from a Fandom wiki's `Special:Categories` page and choose broad direct page categories first, such as `Characters`, `Items`, `Locations`. The code does not do not recursively descend categories, however many Fandom pages already appear in several categories, so recursive traversal is often unnecessary. Do a bit of research on your own.
 
 The generic path should produce a good-but-not-refined dictionary. Fandom-specific executable code, via plugins, is not supported yet.
 
@@ -167,14 +160,14 @@ Minimal shape:
 }
 ```
 
-## Build Behavior Notes
+## Build Behavior Notes, for curious developers
 
 The crawler uses the MediaWiki API, records pages in SQLite, respects `robots.txt` unless `--ignore-robots` is passed, sleeps between requests with jitter, retries temporary HTTP failures with exponential backoff, records errors, and resumes previous successful fetches unless `--refresh` is passed.
 
 Re-extract definitions from stored HTML without touching the network:
 
 ```sh
-python3 -m dcdict.fetch_entries --reextract-only
+./bin/fetch_entries --reextract-only
 ```
 
 The entry pipeline extracts the first useful summary text, strips wiki maintenance boxes and citation markers, preserves safe bold/italic inline formatting, adds conservative sidebar details, repairs forwarding-only entries, trims overlong summaries, and skips low-quality final definitions while preserving raw crawled data.
@@ -196,12 +189,14 @@ Default DCC outputs:
 
 The release command snapshots the current SQLite database, re-extracts descriptions from stored HTML, runs tests and entry audit, builds the selected formats, smoke-tests finished artifacts, writes checksums, and packages assets atomically into `dist/vX.Y.Z/`.
 
-By default it builds all formats. For faster local checks:
+By default it builds all formats.
+
+For faster local checks:
 
 ```sh
-python3 -m dcdict.release --version 0.7.0 --link-entries --format kindle
-python3 -m dcdict.release --version 0.7.0 --link-entries --format stardict
-python3 -m dcdict.release --version 0.7.0 --link-entries --format kobo
+./bin/release --version 0.7.0 --link-entries --format kindle
+./bin/release --version 0.7.0 --link-entries --format stardict
+./bin/release --version 0.7.0 --link-entries --format kobo
 ```
 
 But a published release must use all formats, so the latest-download links stay complete.
@@ -217,22 +212,6 @@ Release assets:
 - `release-manifest.json`
 
 Each bundle includes format-specific installation notes, `LICENSE`, and `ATTRIBUTION.md`.
-
-## Tests And Badges
-
-Run tests:
-
-```sh
-python3 -m unittest discover -s tests
-```
-
-Update tracked Shields badge JSON:
-
-```sh
-python3 -m dcdict.badges --version 0.7.0
-```
-
-Badge files are committed with normal project changes. There is intentionally no GitHub Actions badge-only commit workflow.
 
 ## License And Attribution
 

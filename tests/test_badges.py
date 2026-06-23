@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from dcdict.badges import (
+from fandom_dict.cli.badges import (
     BADGE_NAMES,
     CoverageResult,
     badge,
@@ -47,8 +47,8 @@ class BadgeTests(unittest.TestCase):
     def test_parse_trace_summary_counts_only_project_modules(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
-            (root / "dcdict").mkdir()
-            project_file = root / "dcdict" / "thing.py"
+            (root / "fandom_dict").mkdir()
+            project_file = root / "fandom_dict" / "thing.py"
             project_file.write_text("x = 1\n", encoding="ascii")
             stdlib_file = root / "not_project.py"
             stdlib_file.write_text("x = 1\n", encoding="ascii")
@@ -67,8 +67,8 @@ class BadgeTests(unittest.TestCase):
     def test_parse_trace_summary_accepts_decimal_percentages(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
-            (root / "dcdict").mkdir()
-            project_file = root / "dcdict" / "thing.py"
+            (root / "fandom_dict").mkdir()
+            project_file = root / "fandom_dict" / "thing.py"
             project_file.write_text("x = 1\n", encoding="ascii")
             output = textwrap.dedent(
                 f"""
@@ -83,13 +83,17 @@ class BadgeTests(unittest.TestCase):
     def test_project_executable_line_count_includes_unexecuted_modules(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
-            package = root / "dcdict"
+            package = root / "fandom_dict"
             package.mkdir()
+            subpackage = package / "formats"
+            subpackage.mkdir()
             (package / "__init__.py").write_text("", encoding="ascii")
             (package / "covered.py").write_text("x = 1\n", encoding="ascii")
             (package / "uncovered.py").write_text("y = 2\n", encoding="ascii")
+            (subpackage / "nested.py").write_text("z = 3\n", encoding="ascii")
             covered_only = len(trace._find_executable_linenos(str(package / "covered.py")))
-            self.assertGreater(project_executable_line_count(root), covered_only)
+            nested_lines = len(trace._find_executable_linenos(str(subpackage / "nested.py")))
+            self.assertGreaterEqual(project_executable_line_count(root), covered_only + nested_lines)
 
     def test_writes_and_validates_badge_json(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -106,7 +110,7 @@ class BadgeTests(unittest.TestCase):
                 validate_badges(badge_dir, parse_version("1.2.3"), 42)
 
     def test_fixture_database_entry_count_matches_badge_output(self) -> None:
-        from dcdict.badges import count_entries
+        from fandom_dict.cli.badges import count_entries
 
         with TemporaryDirectory() as tmp_dir:
             db_path = Path(tmp_dir) / "entries.sqlite"

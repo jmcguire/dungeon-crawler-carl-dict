@@ -14,7 +14,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Iterable
 
-from dcdict.entries import (
+from fandom_dict.entries import (
     Entry,
     build_lookup_report,
     link_definition_references,

@@ -9,8 +9,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from dcdict.config import SidebarField
-from dcdict.kindle import (
+from fandom_dict.config import SidebarField
+from fandom_dict.formats.kindle import (
     Entry,
     build_alias_report,
     build_aliases,
@@ -28,8 +28,8 @@ from dcdict.kindle import (
     write_xhtml,
     write_xhtml_with_options,
 )
-from dcdict.build_kindle_dictionary import main as build_kindle_main
-from dcdict.build_kindle_dictionary import normalize_release_version
+from fandom_dict.cli.build_kindle_dictionary import main as build_kindle_main
+from fandom_dict.cli.build_kindle_dictionary import normalize_release_version
 
 
 class BuildKindleDictionaryTests(unittest.TestCase):
@@ -459,7 +459,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             )
             conn.commit()
 
-            with self.assertLogs("dcdict.entries", level="INFO") as logs:
+            with self.assertLogs("fandom_dict.entries", level="INFO") as logs:
                 entries = load_entries(db_path, min_definition_length=8)
 
             self.assertEqual([entry.title for entry in entries], ["Carl"])
@@ -1365,7 +1365,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             opf_path = Path(tmp_dir) / "dictionary.opf"
             opf_path.write_text("<package />", encoding="utf-8")
-            with mock.patch("dcdict.kindle.find_kindlegen", return_value=None):
+            with mock.patch("fandom_dict.formats.kindle.find_kindlegen", return_value=None):
                 self.assertIsNone(compile_with_kindlegen(opf_path))
 
 

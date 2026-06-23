@@ -19,12 +19,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Sequence
 
-from dcdict.audit_entries import AuditFinding, audit_entries
-from dcdict.badges import validate_badges
-from dcdict.config import load_default_project_config
-from dcdict.entries import load_entries
-from dcdict.fetch_entries import reextract_first_paragraphs
-from dcdict.kindle import (
+from fandom_dict.cli.audit_entries import AuditFinding, audit_entries
+from fandom_dict.cli.badges import validate_badges
+from fandom_dict.config import load_default_project_config
+from fandom_dict.entries import load_entries
+from fandom_dict.cli.fetch_entries import reextract_first_paragraphs
+from fandom_dict.formats.kindle import (
     DEFAULT_AUTHOR,
     DEFAULT_TITLE,
     CompilationResult,
@@ -32,7 +32,7 @@ from dcdict.kindle import (
     compile_with_kindlegen,
     find_kindlegen,
 )
-from dcdict.kobo import (
+from fandom_dict.formats.kobo import (
     DICTGEN_OUTPUT_NAME,
     KoboBuildResult,
     KoboValidationError,
@@ -40,8 +40,8 @@ from dcdict.kobo import (
     find_dictgen,
     inspect_kobo,
 )
-from dcdict.mobi import MobiValidationError, inspect_mobi
-from dcdict.stardict import (
+from fandom_dict.formats.mobi import MobiValidationError, inspect_mobi
+from fandom_dict.formats.stardict import (
     BASE_NAME as STARDICT_BASE_NAME,
     StarDictBuildResult,
     StarDictValidationError,
@@ -452,7 +452,7 @@ def package_release(
         except ValueError as exc:
             raise ReleaseError(
                 f"badge metadata is stale: {exc}. Run "
-                f"`python3 -m dcdict.badges --version {version.value} --input {input_db}` "
+                f"`./bin/badges --version {version.value} --input {input_db}` "
                 "and commit the badge JSON files before releasing."
             ) from exc
         findings = audit_entries(entries)
@@ -688,7 +688,7 @@ def publish_release(
     if "not found" not in existing_release.stdout.lower():
         raise ReleaseError(f"could not check for an existing GitHub Release:\n{existing_release.stdout.strip()}")
 
-    with tempfile.TemporaryDirectory(prefix="dcdict-publish-") as temp_name:
+    with tempfile.TemporaryDirectory(prefix="fandom_dict-publish-") as temp_name:
         notes_path = Path(temp_name) / "release-notes.md"
         notes_path.write_text(release_notes(version), encoding="utf-8")
         command = (

@@ -5,9 +5,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from dcdict.build_kobo_dictionary import main, parse_args
-from dcdict.entries import Entry
-from dcdict.kobo import (
+from fandom_dict.cli.build_kobo_dictionary import main, parse_args
+from fandom_dict.entries import Entry
+from fandom_dict.formats.kobo import (
     DICTGEN_OUTPUT_NAME,
     KoboValidationError,
     build_kobo,
@@ -284,14 +284,14 @@ class KoboTests(unittest.TestCase):
         self.assertIsNone(args.output_name)
 
     def test_cli_reports_missing_dictgen_cleanly(self) -> None:
-        with mock.patch("dcdict.build_kobo_dictionary.load_entries", return_value=self.sample_entries()), mock.patch(
-            "dcdict.kobo.find_dictgen", return_value=None
+        with mock.patch("fandom_dict.cli.build_kobo_dictionary.load_entries", return_value=self.sample_entries()), mock.patch(
+            "fandom_dict.formats.kobo.find_dictgen", return_value=None
         ):
             self.assertEqual(main(["--input", "ignored.sqlite"]), 1)
 
     def test_detect_dictgen_version_prefers_version_line(self) -> None:
         completed = mock.Mock(stdout="Usage: dictgen [options]\n\nVersion: dictgen dev\n", returncode=0)
-        with mock.patch("dcdict.kobo.subprocess.run", return_value=completed):
+        with mock.patch("fandom_dict.formats.kobo.subprocess.run", return_value=completed):
             self.assertEqual(detect_dictgen_version("/usr/local/bin/dictgen"), "dictgen dev")
 
     @unittest.skipUnless(find_dictgen(), "dictgen is not installed")
