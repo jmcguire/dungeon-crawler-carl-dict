@@ -1,14 +1,16 @@
 # Dungeon Crawler Carl E-reader Dictionaries
 
-[![Release](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Frelease.json)](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases)
-[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fcoverage.json)](#tests-and-badges)
-[![Python](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fpython.json)](#developer-tools)
-[![Licenses](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Flicenses.json)](#license-and-attribution)
-[![Output](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Foutput.json)](#release-workflow)
+<img width="100%" alt="Dungeon Crawler Carl dictionary for e-readers. Automatically generated from fandom wiki. Create your own with this codebase." src="https://raw.githubusercontent.com/jmcguire/dungeon-crawler-carl-dict/main/banner.png">
 
 A free custom e-reader dictionary for *Dungeon Crawler Carl*.
 
-This project lets you look up Dungeon Crawler Carl characters, factions, races, spells, achievements, items, and other terms directly from an e-reader dictionary panel.
+[![Python](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fpython.json)](#developer-tools)
+[![Release](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Frelease.json)](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases)
+[![Licenses](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Flicenses.json)](#license-and-attribution)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fcoverage.json)](#tests-and-badges)
+[![Output](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Foutput.json)](#release-workflow)
+
+This project lets you look up Dungeon Crawler Carl characters, factions, races, spells, achievements, items, and other terms directly from an e-reader dictionary panel. It gets the entries, with permission, from the [Dungeon Crawler Carl Wiki](https://dungeon-crawler-carl.fandom.com/wiki/Dungeon_Crawler_Carl_Wiki).
 
 ## Just Want The Dictionary?
 
