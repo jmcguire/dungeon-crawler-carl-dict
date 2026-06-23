@@ -66,8 +66,34 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - Review `kindling`: <https://github.com/ciscoriordan/kindling>
   - Look for Kindle XHTML/indexing tricks that could improve lookup reliability.
   - Future format candidates should be justified by reader demand and side-loading practicality.
+  - look at dictionaries in https://www.thefictionary.net/home , see how they look and if we can copy their best ideas
+
+## Unsorted Stuff
 
 - Should rename dcdict.build_kindle_dictionary to dcdict.build_dictionaries
+
+- delete the unused fetch_characters.py file (it renamed)
+
+- redo the README
+  - the instructions for actually installing a dictionary are in the docs, so we should make a very clear call to action to click that if you just want the dictionary. the rest should be developer notes.
+  - we don't need to document every little thing the program does. there should be a small section for workflow without a lot of etra talk, that just gets to the commands fetch, build, tag, release, with notes of which ones work for DCC and which ones work for all fandoms
+  - all the extra notes on what the program does to build entries and make aliases and such should be in a big section after that.
+  - we should document the basic config file. somewhere. the README is nice place for it.
+  - should mention up front, before the workflow, the different outside tools a developer would need, like kindle gen and gh.
+
+- NOTICE and CONTENT_LICENSE is duplicative. combine and rename
+
+- need a single "build" command that builds all dictionaries.
+
+- need a clearer tag/release workflow. i've already forgotten it.
+
+- i want to know how the code files relate to each other. which one uses which?
+
+- i think we've gone far enough that we should use folders in the dcdict.
+  - and also, the dcdict should be renamed to something more generic, like fandom-dictionary-creation, or something like that.
+
+- when building the different dictionaries, why does kindle and kobo have 1205 but stardict has 1212. they have the same number of aliases
+
 
 ## Reference Notes
 
