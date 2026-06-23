@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+from dcdict.config import SidebarField
 from dcdict.kindle import (
     Entry,
     build_alias_report,
@@ -91,6 +92,68 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertEqual(
             entries[1].details,
             (("Aliases", "GC, BWR, NW Princess Donut"), ("Origin", "Earth: Seattle, WA")),
+        )
+
+    def test_load_entries_strips_collision_free_parenthetical_title(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    ("Torch (Item)", "https://example/wiki/Torch", "Items", "Torch is an item.", "", "ok"),
+                    ("Carl", "https://example/wiki/Carl", "Characters", "Carl is a crawler.", "", "ok"),
+                ],
+            )
+            conn.commit()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        self.assertIn("Torch", {entry.title for entry in entries})
+        self.assertNotIn("Torch (Item)", {entry.title for entry in entries})
+
+    def test_load_entries_keeps_parenthetical_title_when_stripped_title_collides(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    ("Baelon Targaryen (son of Aerys)", "https://example/wiki/Baelon_A", "Characters", "One Baelon.", "", "ok"),
+                    ("Baelon Targaryen (son of Viserys I)", "https://example/wiki/Baelon_V", "Characters", "Another Baelon.", "", "ok"),
+                ],
+            )
+            conn.commit()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        self.assertEqual(
+            {entry.title for entry in entries},
+            {"Baelon Targaryen (son of Aerys)", "Baelon Targaryen (son of Viserys I)"},
         )
 
     def test_load_entries_resolves_simple_forwarding_entry(self) -> None:
@@ -483,6 +546,30 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             (("Origin", "Dungeon"),),
         )
 
+    def test_sidebar_details_from_html_uses_configurable_fields(self) -> None:
+        raw_html = """
+        <aside class="portable-infobox">
+          <div class="pi-data" data-source="allegiance">
+            <h3 class="pi-data-label">ALLEGIANCE</h3>
+            <div class="pi-data-value">House Stark</div>
+          </div>
+          <div class="pi-data" data-source="culture">
+            <h3 class="pi-data-label">CULTURE</h3>
+            <div class="pi-data-value">Northmen</div>
+          </div>
+        </aside>
+        """
+
+        fields = (
+            SidebarField("allegiance", "Allegiance"),
+            SidebarField("culture", "Culture"),
+        )
+
+        self.assertEqual(
+            sidebar_details_from_html(raw_html, fields),
+            (("Allegiance", "House Stark"), ("Culture", "Northmen")),
+        )
+
     def test_build_aliases_does_not_add_unrelated_alias_forms(self) -> None:
         entries = [
             Entry("Red Beret", "https://example/wiki/Red_Beret", "An item."),
@@ -569,6 +656,52 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             report.multi_target_lookups[0].targets,
             ("Ring of Water Breathing", "Scroll of Water Breathing"),
         )
+
+    def test_lookup_report_tracks_parenthetical_alias_collisions_as_multi_lookup(self) -> None:
+        entries = [
+            Entry("Baelon Targaryen (son of Aerys)", "https://example/wiki/Baelon_A", "One Baelon."),
+            Entry("Baelon Targaryen (son of Viserys I)", "https://example/wiki/Baelon_V", "Another Baelon."),
+        ]
+
+        aliases = build_aliases(entries)
+        report = build_lookup_report(entries)
+
+        self.assertNotIn("Baelon Targaryen", aliases["Baelon Targaryen (son of Aerys)"])
+        self.assertEqual(len(report.multi_target_lookups), 1)
+        self.assertEqual(report.multi_target_lookups[0].word, "Baelon Targaryen")
+        self.assertEqual(
+            report.multi_target_lookups[0].targets,
+            ("Baelon Targaryen (son of Aerys)", "Baelon Targaryen (son of Viserys I)"),
+        )
+
+    def test_lookup_report_uses_configured_house_prefix_only_when_enabled(self) -> None:
+        entries = [
+            Entry("House Stark", "https://example/wiki/House_Stark", "A noble house."),
+            Entry("Battle of the Bells", "https://example/wiki/Battle_Bells", "A battle."),
+        ]
+
+        default_report = build_lookup_report(entries, title_prefix_aliases=())
+        house_report = build_lookup_report(entries, title_prefix_aliases=("House ",))
+
+        self.assertNotIn("Stark", default_report.aliases["House Stark"])
+        self.assertIn("Stark", house_report.aliases["House Stark"])
+        self.assertNotIn("the Bells", house_report.aliases["Battle of the Bells"])
+
+    def test_lookup_report_uses_configured_sidebar_alias_label(self) -> None:
+        entries = [
+            Entry(
+                "Ferdinand",
+                "https://example/wiki/Ferdinand",
+                "A cat.",
+                details=(("Also known as", "Gravy Boat"),),
+            )
+        ]
+
+        default_report = build_lookup_report(entries)
+        custom_report = build_lookup_report(entries, sidebar_alias_labels=("Also known as",))
+
+        self.assertNotIn("Gravy Boat", default_report.aliases["Ferdinand"])
+        self.assertIn("Gravy Boat", custom_report.aliases["Ferdinand"])
 
     def test_build_aliases_skips_case_insensitive_canonical_and_generated_collisions(self) -> None:
         entries = [
@@ -824,6 +957,17 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         )
 
         self.assertEqual(linked, 'Tin appears near <a href="#entry-2">Li Na</a>.')
+
+    def test_link_definition_references_escapes_unlinked_text(self) -> None:
+        title_to_id = {"Blood": 1}
+
+        linked = link_definition_references(
+            "Fire & Blood mentions Blood.",
+            title_to_id,
+            current_title="Carl",
+        )
+
+        self.assertEqual(linked, 'Fire &amp; <a href="#entry-1">Blood</a> mentions Blood.')
 
     def test_write_xhtml_preserves_emphasis_escapes_text_and_produces_valid_xml(self) -> None:
         with TemporaryDirectory() as tmp_dir:

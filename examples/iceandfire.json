@@ -1,0 +1,38 @@
+{
+  "fandom": "iceandfire",
+  "title": "Ice and Fire Dictionary",
+  "author": "Generated from Ice and Fire Wiki contributors",
+  "source_name": "Ice and Fire Wiki",
+  "categories": [
+    "Characters",
+    "Battles",
+    "Noble_houses",
+    "Nations",
+    "Locations",
+    "Geography",
+    "Historical",
+    "Cities"
+  ],
+  "database_path": "data/iceandfire.sqlite",
+  "build_dir": "build/iceandfire",
+  "sidebar_fields": [
+    {"source": "alias", "label": "Aliases", "alias": true},
+    {"source": "allegiance", "label": "Allegiance"},
+    {"source": "culture", "label": "Culture"},
+    {"source": "title", "label": "Title"},
+    {"source": "born", "label": "Born"},
+    {"source": "died", "label": "Died"},
+    {"source": "location", "label": "Location"},
+    {"source": "region", "label": "Region"},
+    {"source": "Type", "label": "Type"},
+    {"source": "type_of_location", "label": "Type"}
+  ],
+  "title_aliases": {
+    "suffixes": [],
+    "prefixes": ["House "],
+    "strip_parenthetical": true
+  },
+  "max_summary_length": 500,
+  "smoke_headwords": ["Cersei Lannister", "House Frey", "Frey", "Baelon Targaryen"],
+  "kobo_output_name": "dicthtml-iaf.zip"
+}

@@ -54,6 +54,19 @@ class MobiInspectionTests(unittest.TestCase):
         self.assertEqual(inspection.inflection_index, 0xFFFFFFFF)
         self.assertIn("direct dictionary index pointers", inspection.checks)
 
+    def test_inspect_mobi_accepts_configured_representative_headwords(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "dictionary.mobi"
+            path.write_bytes(synthetic_mobi())
+
+            inspection = inspect_mobi(
+                path,
+                expected_title=TITLE,
+                representative_headwords=("Carl", "Donut"),
+            )
+
+        self.assertIn("index markers and representative headwords", inspection.checks)
+
     def test_inspect_mobi_rejects_bad_signature(self) -> None:
         data = bytearray(synthetic_mobi())
         data[60:68] = b"NOTMOBI!"

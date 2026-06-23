@@ -1,0 +1,33 @@
+{
+  "fandom": "dungeon-crawler-carl",
+  "title": "Dungeon Crawler Carl Dictionary",
+  "author": "Generated from Dungeon Crawler Carl Wiki contributors",
+  "source_name": "Dungeon Crawler Carl Wiki",
+  "categories": [
+    "Characters",
+    "Groups",
+    "Spells",
+    "Achievements",
+    "Races",
+    "Items",
+    "Mob_Types"
+  ],
+  "database_path": "data/dungeon-crawler-carl.sqlite",
+  "build_dir": "build/dungeon-crawler-carl",
+  "sidebar_fields": [
+    {"source": "aliases", "label": "Aliases", "alias": true},
+    {"source": "origin", "label": "Origin"},
+    {"source": "species", "label": "Race"},
+    {"source": "race", "label": "Race"},
+    {"source": "first_appearance", "label": "First scene"},
+    {"source": "source", "label": "Source"}
+  ],
+  "title_aliases": {
+    "suffixes": [" Spell", " Box", " Achievement", " Potion", " Scroll"],
+    "prefixes": ["Potion of ", "Scroll of ", "Ring of ", "Wand of "],
+    "strip_parenthetical": true
+  },
+  "max_summary_length": 600,
+  "smoke_headwords": ["Carl", "Donut", "Mordecai", "1914", "Fire Fingers"],
+  "kobo_output_name": "dicthtml-dc.zip"
+}

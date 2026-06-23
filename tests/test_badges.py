@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import textwrap
+import trace
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -63,6 +64,22 @@ class BadgeTests(unittest.TestCase):
             self.assertEqual(coverage.executable_lines, 10)
             self.assertEqual(coverage.percent, 80)
 
+    def test_parse_trace_summary_accepts_decimal_percentages(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            (root / "dcdict").mkdir()
+            project_file = root / "dcdict" / "thing.py"
+            project_file.write_text("x = 1\n", encoding="ascii")
+            output = textwrap.dedent(
+                f"""
+                lines   cov%   module   (path)
+                   10   80.0%   thing    ({project_file})
+                """
+            )
+            coverage = parse_trace_summary(output, root)
+            self.assertEqual(coverage.covered_lines, 8)
+            self.assertEqual(coverage.executable_lines, 10)
+
     def test_project_executable_line_count_includes_unexecuted_modules(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
@@ -71,7 +88,8 @@ class BadgeTests(unittest.TestCase):
             (package / "__init__.py").write_text("", encoding="ascii")
             (package / "covered.py").write_text("x = 1\n", encoding="ascii")
             (package / "uncovered.py").write_text("y = 2\n", encoding="ascii")
-            self.assertEqual(project_executable_line_count(root), 3)
+            covered_only = len(trace._find_executable_linenos(str(package / "covered.py")))
+            self.assertGreater(project_executable_line_count(root), covered_only)
 
     def test_writes_and_validates_badge_json(self) -> None:
         with TemporaryDirectory() as tmp_dir:

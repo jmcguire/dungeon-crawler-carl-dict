@@ -154,6 +154,7 @@ def render_definition(
     known_titles: set[str],
     *,
     link_entries: bool,
+    source_name: str = "Dungeon Crawler Carl Wiki",
 ) -> str:
     """Render one conservative HTML definition for KOReader."""
 
@@ -187,7 +188,7 @@ def render_definition(
     chunks.append("</ul>")
     chunks.append(
         '<p class="source">Source: '
-        f"{html.escape(entry.title, quote=False)} on Dungeon Crawler Carl Wiki<br />"
+        f"{html.escape(entry.title, quote=False)} on {html.escape(source_name, quote=False)}<br />"
         f"{html.escape(entry.url, quote=False)}</p>"
     )
     chunks.append("</div>")
@@ -200,12 +201,20 @@ def render_combined_definition(
     known_titles: set[str],
     *,
     link_entries: bool,
+    source_name: str = "Dungeon Crawler Carl Wiki",
 ) -> str:
     """Render multiple canonical entries as one lookup result."""
 
     chunks = ['<div class="multi-lookup">']
     for target in targets:
-        chunks.append(render_definition(entries_by_title[target], known_titles, link_entries=link_entries))
+        chunks.append(
+            render_definition(
+                entries_by_title[target],
+                known_titles,
+                link_entries=link_entries,
+                source_name=source_name,
+            )
+        )
     chunks.append("</div>")
     return "".join(chunks)
 
@@ -225,14 +234,25 @@ def build_stardict(
     link_entries: bool = False,
     base_name: str = BASE_NAME,
     include_sidebar_aliases: bool = True,
+    source_name: str = "Dungeon Crawler Carl Wiki",
+    title_suffix_aliases: tuple[str, ...] | None = None,
+    title_prefix_aliases: tuple[str, ...] | None = None,
+    strip_parenthetical_disambiguation: bool = True,
+    sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> StarDictBuildResult:
     """Generate a StarDict 2.4.2 bundle from normalized entries."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    lookup_report = build_lookup_report(
-        entries,
-        include_sidebar_aliases=include_sidebar_aliases,
-    )
+    lookup_options = {
+        "include_sidebar_aliases": include_sidebar_aliases,
+        "strip_parenthetical_disambiguation": strip_parenthetical_disambiguation,
+        "sidebar_alias_labels": sidebar_alias_labels,
+    }
+    if title_suffix_aliases is not None:
+        lookup_options["title_suffix_aliases"] = title_suffix_aliases
+    if title_prefix_aliases is not None:
+        lookup_options["title_prefix_aliases"] = title_prefix_aliases
+    lookup_report = build_lookup_report(entries, **lookup_options)
     aliases = lookup_report.aliases
     entries_by_title = {entry.title: entry for entry in entries}
     if len(entries_by_title) != len(entries):
@@ -248,6 +268,7 @@ def build_stardict(
             entries_by_title,
             known_titles,
             link_entries=link_entries,
+            source_name=source_name,
         )
         for lookup in lookup_report.multi_target_lookups
     }
@@ -263,6 +284,7 @@ def build_stardict(
                 entries_by_title[word],
                 known_titles,
                 link_entries=link_entries,
+                source_name=source_name,
             )
         definition = definition_html.encode("utf-8")
         if not definition:
@@ -313,7 +335,7 @@ def build_stardict(
                 f"bookname={title}",
                 f"author={author}",
                 "website=https://github.com/jmcguire/dungeon-crawler-carl-dict",
-                "description=Fan dictionary generated from Dungeon Crawler Carl Wiki contributors; content CC BY-SA 3.0.",
+                f"description=Fan dictionary generated from {source_name} contributors; content CC BY-SA 3.0.",
                 f"date={date}",
                 "sametypesequence=h",
                 "lang=en-en",

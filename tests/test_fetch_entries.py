@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import unittest
 from pathlib import Path
@@ -16,6 +17,7 @@ from dcdict.extraction import (
     summary_blocks_from_html,
     summary_from_html,
     summary_from_infobox,
+    trim_inline_html_to_plain_length,
 )
 from dcdict.fetch_entries import (
     CrawlConfig,
@@ -219,6 +221,24 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         self.assertEqual(
             summary_from_html("201st Security Group Militia", html),
             "<b>The 201st Security Group</b> is a cult of City Elves. They worship Apito, and they believe they must protect Skyfowl from flightless creatures.",
+        )
+
+    def test_summary_trims_overlong_intro_at_sentence_boundary(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p><b>Ermesande Hayford</b> is the last of her line. She has a long page intro with many later details. This third sentence should not be kept.</p>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Ermesande Hayford", html, max_summary_length=75),
+            "<b>Ermesande Hayford</b> is the last of her line.",
+        )
+
+    def test_trim_inline_html_closes_open_emphasis_tags(self) -> None:
+        self.assertEqual(
+            trim_inline_html_to_plain_length("<b>Ermesande Hayford</b> has a long description.", 10),
+            "<b>Ermesande</b>",
         )
 
     def test_summary_replaces_truncated_intro_with_ai_description(self) -> None:
@@ -583,6 +603,7 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         args = parse_args([])
 
         self.assertIsNone(args.categories)
+        self.assertEqual(args.config, Path("configs/dungeon-crawler-carl.json"))
         self.assertEqual(
             DEFAULT_CATEGORIES,
             ("Characters", "Groups", "Spells", "Achievements", "Races", "Items", "Mob_Types"),
@@ -609,6 +630,90 @@ class FetchCharacterExtractionTests(unittest.TestCase):
 
             crawl_config = load_members.call_args.args[1]
             self.assertEqual(crawl_config.categories, DEFAULT_CATEGORIES)
+
+    def test_main_uses_config_fandom_categories_and_output(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            config_path = root / "config.json"
+            db_path = root / "custom.sqlite"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "fandom": "iceandfire",
+                        "title": "Ice and Fire Dictionary",
+                        "author": "Example",
+                        "source_name": "Ice and Fire Wiki",
+                        "categories": ["Characters", "Noble_houses"],
+                        "database_path": str(db_path),
+                        "build_dir": str(root / "build"),
+                        "sidebar_fields": [{"source": "alias", "label": "Also known as", "alias": True}],
+                        "title_aliases": {"prefixes": ["House "], "suffixes": [], "strip_parenthetical": True},
+                        "smoke_headwords": ["Cersei Lannister"],
+                        "kobo_output_name": "dicthtml-iaf.zip",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            captured = {}
+
+            class StubClient:
+                def __init__(self, fandom, request_config) -> None:
+                    captured["fandom"] = fandom
+                    captured["request_config"] = request_config
+
+            with mock.patch("dcdict.fetch_entries.MediaWikiClient", StubClient), mock.patch(
+                "dcdict.fetch_entries.load_category_members", return_value=[]
+            ) as load_members, mock.patch("dcdict.fetch_entries.crawl_pages"), mock.patch(
+                "dcdict.fetch_entries.print_crawl_summary"
+            ), mock.patch("dcdict.fetch_entries.assert_robots_allowed"):
+                from dcdict.fetch_entries import main
+
+                self.assertEqual(main(["--config", str(config_path)]), 0)
+
+            crawl_config = load_members.call_args.args[1]
+            self.assertEqual(captured["fandom"], "iceandfire")
+            self.assertEqual(crawl_config.categories, ("Characters", "Noble_houses"))
+            self.assertTrue(db_path.exists())
+
+    def test_main_cli_categories_override_config_categories(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            config_path = root / "config.json"
+            db_path = root / "custom.sqlite"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "fandom": "iceandfire",
+                        "title": "Ice and Fire Dictionary",
+                        "author": "Example",
+                        "source_name": "Ice and Fire Wiki",
+                        "categories": ["Characters"],
+                        "database_path": str(db_path),
+                        "build_dir": str(root / "build"),
+                        "sidebar_fields": [{"source": "alias", "label": "Aliases", "alias": True}],
+                        "title_aliases": {"prefixes": ["House "], "suffixes": [], "strip_parenthetical": True},
+                        "smoke_headwords": ["Cersei Lannister"],
+                        "kobo_output_name": "dicthtml-iaf.zip",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with mock.patch("dcdict.fetch_entries.MediaWikiClient"), mock.patch(
+                "dcdict.fetch_entries.load_category_members", return_value=[]
+            ) as load_members, mock.patch("dcdict.fetch_entries.crawl_pages"), mock.patch(
+                "dcdict.fetch_entries.print_crawl_summary"
+            ), mock.patch("dcdict.fetch_entries.assert_robots_allowed"):
+                from dcdict.fetch_entries import main
+
+                self.assertEqual(
+                    main(["--config", str(config_path), "--category", "Battles", "--category", "Cities"]),
+                    0,
+                )
+
+            crawl_config = load_members.call_args.args[1]
+            self.assertEqual(crawl_config.categories, ("Battles", "Cities"))
 
     def test_fetch_characters_wrapper_reexports_main(self) -> None:
         from dcdict import fetch_characters

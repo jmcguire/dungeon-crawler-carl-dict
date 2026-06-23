@@ -54,22 +54,13 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
 ## P3 - Portability And Future Formats
 
-- Test the crawler/build pipeline against a different Fandom wiki.
-  - Goal: produce a good-but-not-refined dictionary without DCC-specific assumptions.
-  - Identify which extraction or alias rules need fandom-specific configuration.
-  - see iceandfire for an example. There are some hardcoded values for DCC.
-    - it also has a lot of parenthetical values, like "Baelon Targaryen (son of Aerys)". we should automaticall get rid of those, it'll be useful in all dictionaries.
-    - there is a big feature here to let people program in some of their own title munging methods. like a fandom-specific plugin that's a piece of code.
-    - why is "Ermesande Hayford" so long and everything else is too short?
-    - should look into history if the entry is too short
-    - it has custom prefixes ("House AAAA")
-  - add configurable sidebar attributes to look at
-  - these values are becoming unweildy to type on the command line. we might want to build a config file that can be used in both commands
-  - write up a guide for doing this with another fandom
-    - mention that Special:Category page has some good starting points.
-    - mention categories don't recursively descend into other categories by default, but here's how to do it, but note that many fandoms just have pages in multiple categories (characters and kings and deceased)
-  - change all outputs to have the fandomn ame built in. fandom.sqlite, build/fandom/, etc
-  - maybe make aliases to split FirstName LastName to also be searchable on FirstName?
+- Consider fandom-specific code hooks if JSON config stops being enough.
+  - Current config covers categories, sidebar fields, source labels, title alias rules, output paths, smoke headwords, and overlong-summary trimming.
+  - Executable plugins are intentionally deferred until a second real fandom needs behavior that cannot be expressed as data.
+
+- Review whether generic first-name/last-name aliases should be configurable by fandom.
+  - This may help wikis with many human names.
+  - It may also create noisy collisions, so keep it collision-protected and opt-in if expanded.
 
 - Research other dictionary tooling when useful.
   - Review `kindling`: <https://github.com/ciscoriordan/kindling>
@@ -89,7 +80,7 @@ This file is prioritized by what is most likely to improve real reader lookup be
 - Useful local checks:
 
 ```sh
-grep idx:orth build/dictionary.xhtml | perl -nE'/value="([^"]+)"/; say $1'
+grep idx:orth build/dungeon-crawler-carl/kindle/dictionary.xhtml | perl -nE'/value="([^"]+)"/; say $1'
 python3 -m dcdict.build_kindle_dictionary --link-entries --compile
 python3 -m dcdict.release --version 0.5.0 --link-entries --format all --overwrite
 ```

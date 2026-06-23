@@ -7,6 +7,7 @@ import argparse
 import logging
 from pathlib import Path
 
+from dcdict.config import DEFAULT_CONFIG_PATH, load_project_config
 from dcdict.entries import load_entries
 from dcdict.kindle import *  # noqa: F403 - preserve the old module's import surface.
 from dcdict.kindle import (
@@ -21,10 +22,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments for the dictionary builder."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=Path("data/characters.sqlite"))
-    parser.add_argument("--output-dir", type=Path, default=Path("build"))
-    parser.add_argument("--title", default=DEFAULT_TITLE)
-    parser.add_argument("--author", default=DEFAULT_AUTHOR)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("--input", type=Path)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--title")
+    parser.add_argument("--author")
+    parser.add_argument("--source-name")
     parser.add_argument("--min-definition-length", type=int, default=8)
     parser.add_argument("--compile", action="store_true", help="Run kindlegen if it is installed.")
     parser.add_argument(
@@ -49,19 +52,36 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    entries = load_entries(args.input, args.min_definition_length)
+    config = load_project_config(args.config)
+    input_path = args.input or config.database_path
+    output_dir = args.output_dir or config.kindle_dir
+    title = args.title or config.title
+    author = args.author or config.author
+    source_name = args.source_name or config.source_name
+    entries = load_entries(
+        input_path,
+        args.min_definition_length,
+        sidebar_fields=config.sidebar_fields,
+        strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
+        max_summary_length=config.max_summary_length,
+    )
     if not entries:
-        raise SystemExit(f"no usable entries found in {args.input}")
+        raise SystemExit(f"no usable entries found in {input_path}")
     release_version = normalize_release_version(args.release_version)
 
     result = build_dictionary_sources(
         entries,
-        args.output_dir,
-        args.title,
-        args.author,
+        output_dir,
+        title,
+        author,
         link_entries=args.link_entries,
         include_sidebar_aliases=not args.no_sidebar_aliases,
         release_version=release_version,
+        source_name=source_name,
+        title_suffix_aliases=config.title_aliases.suffixes,
+        title_prefix_aliases=config.title_aliases.prefixes,
+        strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
+        sidebar_alias_labels=config.sidebar_alias_labels,
     )
 
     print(f"wrote {result.xhtml_path}")

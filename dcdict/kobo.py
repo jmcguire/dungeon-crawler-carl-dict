@@ -139,7 +139,7 @@ def normalize_kobo_variant(word: str) -> str:
     return word.strip().casefold()
 
 
-def render_definition(entry: Entry) -> str:
+def render_definition(entry: Entry, source_name: str = "Dungeon Crawler Carl Wiki") -> str:
     """Render one conservative raw HTML definition for Kobo."""
 
     chunks = [
@@ -161,19 +161,23 @@ def render_definition(entry: Entry) -> str:
     chunks.append("</ul>")
     chunks.append(
         '<p class="source">Source: '
-        f"{html.escape(entry.title, quote=False)} on Dungeon Crawler Carl Wiki<br />"
+        f"{html.escape(entry.title, quote=False)} on {html.escape(source_name, quote=False)}<br />"
         f"{html.escape(entry.url, quote=False)}</p>"
     )
     chunks.append("</div>")
     return "".join(chunks)
 
 
-def render_combined_definition(targets: tuple[str, ...], entries_by_title: dict[str, Entry]) -> str:
+def render_combined_definition(
+    targets: tuple[str, ...],
+    entries_by_title: dict[str, Entry],
+    source_name: str = "Dungeon Crawler Carl Wiki",
+) -> str:
     """Render multiple canonical entries as one Kobo lookup result."""
 
     chunks = ['<div class="multi-lookup">']
     for target in targets:
-        chunks.append(render_definition(entries_by_title[target]))
+        chunks.append(render_definition(entries_by_title[target], source_name))
     chunks.append("</div>")
     return "".join(chunks)
 
@@ -182,17 +186,28 @@ def entries_to_dictfile(
     entries: list[Entry],
     *,
     include_sidebar_aliases: bool = True,
+    source_name: str = "Dungeon Crawler Carl Wiki",
+    title_suffix_aliases: tuple[str, ...] | None = None,
+    title_prefix_aliases: tuple[str, ...] | None = None,
+    strip_parenthetical_disambiguation: bool = True,
+    sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> tuple[str, int, int, int]:
     """Render Kobo dictgen input and return it with lookup counts."""
 
-    lookup_report = build_lookup_report(
-        entries,
-        include_sidebar_aliases=include_sidebar_aliases,
-    )
+    lookup_options = {
+        "include_sidebar_aliases": include_sidebar_aliases,
+        "strip_parenthetical_disambiguation": strip_parenthetical_disambiguation,
+        "sidebar_alias_labels": sidebar_alias_labels,
+    }
+    if title_suffix_aliases is not None:
+        lookup_options["title_suffix_aliases"] = title_suffix_aliases
+    if title_prefix_aliases is not None:
+        lookup_options["title_prefix_aliases"] = title_prefix_aliases
+    lookup_report = build_lookup_report(entries, **lookup_options)
     aliases = lookup_report.aliases
     entries_by_title = {entry.title: entry for entry in entries}
     combined_definitions = {
-        lookup.word: render_combined_definition(lookup.targets, entries_by_title)
+        lookup.word: render_combined_definition(lookup.targets, entries_by_title, source_name)
         for lookup in lookup_report.multi_target_lookups
     }
     chunks: list[str] = []
@@ -204,7 +219,7 @@ def entries_to_dictfile(
                 chunks.append(f"& {alias}")
                 alias_count += 1
         chunks.append("::")
-        chunks.append(f"<html>{combined_definitions.get(entry.title, render_definition(entry))}")
+        chunks.append(f"<html>{combined_definitions.get(entry.title, render_definition(entry, source_name))}")
         chunks.append("")
     for word in sorted(set(combined_definitions) - set(entries_by_title), key=str.casefold):
         chunks.append(f"@ {word}")
@@ -241,6 +256,11 @@ def build_kobo(
     *,
     output_name: str = DICTGEN_OUTPUT_NAME,
     include_sidebar_aliases: bool = True,
+    source_name: str = "Dungeon Crawler Carl Wiki",
+    title_suffix_aliases: tuple[str, ...] | None = None,
+    title_prefix_aliases: tuple[str, ...] | None = None,
+    strip_parenthetical_disambiguation: bool = True,
+    sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> KoboBuildResult:
     """Generate a Kobo dictfile and compile it with dictgen."""
 
@@ -251,6 +271,11 @@ def build_kobo(
     dictfile_text, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(
         entries,
         include_sidebar_aliases=include_sidebar_aliases,
+        source_name=source_name,
+        title_suffix_aliases=title_suffix_aliases,
+        title_prefix_aliases=title_prefix_aliases,
+        strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
+        sidebar_alias_labels=sidebar_alias_labels,
     )
     dictfile_path = output_dir / DICTFILE_NAME
     dictfile_path.write_text(dictfile_text, encoding="utf-8")

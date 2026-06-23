@@ -13,6 +13,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Callable, Mapping
 
+from dcdict.config import SidebarField
 from dcdict.text import clean_wiki_text_artifacts
 
 
@@ -28,6 +29,10 @@ SIDEBAR_FIELD_LABELS = {
     "source": "Source",
 }
 BIOGRAPHICAL_FIELD_LABELS = SIDEBAR_FIELD_LABELS
+DEFAULT_SIDEBAR_FIELDS = tuple(
+    SidebarField(source=source, label=label, alias=(label == "Aliases"))
+    for source, label in SIDEBAR_FIELD_LABELS.items()
+)
 
 
 @dataclass(frozen=True)
@@ -307,7 +312,14 @@ class EntryReferenceLinker:
             href = self.href_for_target(title, self.targets[title])
             return f'<a href="{html.escape(href, quote=True)}">{html.escape(title, quote=False)}</a>'
 
-        return self._pattern.sub(replace, text)
+        chunks: list[str] = []
+        last_end = 0
+        for match in self._pattern.finditer(text):
+            chunks.append(html.escape(text[last_end : match.start()], quote=False))
+            chunks.append(replace(match))
+            last_end = match.end()
+        chunks.append(html.escape(text[last_end:], quote=False))
+        return "".join(chunks)
 
 
 def sanitize_inline_html(fragment: str) -> str:
@@ -433,8 +445,9 @@ def spoiler_notice_from_html(raw_html: str | None) -> str | None:
 class SidebarInfoParser(HTMLParser):
     """Extract selected approved fields from Fandom sidebars."""
 
-    def __init__(self) -> None:
+    def __init__(self, sidebar_fields: tuple[SidebarField, ...] = DEFAULT_SIDEBAR_FIELDS) -> None:
         super().__init__(convert_charrefs=True)
+        self.field_labels = {field.source: field.label for field in sidebar_fields}
         self.in_infobox = False
         self.current_source: str | None = None
         self._label_depth = 0
@@ -452,7 +465,7 @@ class SidebarInfoParser(HTMLParser):
         if not self.in_infobox:
             return
         if tag == "div" and has_class(classes, "pi-data"):
-            self.current_source = source if source in SIDEBAR_FIELD_LABELS else None
+            self.current_source = source if source in self.field_labels else None
             return
         if self.current_source and tag == "h3" and has_class(classes, "pi-data-label"):
             self._label_depth = 1
@@ -483,7 +496,7 @@ class SidebarInfoParser(HTMLParser):
             self._value_chunks.append(data)
 
     def _save_current_field(self) -> None:
-        if self.current_source in SIDEBAR_FIELD_LABELS:
+        if self.current_source in self.field_labels:
             value = normalize_text("".join(self._value_chunks))
             if value:
                 self.fields.setdefault(self.current_source, value)
@@ -500,18 +513,22 @@ def has_class(classes: str, class_name: str) -> bool:
     return class_name in classes.split()
 
 
-def sidebar_details_from_html(raw_html: str | None) -> tuple[tuple[str, str], ...]:
+def sidebar_details_from_html(
+    raw_html: str | None,
+    sidebar_fields: tuple[SidebarField, ...] = DEFAULT_SIDEBAR_FIELDS,
+) -> tuple[tuple[str, str], ...]:
     """Extract approved non-spoilery sidebar fields."""
 
     if not raw_html:
         return ()
-    parser = SidebarInfoParser()
+    parser = SidebarInfoParser(sidebar_fields)
     parser.feed(raw_html)
     parser.close()
     details = []
-    for source in ("aliases", "origin", "species", "race", "first_appearance", "source"):
+    for field in sidebar_fields:
+        source = field.source
         if source in parser.fields:
-            details.append((SIDEBAR_FIELD_LABELS[source], parser.fields[source]))
+            details.append((field.label, parser.fields[source]))
     return tuple(details)
 
 
@@ -527,7 +544,14 @@ def ascii_fold(text: str) -> str:
     return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
 
 
-def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
+def load_entries(
+    db_path: Path,
+    min_definition_length: int,
+    *,
+    sidebar_fields: tuple[SidebarField, ...] = DEFAULT_SIDEBAR_FIELDS,
+    strip_parenthetical_disambiguation: bool = True,
+    max_summary_length: int | None = None,
+) -> list[Entry]:
     """Load usable dictionary entries from the crawler SQLite database."""
 
     conn = sqlite3.connect(db_path)
@@ -545,7 +569,11 @@ def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
     entries = []
     for title, url, first_paragraph, raw_html in rows:
         definition = sanitize_inline_html(clean_wiki_text_artifacts(first_paragraph))
-        details = sidebar_details_from_html(raw_html)
+        if max_summary_length:
+            from dcdict.extraction import trim_inline_html_to_plain_length
+
+            definition = trim_inline_html_to_plain_length(definition, max_summary_length)
+        details = sidebar_details_from_html(raw_html, sidebar_fields)
         if len(text_from_inline_html(definition)) >= min_definition_length or forwarding_target_from_definition(definition) or details:
             entries.append(
                 Entry(
@@ -556,7 +584,42 @@ def load_entries(db_path: Path, min_definition_length: int) -> list[Entry]:
                     details=details,
                 )
             )
+    entries = apply_title_munging(entries, strip_parenthetical_disambiguation=strip_parenthetical_disambiguation)
     return filter_low_quality_entries(resolve_forwarding_entries(entries))
+
+
+def apply_title_munging(entries: list[Entry], *, strip_parenthetical_disambiguation: bool) -> list[Entry]:
+    """Apply collision-safe display title cleanup to loaded entries."""
+
+    if not strip_parenthetical_disambiguation:
+        return entries
+    folded_titles = {entry.title.casefold() for entry in entries}
+    stripped_counts: dict[str, int] = {}
+    stripped_titles: dict[str, str] = {}
+    for entry in entries:
+        stripped = strip_parenthetical_suffix(entry.title)
+        if not stripped or stripped == entry.title:
+            continue
+        folded = stripped.casefold()
+        stripped_counts[folded] = stripped_counts.get(folded, 0) + 1
+        stripped_titles[entry.title] = stripped
+
+    munged: list[Entry] = []
+    for entry in entries:
+        stripped = stripped_titles.get(entry.title)
+        if stripped and stripped_counts[stripped.casefold()] == 1 and stripped.casefold() not in folded_titles:
+            munged.append(
+                Entry(
+                    title=stripped,
+                    url=entry.url,
+                    definition=entry.definition,
+                    spoiler_notice=entry.spoiler_notice,
+                    details=entry.details,
+                )
+            )
+        else:
+            munged.append(entry)
+    return munged
 
 
 def is_low_quality_definition(entry: Entry) -> bool:
@@ -649,20 +712,41 @@ TITLE_PREFIX_ALIASES = (
 )
 
 
-def title_alias_candidates(title: str) -> list[_AliasCandidate]:
+def strip_parenthetical_suffix(title: str) -> str | None:
+    """Return ``title`` without a trailing parenthetical disambiguator."""
+
+    stripped = re.sub(r"\s+\([^()]{1,120}\)\s*$", "", title).strip()
+    return stripped if stripped and stripped != title else None
+
+
+def title_alias_candidates(
+    title: str,
+    *,
+    suffixes: tuple[str, ...] = tuple(suffix for suffix, _source in TITLE_SUFFIX_ALIASES),
+    prefixes: tuple[str, ...] = tuple(prefix for prefix, _source in TITLE_PREFIX_ALIASES),
+    strip_parenthetical_disambiguation: bool = True,
+) -> list[_AliasCandidate]:
     """Return trusted title-shape aliases derived directly from the headword."""
 
     candidates: list[_AliasCandidate] = []
-    for suffix, source in TITLE_SUFFIX_ALIASES:
+    suffix_sources = {suffix: source for suffix, source in TITLE_SUFFIX_ALIASES}
+    prefix_sources = {prefix: source for prefix, source in TITLE_PREFIX_ALIASES}
+    for suffix in suffixes:
         if title.endswith(suffix):
             alias = title[: -len(suffix)].strip()
             if alias:
+                source = suffix_sources.get(suffix, "title-suffix-custom")
                 candidates.append(_AliasCandidate(title, alias, source))
-    for prefix, source in TITLE_PREFIX_ALIASES:
+    for prefix in prefixes:
         if title.startswith(prefix):
             alias = title[len(prefix) :].strip()
             if alias:
+                source = prefix_sources.get(prefix, "title-prefix-custom")
                 candidates.append(_AliasCandidate(title, alias, source))
+    if strip_parenthetical_disambiguation:
+        alias = strip_parenthetical_suffix(title)
+        if alias:
+            candidates.append(_AliasCandidate(title, alias, "title-parenthetical"))
     return candidates
 
 
@@ -766,12 +850,13 @@ def leading_article_title_candidates(entry: Entry, text: str, bold_phrases: list
     return [_AliasCandidate(entry.title, alias, "description-leading-article")]
 
 
-def sidebar_alias_candidates(entry: Entry) -> list[_AliasCandidate]:
+def sidebar_alias_candidates(entry: Entry, alias_labels: tuple[str, ...] = ("Aliases",)) -> list[_AliasCandidate]:
     """Return filtered alias candidates from one entry's sidebar details."""
 
+    alias_label_set = set(alias_labels)
     candidates: list[_AliasCandidate] = []
     for label, value in entry.details:
-        if label != "Aliases":
+        if label not in alias_label_set:
             continue
         for alias in split_sidebar_aliases(value):
             candidates.append(_AliasCandidate(entry.title, alias, "sidebar"))
@@ -849,6 +934,10 @@ def build_lookup_report(
     *,
     include_sidebar_aliases: bool = True,
     include_human_name_aliases: bool = True,
+    title_suffix_aliases: tuple[str, ...] = tuple(suffix for suffix, _source in TITLE_SUFFIX_ALIASES),
+    title_prefix_aliases: tuple[str, ...] = tuple(prefix for prefix, _source in TITLE_PREFIX_ALIASES),
+    strip_parenthetical_disambiguation: bool = True,
+    sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> LookupReport:
     """Build lookup forms from titles, aliases, and collision-safe groups."""
 
@@ -856,10 +945,17 @@ def build_lookup_report(
     raw_candidates: list[_AliasCandidate] = []
     omissions: list[AliasOmission] = []
     for entry in entries:
-        raw_candidates.extend(title_alias_candidates(entry.title))
+        raw_candidates.extend(
+            title_alias_candidates(
+                entry.title,
+                suffixes=title_suffix_aliases,
+                prefixes=title_prefix_aliases,
+                strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
+            )
+        )
         raw_candidates.extend(description_alias_candidates(entry))
         if include_sidebar_aliases:
-            raw_candidates.extend(sidebar_alias_candidates(entry))
+            raw_candidates.extend(sidebar_alias_candidates(entry, sidebar_alias_labels))
         if include_human_name_aliases:
             raw_candidates.extend(human_name_alias_candidates(entry))
 
@@ -952,6 +1048,10 @@ def build_alias_report(
     *,
     include_sidebar_aliases: bool = True,
     include_human_name_aliases: bool = True,
+    title_suffix_aliases: tuple[str, ...] = tuple(suffix for suffix, _source in TITLE_SUFFIX_ALIASES),
+    title_prefix_aliases: tuple[str, ...] = tuple(prefix for prefix, _source in TITLE_PREFIX_ALIASES),
+    strip_parenthetical_disambiguation: bool = True,
+    sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> AliasReport:
     """Build unique single-target aliases from titles, descriptions, sidebars, and names."""
 
@@ -959,6 +1059,10 @@ def build_alias_report(
         entries,
         include_sidebar_aliases=include_sidebar_aliases,
         include_human_name_aliases=include_human_name_aliases,
+        title_suffix_aliases=title_suffix_aliases,
+        title_prefix_aliases=title_prefix_aliases,
+        strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
+        sidebar_alias_labels=sidebar_alias_labels,
     )
     return AliasReport(aliases=report.aliases, omissions=report.omissions)
 
@@ -968,6 +1072,10 @@ def build_aliases(
     *,
     include_sidebar_aliases: bool = True,
     include_human_name_aliases: bool = True,
+    title_suffix_aliases: tuple[str, ...] = tuple(suffix for suffix, _source in TITLE_SUFFIX_ALIASES),
+    title_prefix_aliases: tuple[str, ...] = tuple(prefix for prefix, _source in TITLE_PREFIX_ALIASES),
+    strip_parenthetical_disambiguation: bool = True,
+    sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> dict[str, list[str]]:
     """Build unique lookup aliases for dictionary entries."""
 
@@ -975,4 +1083,8 @@ def build_aliases(
         entries,
         include_sidebar_aliases=include_sidebar_aliases,
         include_human_name_aliases=include_human_name_aliases,
+        title_suffix_aliases=title_suffix_aliases,
+        title_prefix_aliases=title_prefix_aliases,
+        strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
+        sidebar_alias_labels=sidebar_alias_labels,
     ).aliases

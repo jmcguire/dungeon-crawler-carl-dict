@@ -14,6 +14,7 @@ import trace
 from dataclasses import dataclass
 from pathlib import Path
 
+from dcdict.config import DEFAULT_CONFIG_PATH, load_project_config
 from dcdict.entries import load_entries
 
 
@@ -119,13 +120,13 @@ def parse_trace_summary(output: str, repo_root: Path) -> CoverageResult:
     covered_lines = 0
     executable_lines = 0
     dcdict_root = (repo_root / "dcdict").resolve()
-    pattern = re.compile(r"^\s*(\d+)\s+(\d+)%\s+\S+\s+\((.+)\)\s*$")
+    pattern = re.compile(r"^\s*(\d+)\s+(\d+(?:\.\d+)?)%\s+\S+\s+\((.+)\)\s*$")
     for line in output.splitlines():
         match = pattern.match(line)
         if not match:
             continue
         lines = int(match.group(1))
-        percent = int(match.group(2))
+        percent = float(match.group(2))
         path = Path(match.group(3)).resolve()
         try:
             path.relative_to(dcdict_root)
@@ -207,10 +208,19 @@ def _trace_ignore_dirs(repo_root: Path) -> str:
     return os.pathsep.join(str(path) for path in paths)
 
 
-def count_entries(db_path: Path) -> int:
+def count_entries(db_path: Path, config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     """Return the number of usable release entries in a crawler database."""
 
-    return len(load_entries(db_path, min_definition_length=8))
+    config = load_project_config(config_path)
+    return len(
+        load_entries(
+            db_path,
+            min_definition_length=8,
+            sidebar_fields=config.sidebar_fields,
+            strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
+            max_summary_length=config.max_summary_length,
+        )
+    )
 
 
 def build_badges(version: Version, coverage: CoverageResult, entry_count: int) -> dict[str, dict[str, object]]:
@@ -276,7 +286,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True, help="Dictionary release version, such as 1.0.0")
-    parser.add_argument("--input", type=Path, default=Path("data/characters.sqlite"))
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("--input", type=Path)
     parser.add_argument("--output-dir", type=Path, default=Path("badges"))
     return parser.parse_args(argv)
 
@@ -288,10 +299,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         version = parse_version(args.version)
         repo_root = Path.cwd()
-        input_db = args.input if args.input.is_absolute() else repo_root / args.input
+        config = load_project_config(args.config)
+        input_arg = args.input or config.database_path
+        input_db = input_arg if input_arg.is_absolute() else repo_root / input_arg
         output_dir = args.output_dir if args.output_dir.is_absolute() else repo_root / args.output_dir
         coverage = run_trace_coverage(repo_root)
-        entry_count = count_entries(input_db)
+        entry_count = count_entries(input_db, args.config)
         write_badge_files(output_dir, build_badges(version, coverage, entry_count))
         print(f"wrote {output_dir}")
         print(f"coverage: {coverage.percent}% lines")

@@ -121,10 +121,12 @@ Fetch raw character page data into SQLite:
 python3 -m dcdict.fetch_entries --ignore-robots
 ```
 
-But if you want more categories, use:
+The default config is `configs/dungeon-crawler-carl.json`. It sets the Fandom slug, normal categories, output database, dictionary title, sidebar fields, alias rules, and build directories for the DCC dictionary.
+
+To override categories for an experiment, use repeated `--category` flags:
 
 ```sh
-python3 -m dcdict.fetch_entries --category Characters --category Groups --category Spells --category Achievements --category Races --category Items --ignore-robots
+python3 -m dcdict.fetch_entries --category Characters --category Groups --category Spells --category Achievements --category Races --category Items --category Mob_Types --ignore-robots
 ```
 
 For this DCC Fandom wiki, `robots.txt` disallows `/api.php` for crawlers. The script respects that by default and will stop unless you pass `--ignore-robots`.
@@ -169,7 +171,7 @@ Build the StarDict dictionary used by KOReader:
 python3 -m dcdict.build_stardict_dictionary --link-entries
 ```
 
-StarDict is a small group of files rather than one native dictionary file. The builder writes the `.ifo`, `.idx`, `.dict`, `.syn`, and `.css` files together under `build/stardict/`. Its `.syn` file provides the same aliases as the Kindle edition. With `--link-entries`, recognized entry names use KOReader's supported `bword://` links.
+StarDict is a small group of files rather than one native dictionary file. The builder writes the `.ifo`, `.idx`, `.dict`, `.syn`, and `.css` files together under `build/dungeon-crawler-carl/stardict/`. Its `.syn` file provides the same aliases as the Kindle edition. With `--link-entries`, recognized entry names use KOReader's supported `bword://` links.
 
 Build the Kobo dictionary:
 
@@ -177,7 +179,7 @@ Build the Kobo dictionary:
 python3 -m dcdict.build_kobo_dictionary
 ```
 
-Kobo dictionaries are compiled with the external `dictgen` tool. The builder writes `build/kobo/dictionary.df` as an intermediate file and `build/kobo/dicthtml-dc.zip` as the Kobo dictionary file. The same shared aliases are emitted as Kobo variants.
+Kobo dictionaries are compiled with the external `dictgen` tool. The builder writes `build/dungeon-crawler-carl/kobo/dictionary.df` as an intermediate file and `build/dungeon-crawler-carl/kobo/dicthtml-dc.zip` as the Kobo dictionary file. The same shared aliases are emitted as Kobo variants.
 
 Try to compile with `kindlegen` if it is installed:
 
@@ -193,12 +195,12 @@ On macOS, the build script also checks for the `kindlegen` binary bundled inside
 
 Outputs:
 
-- `data/characters.sqlite`: raw crawl output
-- `build/dictionary.xhtml`: Kindle dictionary content source
-- `build/dictionary.opf`: Kindle package metadata
-- `build/dictionary.mobi`: compiled Kindle file, only when `kindlegen` is available
-- `build/stardict/`: StarDict files for KOReader
-- `build/kobo/dicthtml-dc.zip`: compiled Kobo dictionary file, only when `dictgen` is available
+- `data/dungeon-crawler-carl.sqlite`: raw crawl output
+- `build/dungeon-crawler-carl/kindle/dictionary.xhtml`: Kindle dictionary content source
+- `build/dungeon-crawler-carl/kindle/dictionary.opf`: Kindle package metadata
+- `build/dungeon-crawler-carl/kindle/dictionary.mobi`: compiled Kindle file, only when `kindlegen` is available
+- `build/dungeon-crawler-carl/stardict/`: StarDict files for KOReader
+- `build/dungeon-crawler-carl/kobo/dicthtml-dc.zip`: compiled Kobo dictionary file, only when `dictgen` is available
 
 ## Tests
 
@@ -213,7 +215,7 @@ The tests cover extraction, SQLite loading, Kindle XHTML/OPF generation, StarDic
 Update the tracked README badge metadata before a release-prep commit:
 
 ```sh
-python3 -m dcdict.badges --version 0.5.0 --input data/characters.sqlite
+python3 -m dcdict.badges --version 0.5.0
 ```
 
 The badge command runs the test suite with Python's standard-library `trace` tool, computes line coverage for `dcdict/`, counts usable dictionary entries, and writes Shields endpoint JSON files under `badges/`. Badge updates are committed with normal project changes; there is no badge-only GitHub Actions commit.
@@ -228,7 +230,7 @@ python3 -m dcdict.release --version 0.5.0 --link-entries
 
 By default the command builds Kindle, StarDict, and Kobo editions.
 
-It requires a clean Git worktree and `data/characters.sqlite`; Kindle builds additionally require the `kindlegen` binary included with Kindle Previewer, and Kobo builds require Patrick Gaskin's `dictgen` tool from [dictutil](https://github.com/pgaskin/dictutil) on your `PATH`. It makes a SQLite snapshot, re-extracts descriptions from stored HTML without crawling, runs the complete test suite and entry audit, and performs binary smoke tests on all finished dictionaries.
+It requires a clean Git worktree and `data/dungeon-crawler-carl.sqlite`; Kindle builds additionally require the `kindlegen` binary included with Kindle Previewer, and Kobo builds require Patrick Gaskin's `dictgen` tool from [dictutil](https://github.com/pgaskin/dictutil) on your `PATH`. It makes a SQLite snapshot, re-extracts descriptions from stored HTML without crawling, runs the complete test suite and entry audit, and performs binary smoke tests on all finished dictionaries.
 
 For a faster local format-specific build, use `--format kindle`, `--format stardict`, or `--format kobo`. StarDict-only builds do not require Kindle Previewer or `dictgen`; Kobo-only builds do not require Kindle Previewer. Published releases must use the default `--format all` so every tagged release remains complete.
 
@@ -268,7 +270,7 @@ These permanent URLs always point to the assets from the newest GitHub Release:
 
 ## Sideload To Kindle
 
-After building `build/dictionary.mobi`, connect the Kindle to the Mac with USB.
+After building `build/dungeon-crawler-carl/kindle/dictionary.mobi`, connect the Kindle to the Mac with USB.
 
 It should mount under `/Volumes`, usually as:
 
@@ -279,13 +281,13 @@ It should mount under `/Volumes`, usually as:
 Copy the dictionary into the Kindle dictionaries folder:
 
 ```sh
-cp build/dictionary.mobi "/Volumes/Kindle/documents/dictionaries/Dungeon_Crawler_Carl_Dictionary.mobi"
+cp build/dungeon-crawler-carl/kindle/dictionary.mobi "/Volumes/Kindle/documents/dictionaries/Dungeon_Crawler_Carl_Dictionary.mobi"
 ```
 
 Verify the copy:
 
 ```sh
-cmp -s build/dictionary.mobi "/Volumes/Kindle/documents/dictionaries/Dungeon_Crawler_Carl_Dictionary.mobi"
+cmp -s build/dungeon-crawler-carl/kindle/dictionary.mobi "/Volumes/Kindle/documents/dictionaries/Dungeon_Crawler_Carl_Dictionary.mobi"
 ```
 
 Safely eject the Kindle:
@@ -364,34 +366,33 @@ The crawler:
 Re-run paragraph extraction from already stored raw HTML, without touching the network:
 
 ```sh
-python3 -m dcdict.fetch_entries --output data/characters.sqlite --reextract-only
+python3 -m dcdict.fetch_entries --reextract-only
 ```
 
-This tool was built for Dungeon Crawler Carl, but it's generic enough to work (mostly) with other fandoms. For example, it works pretty well with the Ice and Fire fandom:
+## Using Another Fandom
+
+This tool was built for Dungeon Crawler Carl, but it can now run against another Fandom wiki with a JSON config. Start by copying `examples/iceandfire.json` and changing the Fandom slug, title, categories, sidebar fields, alias rules, smoke headwords, and output paths.
+
+The Fandom `Special:Categories` page is usually the best place to find starting categories. Pick broad page categories first, such as `Characters`, `Items`, `Locations`, or wiki-specific equivalents. Categories do not recursively descend into subcategories by default; this crawler intentionally fetches the category pages you name. Many Fandom wikis already put one page in several direct categories, so a character may appear in `Characters`, `Kings`, and `Deceased` without needing recursive traversal.
+
+For example, the Ice and Fire example config can be used like this:
 
 ```sh
 python3 -m dcdict.fetch_entries \
-  -fandom iceandfire \
-  --category Characters \
-  --category Battles \
-  --category Noble_houses \
-  --category Nations \
-  --category Locations \
-  --category Geography \
-  --category Historical \
-  --category Cities \
-  --output data/iceandfire.sqlite \
+  --config examples/iceandfire.json \
   --ignore-robots
 
 python3 -m dcdict.build_kindle_dictionary \
-  --input data/iceandfire.sqlite \
-  --output-dir build/iceandfire \
-  --title "Ice and Fire Dictionary" \
-  --author "You" \
-  --no-sidebar-aliases
+  --config examples/iceandfire.json
+
+python3 -m dcdict.build_stardict_dictionary \
+  --config examples/iceandfire.json
+
+python3 -m dcdict.build_kobo_dictionary \
+  --config examples/iceandfire.json
 ```
 
-You'll notice it still has some hardcoded values for Dungeon Crawler Carl. It's not perfect. Fixing these is on the TODO list.
+The config controls source attribution labels, sidebar fields, title alias rules such as `House ...`, and overlong-summary trimming. Fandom-specific executable plugins are not supported yet; keep custom behavior in data config until there is a real second use case that needs code hooks.
 
 ## Kindle Notes
 
@@ -405,8 +406,8 @@ kindlegen dictionary.opf -c2 -verbose -dont_append_source
 
 For this project, the bundled Kindle Previewer compiler successfully produces a classic MOBI v7 dictionary when run without `-c2`. The Python build script handles that detail for you.
 
-Kindle tooling has changed over the years, so the source files are the stable artifact this project controls, and `build/dictionary.mobi` is the sideloadable artifact to try on the device.
+Kindle tooling has changed over the years, so the source files are the stable artifact this project controls, and `build/dungeon-crawler-carl/kindle/dictionary.mobi` is the sideloadable artifact to try on the device.
 
 ## Attribution
 
-The generated entries include source links back to the Dungeon Crawler Carl Wiki pages. Fandom community content is generally licensed under CC BY-SA unless otherwise noted on the source wiki.
+The generated entries include source links back to the configured Fandom wiki pages. Fandom community content is generally licensed under CC BY-SA unless otherwise noted on the source wiki.

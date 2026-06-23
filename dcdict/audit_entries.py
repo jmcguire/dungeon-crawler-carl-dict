@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from dcdict.config import DEFAULT_CONFIG_PATH, load_project_config
 from dcdict.entries import (
     Entry,
     forwarding_target_from_definition,
@@ -59,7 +60,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments for the audit command."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=Path("data/characters.sqlite"))
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("--input", type=Path)
     parser.add_argument("--min-definition-length", type=int, default=8)
     return parser.parse_args(argv)
 
@@ -68,7 +70,15 @@ def main(argv: list[str] | None = None) -> int:
     """Run the offline dictionary entry audit."""
 
     args = parse_args(argv)
-    entries = load_entries(args.input, args.min_definition_length)
+    config = load_project_config(args.config)
+    input_path = args.input or config.database_path
+    entries = load_entries(
+        input_path,
+        args.min_definition_length,
+        sidebar_fields=config.sidebar_fields,
+        strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
+        max_summary_length=config.max_summary_length,
+    )
     findings = audit_entries(entries)
     for finding in findings:
         print(finding.format())

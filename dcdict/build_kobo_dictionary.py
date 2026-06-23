@@ -8,6 +8,7 @@ import logging
 import sys
 from pathlib import Path
 
+from dcdict.config import DEFAULT_CONFIG_PATH, load_project_config
 from dcdict.entries import load_entries
 from dcdict.kobo import DICTGEN_OUTPUT_NAME, KoboValidationError, build_kobo, inspect_kobo
 
@@ -16,9 +17,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments for the Kobo builder."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=Path("data/characters.sqlite"))
-    parser.add_argument("--output-dir", type=Path, default=Path("build/kobo"))
-    parser.add_argument("--output-name", default=DICTGEN_OUTPUT_NAME)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("--input", type=Path)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--output-name")
+    parser.add_argument("--source-name")
     parser.add_argument("--min-definition-length", type=int, default=8)
     parser.add_argument(
         "--no-sidebar-aliases",
@@ -33,19 +36,35 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    entries = load_entries(args.input, args.min_definition_length)
+    config = load_project_config(args.config)
+    input_path = args.input or config.database_path
+    output_dir = args.output_dir or config.kobo_dir
+    output_name = args.output_name or config.kobo_output_name
+    source_name = args.source_name or config.source_name
+    entries = load_entries(
+        input_path,
+        args.min_definition_length,
+        sidebar_fields=config.sidebar_fields,
+        strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
+        max_summary_length=config.max_summary_length,
+    )
     if not entries:
-        raise SystemExit(f"no usable entries found in {args.input}")
+        raise SystemExit(f"no usable entries found in {input_path}")
     try:
         result = build_kobo(
             entries,
-            args.output_dir,
-            output_name=args.output_name,
+            output_dir,
+            output_name=output_name,
             include_sidebar_aliases=not args.no_sidebar_aliases,
+            source_name=source_name,
+            title_suffix_aliases=config.title_aliases.suffixes,
+            title_prefix_aliases=config.title_aliases.prefixes,
+            strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
+            sidebar_alias_labels=config.sidebar_alias_labels,
         )
         inspection = inspect_kobo(
             result.dictzip_path,
-            required_headwords=("Carl", "Donut", "Mordecai", "1914", "Fire Fingers"),
+            required_headwords=config.smoke_headwords,
         )
     except KoboValidationError as exc:
         print(f"Kobo build failed: {exc}", file=sys.stderr)

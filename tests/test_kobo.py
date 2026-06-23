@@ -253,8 +253,8 @@ class KoboTests(unittest.TestCase):
 
     def test_cli_defaults(self) -> None:
         args = parse_args([])
-        self.assertEqual(args.output_dir, Path("build/kobo"))
-        self.assertEqual(args.output_name, DICTGEN_OUTPUT_NAME)
+        self.assertIsNone(args.output_dir)
+        self.assertIsNone(args.output_name)
 
     def test_cli_reports_missing_dictgen_cleanly(self) -> None:
         with mock.patch("dcdict.build_kobo_dictionary.load_entries", return_value=self.sample_entries()), mock.patch(

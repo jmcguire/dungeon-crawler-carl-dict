@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from dcdict.config import DEFAULT_CONFIG_PATH, load_default_project_config, load_project_config
 from dcdict.extraction import (
     SHORT_DESCRIPTION_THRESHOLD,
     FirstParagraphParser,
@@ -51,16 +52,10 @@ from dcdict.mediawiki import (
 )
 
 
-DEFAULT_FANDOM = "dungeon-crawler-carl"
-DEFAULT_CATEGORIES = (
-    "Characters",
-    "Groups",
-    "Spells",
-    "Achievements",
-    "Races",
-    "Items",
-    "Mob_Types",
-)
+DEFAULT_PROJECT = load_default_project_config()
+DEFAULT_FANDOM = DEFAULT_PROJECT.fandom
+DEFAULT_CATEGORIES = DEFAULT_PROJECT.categories
+DEFAULT_DATABASE_PATH = DEFAULT_PROJECT.database_path
 DEFAULT_USER_AGENT = "KindleDictionaryCreationCrawler/0.1"
 LOGGER = logging.getLogger(__name__)
 
@@ -74,6 +69,7 @@ class CrawlConfig:
     max_pages: int
     category_batch_size: int
     refresh: bool
+    max_summary_length: int | None = None
 
 
 @dataclass(frozen=True)
@@ -194,14 +190,14 @@ def upsert_page(
     conn.commit()
 
 
-def reextract_first_paragraphs(conn: sqlite3.Connection) -> int:
+def reextract_first_paragraphs(conn: sqlite3.Connection, max_summary_length: int | None = None) -> int:
     """Refresh derived summaries from stored raw HTML without network access."""
 
     rows = conn.execute(
         "SELECT pageid, title, raw_html FROM pages WHERE status != 'error' AND COALESCE(raw_html, '') != ''"
     ).fetchall()
     for pageid, title, raw_html in rows:
-        status, first_paragraph = extract_summary_status(title, raw_html)
+        status, first_paragraph = extract_summary_status(title, raw_html, max_summary_length)
         if status == "empty":
             LOGGER.info("empty entry %s", title)
         conn.execute(
@@ -278,11 +274,12 @@ def crawl_config_from_args(args: argparse.Namespace) -> CrawlConfig:
     """Translate CLI arguments into crawl configuration."""
 
     return CrawlConfig(
-        categories=tuple(args.categories or [DEFAULT_CATEGORY]),
+        categories=tuple(args.categories or DEFAULT_CATEGORIES),
         delay=args.delay,
         max_pages=args.max_pages,
         category_batch_size=args.category_batch_size,
         refresh=args.refresh,
+        max_summary_length=args.max_summary_length,
     )
 
 
@@ -300,11 +297,16 @@ def crawl_pages(
             continue
 
         LOGGER.info("[%s/%s] fetch %s", index, len(pages), page.title)
-        fetch_and_store_page(conn, client, page)
+        fetch_and_store_page(conn, client, page, config)
         time.sleep(jitter(config.delay))
 
 
-def fetch_and_store_page(conn: sqlite3.Connection, client: MediaWikiClient, page: CrawlTarget) -> None:
+def fetch_and_store_page(
+    conn: sqlite3.Connection,
+    client: MediaWikiClient,
+    page: CrawlTarget,
+    config: CrawlConfig | None = None,
+) -> None:
     """Fetch one page and record either the successful content or the error."""
 
     url = client.page_url(page.title)
@@ -313,7 +315,11 @@ def fetch_and_store_page(conn: sqlite3.Connection, client: MediaWikiClient, page
         data = fetch_page(client, page)
         parsed = data.get("parse", {})
         html = parsed.get("text", {}).get("*", "")
-        status, first_paragraph = extract_summary_status(page.title, html)
+        status, first_paragraph = extract_summary_status(
+            page.title,
+            html,
+            config.max_summary_length if config else None,
+        )
         upsert_page(conn, page, url, source_category, status, data, html, first_paragraph or None)
         if status == "empty":
             LOGGER.info("empty entry %s", page.title)
@@ -345,7 +351,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments for the crawler."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fandom", default=DEFAULT_FANDOM, help="Fandom wiki slug, like dungeon-crawler-carl.")
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("--fandom", help="Fandom wiki slug, like dungeon-crawler-carl.")
     parser.add_argument(
         "--category",
         dest="categories",
@@ -353,7 +360,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Category name without the Category: prefix. May be repeated. Defaults to the normal DCC build categories.",
     )
-    parser.add_argument("--output", type=Path, default=Path("data/characters.sqlite"))
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--user-agent", default=DEFAULT_USER_AGENT)
     parser.add_argument("--delay", type=float, default=1.5, help="Base delay between page requests.")
     parser.add_argument("--timeout", type=float, default=30.0)
@@ -377,35 +384,43 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    project_config = load_project_config(args.config)
+    args.fandom = args.fandom or project_config.fandom
+    args.categories = args.categories or list(project_config.categories)
+    args.output = args.output or project_config.database_path
+    args.max_summary_length = project_config.max_summary_length
+
     conn = init_db(args.output)
-    if args.reextract_only:
-        count = reextract_first_paragraphs(conn)
-        LOGGER.info("re-extracted first paragraphs for %s stored pages in %s", count, args.output)
-        return 0
+    try:
+        if args.reextract_only:
+            count = reextract_first_paragraphs(conn, project_config.max_summary_length)
+            LOGGER.info("re-extracted first paragraphs for %s stored pages in %s", count, args.output)
+            return 0
 
-    if not args.ignore_robots:
-        assert_robots_allowed(fandom_api_url(args.fandom), args.user_agent)
+        if not args.ignore_robots:
+            assert_robots_allowed(fandom_api_url(args.fandom), args.user_agent)
 
-    args.categories = args.categories or list(DEFAULT_CATEGORIES)
-    api_url = fandom_api_url(args.fandom)
+        api_url = fandom_api_url(args.fandom)
 
-    save_meta(
-        conn,
-        {
-            "api_url": api_url,
-            "fandom": args.fandom,
-            "categories": ",".join(args.categories),
-            "user_agent": args.user_agent,
-            "fetched_by": "fetch_entries.py",
-        },
-    )
+        save_meta(
+            conn,
+            {
+                "api_url": api_url,
+                "fandom": args.fandom,
+                "categories": ",".join(args.categories),
+                "user_agent": args.user_agent,
+                "fetched_by": "fetch_entries.py",
+            },
+        )
 
-    client = MediaWikiClient(args.fandom, request_config_from_args(args))
-    crawl_config = crawl_config_from_args(args)
-    pages = load_category_members(client, crawl_config)
-    LOGGER.info("found %s pages across %s", len(pages), ", ".join(args.categories))
-    crawl_pages(conn, client, pages, crawl_config)
-    print_crawl_summary(conn, args.output)
+        client = MediaWikiClient(args.fandom, request_config_from_args(args))
+        crawl_config = crawl_config_from_args(args)
+        pages = load_category_members(client, crawl_config)
+        LOGGER.info("found %s pages across %s", len(pages), ", ".join(args.categories))
+        crawl_pages(conn, client, pages, crawl_config)
+        print_crawl_summary(conn, args.output)
+    finally:
+        conn.close()
     return 0
 
 

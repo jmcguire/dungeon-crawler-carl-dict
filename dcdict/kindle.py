@@ -86,6 +86,7 @@ def entry_to_xhtml(
     lookup_aliases: list[str] | None = None,
     title_to_id: dict[str, int] | None = None,
     lookup_value: str | None = None,
+    source_name: str = "Dungeon Crawler Carl Wiki",
 ) -> str:
     """Render one Kindle dictionary entry with optional hidden lookup forms."""
 
@@ -124,7 +125,7 @@ def entry_to_xhtml(
           <li>{definition}</li>
 {details_block}
         </ul>
-        <p class="source">Source: <a href="{url}">{title} on Dungeon Crawler Carl Wiki</a></p>
+        <p class="source">Source: <a href="{url}">{title} on {html.escape(source_name, quote=False)}</a></p>
         </idx:short>
       </idx:entry>"""
 
@@ -153,6 +154,7 @@ def entries_to_xhtml(
     entries: list[Entry],
     lookup_report: LookupReport,
     title_to_id: dict[str, int] | None = None,
+    source_name: str = "Dungeon Crawler Carl Wiki",
 ) -> str:
     """Render canonical Kindle entries with alphabet page breaks and separators."""
 
@@ -172,7 +174,7 @@ def entries_to_xhtml(
         if label != current_label:
             current_label = label
             section_heading = alphabet_section_to_xhtml(label)
-        rendered = entry_to_xhtml(entry, str(index), aliases.get(entry.title, []), title_to_id)
+        rendered = entry_to_xhtml(entry, str(index), aliases.get(entry.title, []), title_to_id, source_name=source_name)
         if section_heading:
             rendered = f"{section_heading}\n\n{rendered}"
         rendered_entries.append(rendered)
@@ -191,6 +193,7 @@ def entries_to_xhtml(
                         [],
                         title_to_id,
                         lookup.word,
+                        source_name,
                     )
                 )
     return "\n\n      <hr />\n\n".join(rendered_entries)
@@ -208,15 +211,26 @@ def write_xhtml_with_options(
     title: str,
     link_entries: bool,
     include_sidebar_aliases: bool = True,
+    source_name: str = "Dungeon Crawler Carl Wiki",
+    title_suffix_aliases: tuple[str, ...] | None = None,
+    title_prefix_aliases: tuple[str, ...] | None = None,
+    strip_parenthetical_disambiguation: bool = True,
+    sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> LookupReport:
     """Write the Kindle dictionary XHTML source file with build options."""
 
-    lookup_report = build_lookup_report(
-        entries,
-        include_sidebar_aliases=include_sidebar_aliases,
-    )
+    lookup_options = {
+        "include_sidebar_aliases": include_sidebar_aliases,
+        "strip_parenthetical_disambiguation": strip_parenthetical_disambiguation,
+        "sidebar_alias_labels": sidebar_alias_labels,
+    }
+    if title_suffix_aliases is not None:
+        lookup_options["title_suffix_aliases"] = title_suffix_aliases
+    if title_prefix_aliases is not None:
+        lookup_options["title_prefix_aliases"] = title_prefix_aliases
+    lookup_report = build_lookup_report(entries, **lookup_options)
     title_to_id = {entry.title: index for index, entry in enumerate(entries, 1)} if link_entries else None
-    body = entries_to_xhtml(entries, lookup_report, title_to_id)
+    body = entries_to_xhtml(entries, lookup_report, title_to_id, source_name)
     output.write_text(
         f"""<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
@@ -318,6 +332,11 @@ def build_dictionary_sources(
     link_entries: bool = False,
     include_sidebar_aliases: bool = True,
     release_version: str = DEFAULT_RELEASE_VERSION,
+    source_name: str = "Dungeon Crawler Carl Wiki",
+    title_suffix_aliases: tuple[str, ...] | None = None,
+    title_prefix_aliases: tuple[str, ...] | None = None,
+    strip_parenthetical_disambiguation: bool = True,
+    sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> BuildResult:
     """Generate and validate Kindle dictionary source files."""
 
@@ -332,6 +351,11 @@ def build_dictionary_sources(
         title,
         link_entries,
         include_sidebar_aliases=include_sidebar_aliases,
+        source_name=source_name,
+        title_suffix_aliases=title_suffix_aliases,
+        title_prefix_aliases=title_prefix_aliases,
+        strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
+        sidebar_alias_labels=sidebar_alias_labels,
     )
     write_opf(opf_path, title, author, xhtml_path.name, identifier)
     validate_xml(xhtml_path)

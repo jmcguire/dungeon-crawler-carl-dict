@@ -188,7 +188,7 @@ class StarDictTests(unittest.TestCase):
 
     def test_cli_defaults_and_link_flag(self) -> None:
         args = parse_args(["--link-entries"])
-        self.assertEqual(args.output_dir, Path("build/stardict"))
+        self.assertIsNone(args.output_dir)
         self.assertTrue(args.link_entries)
         self.assertEqual(BASE_NAME, "Dungeon-Crawler-Carl-Dictionary")
 

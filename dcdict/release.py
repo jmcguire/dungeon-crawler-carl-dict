@@ -21,6 +21,7 @@ from typing import Callable, Sequence
 
 from dcdict.audit_entries import AuditFinding, audit_entries
 from dcdict.badges import validate_badges
+from dcdict.config import load_default_project_config
 from dcdict.entries import load_entries
 from dcdict.fetch_entries import reextract_first_paragraphs
 from dcdict.kindle import (
@@ -50,6 +51,7 @@ from dcdict.stardict import (
 
 
 LOGGER = logging.getLogger(__name__)
+DEFAULT_PROJECT = load_default_project_config()
 MOBI_NAME = "Dungeon-Crawler-Carl-Dictionary.mobi"
 ZIP_NAME = "Dungeon-Crawler-Carl-Dictionary.zip"
 STARDICT_ZIP_NAME = "Dungeon-Crawler-Carl-Dictionary-StarDict.zip"
@@ -432,13 +434,19 @@ def package_release(
         snapshot_database(input_db, snapshot_path)
         conn = sqlite3.connect(snapshot_path)
         try:
-            reextract_count = reextract_first_paragraphs(conn)
+            reextract_count = reextract_first_paragraphs(conn, DEFAULT_PROJECT.max_summary_length)
         finally:
             conn.close()
         LOGGER.info("re-extracted %s stored pages from the database snapshot", reextract_count)
 
         run_unit_tests(repo_root, runner)
-        entries = load_entries(snapshot_path, min_definition_length=8)
+        entries = load_entries(
+            snapshot_path,
+            min_definition_length=8,
+            sidebar_fields=DEFAULT_PROJECT.sidebar_fields,
+            strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
+            max_summary_length=DEFAULT_PROJECT.max_summary_length,
+        )
         try:
             validate_badges(repo_root / BADGE_DIR_NAME, version, len(entries))
         except ValueError as exc:
@@ -463,11 +471,16 @@ def package_release(
             kindle_build = build_dictionary_sources(
                 entries,
                 kindle_dir,
-                DEFAULT_TITLE,
-                DEFAULT_AUTHOR,
+                DEFAULT_PROJECT.title,
+                DEFAULT_PROJECT.author,
                 link_entries=link_entries,
                 include_sidebar_aliases=include_sidebar_aliases,
                 release_version=version.tag,
+                source_name=DEFAULT_PROJECT.source_name,
+                title_suffix_aliases=DEFAULT_PROJECT.title_aliases.suffixes,
+                title_prefix_aliases=DEFAULT_PROJECT.title_aliases.prefixes,
+                strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
+                sidebar_alias_labels=DEFAULT_PROJECT.sidebar_alias_labels,
             )
             LOGGER.info(
                 "Kindle aliases: %s accepted, %s multi-target, %s omitted",
@@ -483,7 +496,13 @@ def package_release(
 
             mobi_path = asset_dir / MOBI_NAME
             shutil.copy2(compilation.output_path, mobi_path)
-            mobi_inspection = inspect_mobi(mobi_path, expected_title=DEFAULT_TITLE)
+            canonical_titles = {entry.title for entry in entries}
+            mobi_headwords = tuple(word for word in DEFAULT_PROJECT.smoke_headwords if word in canonical_titles)
+            mobi_inspection = inspect_mobi(
+                mobi_path,
+                expected_title=DEFAULT_PROJECT.title,
+                representative_headwords=mobi_headwords,
+            )
             LOGGER.info("MOBI smoke tests passed (%s checks)", len(mobi_inspection.checks))
             kindle_zip_path = asset_dir / ZIP_NAME
             write_release_zip(kindle_zip_path, mobi_path, repo_root)
@@ -506,10 +525,16 @@ def package_release(
             stardict_build = build_stardict(
                 entries,
                 work_dir / "stardict",
-                DEFAULT_TITLE,
-                DEFAULT_AUTHOR,
+                DEFAULT_PROJECT.title,
+                DEFAULT_PROJECT.author,
                 link_entries=link_entries,
                 include_sidebar_aliases=include_sidebar_aliases,
+                base_name=DEFAULT_PROJECT.file_base_name,
+                source_name=DEFAULT_PROJECT.source_name,
+                title_suffix_aliases=DEFAULT_PROJECT.title_aliases.suffixes,
+                title_prefix_aliases=DEFAULT_PROJECT.title_aliases.prefixes,
+                strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
+                sidebar_alias_labels=DEFAULT_PROJECT.sidebar_alias_labels,
             )
             LOGGER.info(
                 "StarDict aliases: %s accepted, %s multi-target, %s omitted",
@@ -519,8 +544,8 @@ def package_release(
             )
             stardict_inspection = inspect_stardict(
                 stardict_build.ifo_path,
-                expected_title=DEFAULT_TITLE,
-                required_headwords=("Carl", "Donut", "Mordecai", "1914", "Fire Fingers"),
+                expected_title=DEFAULT_PROJECT.title,
+                required_headwords=DEFAULT_PROJECT.smoke_headwords,
                 require_links=link_entries,
             )
             LOGGER.info("StarDict smoke tests passed (%s checks)", len(stardict_inspection.checks))
@@ -540,7 +565,13 @@ def package_release(
             kobo_build = build_kobo(
                 entries,
                 work_dir / "kobo",
+                output_name=DEFAULT_PROJECT.kobo_output_name,
                 include_sidebar_aliases=include_sidebar_aliases,
+                source_name=DEFAULT_PROJECT.source_name,
+                title_suffix_aliases=DEFAULT_PROJECT.title_aliases.suffixes,
+                title_prefix_aliases=DEFAULT_PROJECT.title_aliases.prefixes,
+                strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
+                sidebar_alias_labels=DEFAULT_PROJECT.sidebar_alias_labels,
             )
             LOGGER.info(
                 "Kobo aliases: %s accepted, %s multi-target, %s omitted",
@@ -550,7 +581,7 @@ def package_release(
             )
             kobo_inspection = inspect_kobo(
                 kobo_build.dictzip_path,
-                required_headwords=("Carl", "Donut", "Mordecai", "1914", "Fire Fingers"),
+                required_headwords=DEFAULT_PROJECT.smoke_headwords,
             )
             LOGGER.info("Kobo smoke tests passed (%s checks)", len(kobo_inspection.checks))
             kobo_dictzip_path = asset_dir / DICTGEN_OUTPUT_NAME
@@ -699,7 +730,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True, help="Semantic version, such as 1.0.0")
-    parser.add_argument("--input", type=Path, default=Path("data/characters.sqlite"))
+    parser.add_argument("--input", type=Path, default=DEFAULT_PROJECT.database_path)
     parser.add_argument("--dist-dir", type=Path, default=Path("dist"))
     parser.add_argument(
         "--no-sidebar-aliases",

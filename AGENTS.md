@@ -67,7 +67,7 @@ python3 -m unittest discover -s tests
 - When changing tests, release packaging, dictionary output, supported formats, licenses, output counts, or release version examples, run:
 
 ```sh
-python3 -m dcdict.badges --version <version> --input data/characters.sqlite
+python3 -m dcdict.badges --version <version> --input data/dungeon-crawler-carl.sqlite
 ```
 
 - Include any changed badge JSON files in the same commit as the related work.

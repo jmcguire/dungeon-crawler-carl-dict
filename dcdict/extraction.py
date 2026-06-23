@@ -271,6 +271,74 @@ def text_from_inline_html(fragment: str) -> str:
     return normalize_text("".join(parser.chunks))
 
 
+class InlineHtmlPrefixParser(HTMLParser):
+    """Keep a plain-text prefix of safe inline HTML and close open tags."""
+
+    ALLOWED_INLINE_TAGS = {"b", "i"}
+
+    def __init__(self, max_chars: int) -> None:
+        super().__init__(convert_charrefs=True)
+        self.max_chars = max_chars
+        self.count = 0
+        self.chunks: list[str] = []
+        self.stack: list[str] = []
+        self.stopped = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if not self.stopped and tag in self.ALLOWED_INLINE_TAGS:
+            self.chunks.append(f"<{tag}>")
+            self.stack.append(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self.stopped or tag not in self.ALLOWED_INLINE_TAGS or tag not in self.stack:
+            return
+        while self.stack:
+            open_tag = self.stack.pop()
+            self.chunks.append(f"</{open_tag}>")
+            if open_tag == tag:
+                return
+
+    def handle_data(self, data: str) -> None:
+        if self.stopped:
+            return
+        remaining = self.max_chars - self.count
+        if remaining <= 0:
+            self.stopped = True
+            return
+        kept = data[:remaining]
+        self.chunks.append(html_lib.escape(kept, quote=False))
+        self.count += len(kept)
+        if len(kept) < len(data):
+            self.stopped = True
+
+    def close(self) -> None:
+        while self.stack:
+            self.chunks.append(f"</{self.stack.pop()}>")
+        super().close()
+
+
+def trim_inline_html_to_plain_length(fragment: str, max_length: int | None) -> str:
+    """Trim safe inline HTML at a sentence boundary when it is too long."""
+
+    if not max_length:
+        return fragment
+    plain_text = text_from_inline_html(fragment)
+    if len(plain_text) <= max_length:
+        return fragment
+    boundary = 0
+    for match in re.finditer(r"(?<=[.!?])\s+", plain_text):
+        if match.start() + 1 <= max_length:
+            boundary = match.start() + 1
+        else:
+            break
+    if boundary < min(80, max_length // 3):
+        boundary = max_length
+    parser = InlineHtmlPrefixParser(boundary)
+    parser.feed(fragment)
+    parser.close()
+    return re.sub(r"\s+(</[bi]>)", r"\1", normalize_inline_html("".join(parser.chunks)))
+
+
 def is_stub_like_description(title: str, description: str) -> bool:
     """Return true for broken one-line intros like ``Dwight is``."""
 
@@ -410,7 +478,7 @@ def summary_from_infobox(title: str, html: str) -> str:
     return f"{html_lib.escape(title, quote=False)}: {'; '.join(parts)}."
 
 
-def summary_from_html(title: str, html: str) -> str:
+def summary_from_html(title: str, html: str, max_summary_length: int | None = None) -> str:
     """Extract a page summary, falling back to infobox fields when needed."""
 
     blocks = summary_blocks_from_html(html)
@@ -426,13 +494,13 @@ def summary_from_html(title: str, html: str) -> str:
         summary = ai_summary or expand_small_description(summary, blocks)
     if not summary:
         summary = summary_from_infobox(title, html)
-    return clean_wiki_text_artifacts(summary)
+    return clean_wiki_text_artifacts(trim_inline_html_to_plain_length(summary, max_summary_length))
 
 
-def extract_summary_status(title: str, html: str) -> tuple[str, str]:
+def extract_summary_status(title: str, html: str, max_summary_length: int | None = None) -> tuple[str, str]:
     """Classify a page as usable or empty based on extracted summary content."""
 
-    summary = summary_from_html(title, html)
+    summary = summary_from_html(title, html, max_summary_length)
     if summary:
         return "ok", summary
     return "empty", ""
