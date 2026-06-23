@@ -179,9 +179,9 @@ With `--link-entries`, known entry names inside definitions become internal link
 Default DCC outputs:
 
 - `data/dungeon-crawler-carl.sqlite`
-- `build/dungeon-crawler-carl/kindle/dictionary.xhtml`
-- `build/dungeon-crawler-carl/kindle/dictionary.opf`
-- `build/dungeon-crawler-carl/kindle/dictionary.mobi`
+- `build/dungeon-crawler-carl/kindle/Dungeon-Crawler-Carl-Dictionary.xhtml`
+- `build/dungeon-crawler-carl/kindle/Dungeon-Crawler-Carl-Dictionary.opf`
+- `build/dungeon-crawler-carl/kindle/Dungeon-Crawler-Carl-Dictionary.mobi`
 - `build/dungeon-crawler-carl/stardict/`
 - `build/dungeon-crawler-carl/kobo/dicthtml-dc.zip`
 
@@ -227,4 +227,3 @@ This repository uses a split-license model:
 - Generated dictionary content that incorporates Fandom wiki text is licensed under CC BY-SA 3.0. See `ATTRIBUTION.md`.
 
 Generated entries include source links back to the configured Fandom wiki pages where practical.
-

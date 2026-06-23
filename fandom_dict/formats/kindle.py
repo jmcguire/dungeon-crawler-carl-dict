@@ -49,6 +49,7 @@ from fandom_dict.entries import (
     suffix_stripped_alias,
     text_from_inline_html,
 )
+from fandom_dict.config import slugify_title
 
 
 DEFAULT_TITLE = "Dungeon Crawler Carl Dictionary"
@@ -341,8 +342,9 @@ def build_dictionary_sources(
     """Generate and validate Kindle dictionary source files."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    xhtml_path = output_dir / "dictionary.xhtml"
-    opf_path = output_dir / "dictionary.opf"
+    base_name = slugify_title(title)
+    xhtml_path = output_dir / f"{base_name}.xhtml"
+    opf_path = output_dir / f"{base_name}.opf"
     identifier = kindle_identifier(title, release_version)
 
     lookup_report = write_xhtml_with_options(

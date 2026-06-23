@@ -1322,7 +1322,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                 )
 
             self.assertEqual(code, 0)
-            text = (root / "build" / "dictionary.opf").read_text(encoding="utf-8")
+            text = (root / "build" / "Test-Dictionary.opf").read_text(encoding="utf-8")
             self.assertIn(
                 "<dc:Identifier id=\"uid\">dcdict:Test-Dictionary:v0.5.0</dc:Identifier>",
                 text,
@@ -1343,7 +1343,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                     assert "-dont_append_source" in sys.argv
                     print("Amazon kindlegen(MAC OSX) V2.9 build 0000")
                     print("Warning(test): expected warning")
-                    Path("dictionary.mobi").write_bytes(b"MOBI")
+                    Path(sys.argv[1]).with_suffix(".mobi").write_bytes(b"MOBI")
                     raise SystemExit(1)
                     """
                 ),

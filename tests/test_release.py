@@ -430,8 +430,8 @@ class ReleaseTests(unittest.TestCase):
             def fake_build_dictionary_sources(entries, output_dir, title, author, **kwargs):
                 captured["release_version"] = kwargs["release_version"]
                 output_dir.mkdir(parents=True)
-                opf_path = output_dir / "dictionary.opf"
-                xhtml_path = output_dir / "dictionary.xhtml"
+                opf_path = output_dir / "Dungeon-Crawler-Carl-Dictionary.opf"
+                xhtml_path = output_dir / "Dungeon-Crawler-Carl-Dictionary.xhtml"
                 opf_path.write_text("<package />", encoding="utf-8")
                 xhtml_path.write_text("<html />", encoding="utf-8")
                 return BuildResult(
