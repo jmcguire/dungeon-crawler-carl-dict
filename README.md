@@ -1,6 +1,6 @@
 # Dungeon Crawler Carl E-reader Dictionaries
 
-<img width="100%" alt="Dungeon Crawler Carl dictionary for e-readers. Automatically generated from fandom wiki. Create your own with this codebase." src="https://raw.githubusercontent.com/jmcguire/dungeon-crawler-carl-dict/main/banner.png">
+<img width="100%" alt="Dungeon Crawler Carl dictionary for e-readers. Automatically generated from fandom wiki. Create your own with this codebase." src="https://raw.githubusercontent.com/jmcguire/dungeon-crawler-carl-dict/main/banner.jpg">
 
 A free custom e-reader dictionary for *Dungeon Crawler Carl*.
 
