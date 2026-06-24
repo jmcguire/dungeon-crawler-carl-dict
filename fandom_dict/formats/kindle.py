@@ -64,6 +64,7 @@ class BuildResult:
 
     xhtml_path: Path
     opf_path: Path
+    cover_path: Path
     entry_count: int
     alias_count: int = 0
     multi_lookup_count: int = 0
@@ -262,8 +263,62 @@ def write_xhtml_with_options(
     return lookup_report
 
 
-def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier: str) -> None:
+def write_cover_xhtml(output: Path, title: str, author: str) -> None:
+    """Write a simple text-only Kindle cover page."""
+
+    output.write_text(
+        f"""<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:mbp="http://www.mobipocket.com/mbp">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>{html.escape(title)} Cover</title>
+    <style type="text/css">
+      body {{ font-family: serif; text-align: center; margin: 18% 8% 0 8%; }}
+      h1 {{ font-size: 1.7em; margin-bottom: 1.2em; }}
+      h2 {{ font-size: 1em; font-weight: normal; margin-top: 0; }}
+      .label {{ font-size: 0.85em; text-transform: uppercase; }}
+    </style>
+  </head>
+  <body>
+    <mbp:pagebreak />
+    <p class="label">Dictionary</p>
+    <h1>{html.escape(title)}</h1>
+    <h2>{html.escape(author)}</h2>
+  </body>
+</html>
+""",
+        encoding="utf-8",
+    )
+
+
+def write_opf(
+    output: Path,
+    title: str,
+    author: str,
+    xhtml_name: str,
+    identifier: str,
+    cover_name: str | None = None,
+) -> None:
     """Write the OPF package file Kindle tooling compiles."""
+
+    cover_manifest = ""
+    cover_spine = ""
+    cover_guide = ""
+    if cover_name:
+        escaped_cover_name = html.escape(cover_name)
+        cover_manifest = (
+            f'    <item id="cover" media-type="application/xhtml+xml" href="{escaped_cover_name}" />\n'
+        )
+        cover_spine = '    <itemref idref="cover" />\n'
+        cover_guide = f'    <reference type="cover" title="Cover" href="{escaped_cover_name}" />\n'
+    manifest_items = (
+        f'{cover_manifest}    <item id="dictionary" media-type="application/xhtml+xml" '
+        f'href="{html.escape(xhtml_name)}" />'
+    )
+    spine_items = f'{cover_spine}    <itemref idref="dictionary" />'
+    guide_items = f'{cover_guide}    <reference type="index" title="IndexName" href="{html.escape(xhtml_name)}" />'
 
     output.write_text(
         f"""<?xml version="1.0" encoding="utf-8"?>
@@ -287,13 +342,13 @@ def write_opf(output: Path, title: str, author: str, xhtml_name: str, identifier
     </x-metadata>
   </metadata>
   <manifest>
-    <item id="dictionary" media-type="application/xhtml+xml" href="{html.escape(xhtml_name)}" />
+{manifest_items}
   </manifest>
   <spine>
-    <itemref idref="dictionary" />
+{spine_items}
   </spine>
   <guide>
-    <reference type="index" title="IndexName" href="{html.escape(xhtml_name)}" />
+{guide_items}
   </guide>
 </package>
 """,
@@ -343,10 +398,12 @@ def build_dictionary_sources(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     base_name = slugify_title(title)
+    cover_path = output_dir / f"{base_name}-cover.xhtml"
     xhtml_path = output_dir / f"{base_name}.xhtml"
     opf_path = output_dir / f"{base_name}.opf"
     identifier = kindle_identifier(title, release_version)
 
+    write_cover_xhtml(cover_path, title, author)
     lookup_report = write_xhtml_with_options(
         entries,
         xhtml_path,
@@ -359,13 +416,15 @@ def build_dictionary_sources(
         strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
         sidebar_alias_labels=sidebar_alias_labels,
     )
-    write_opf(opf_path, title, author, xhtml_path.name, identifier)
+    write_opf(opf_path, title, author, xhtml_path.name, identifier, cover_path.name)
+    validate_xml(cover_path)
     validate_xml(xhtml_path)
     validate_xml(opf_path)
 
     return BuildResult(
         xhtml_path=xhtml_path,
         opf_path=opf_path,
+        cover_path=cover_path,
         entry_count=len(entries),
         alias_count=lookup_report.single_target_alias_count,
         multi_lookup_count=lookup_report.multi_target_lookup_count,

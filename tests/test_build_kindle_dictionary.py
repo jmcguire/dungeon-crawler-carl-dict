@@ -24,6 +24,7 @@ from fandom_dict.formats.kindle import (
     sanitize_inline_html,
     sidebar_details_from_html,
     spoiler_notice_from_html,
+    write_cover_xhtml,
     write_opf,
     write_xhtml,
     write_xhtml_with_options,
@@ -1218,17 +1219,33 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertIn('<li>Donut knows <a href="#entry-1">Carl</a>.</li>', text)
             ET.parse(output)
 
+    def test_write_cover_xhtml_contains_title_and_author(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "cover.xhtml"
+
+            write_cover_xhtml(output, "Test Dictionary", "Test Author")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertIn("<h1>Test Dictionary</h1>", text)
+            self.assertIn("<h2>Test Author</h2>", text)
+            self.assertIn("<mbp:pagebreak />", text)
+            ET.parse(output)
+
     def test_write_opf_contains_dictionary_metadata(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             output = Path(tmp_dir) / "dictionary.opf"
 
-            write_opf(output, "Title", "Author", "dictionary.xhtml", "urn:test")
+            write_opf(output, "Title", "Author", "dictionary.xhtml", "urn:test", "cover.xhtml")
 
             text = output.read_text(encoding="utf-8")
             self.assertIn("<DictionaryInLanguage>en-us</DictionaryInLanguage>", text)
             self.assertIn('<dc:Identifier id="uid">urn:test</dc:Identifier>', text)
             self.assertIn("<DefaultLookupIndex>default</DefaultLookupIndex>", text)
             self.assertIn("generated from the fandom wiki page summaries", text)
+            self.assertIn('<item id="cover" media-type="application/xhtml+xml" href="cover.xhtml" />', text)
+            self.assertIn('<itemref idref="cover" />', text)
+            self.assertIn('<reference type="cover" title="Cover" href="cover.xhtml" />', text)
+            self.assertLess(text.index('idref="cover"'), text.index('idref="dictionary"'))
             self.assertIn('xmlns:opf="http://www.idpf.org/2007/opf"', text)
             ET.parse(output)
 
@@ -1263,12 +1280,16 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             )
 
             self.assertEqual(result.entry_count, 1)
+            self.assertTrue(result.cover_path.exists())
             self.assertTrue(result.xhtml_path.exists())
             self.assertTrue(result.opf_path.exists())
+            self.assertEqual(result.cover_path.name, "Test-Dictionary-cover.xhtml")
             self.assertIn(
                 "<dc:Identifier id=\"uid\">dcdict:Test-Dictionary:dev</dc:Identifier>",
                 result.opf_path.read_text(encoding="utf-8"),
             )
+            self.assertIn("Test-Dictionary-cover.xhtml", result.opf_path.read_text(encoding="utf-8"))
+            ET.parse(result.cover_path)
             ET.parse(result.xhtml_path)
             ET.parse(result.opf_path)
 

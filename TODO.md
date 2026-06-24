@@ -97,9 +97,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - Kobo output does not currently include internal dictionary links.
   - Determine whether Kobo dicthtml supports reliable in-dictionary links before adding them.
 
-- add a simple cover for generated dictionaries
-  - can just be a HTML with a h1:title and h2:author
-
 ## P3 - Portability And Future Formats
 
 - Consider fandom-specific code hooks if JSON config stops being enough.

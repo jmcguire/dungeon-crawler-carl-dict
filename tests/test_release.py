@@ -432,11 +432,14 @@ class ReleaseTests(unittest.TestCase):
                 output_dir.mkdir(parents=True)
                 opf_path = output_dir / "Dungeon-Crawler-Carl-Dictionary.opf"
                 xhtml_path = output_dir / "Dungeon-Crawler-Carl-Dictionary.xhtml"
+                cover_path = output_dir / "Dungeon-Crawler-Carl-Dictionary-cover.xhtml"
                 opf_path.write_text("<package />", encoding="utf-8")
                 xhtml_path.write_text("<html />", encoding="utf-8")
+                cover_path.write_text("<html />", encoding="utf-8")
                 return BuildResult(
                     xhtml_path=xhtml_path,
                     opf_path=opf_path,
+                    cover_path=cover_path,
                     entry_count=len(entries),
                     alias_count=0,
                     multi_lookup_count=0,
