@@ -4,16 +4,39 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
 ## P0 - Understand Kindle Lookup Failures
 
-- Build a small Kindle lookup diagnostic workflow.
+- Build a Kindle lookup diagnostic workflow.
   - Goal: separate dictionary-index problems from Kindle UI selection behavior.
-  - Check generated `idx:orth` values, compiled MOBI indexes, and exact selected text examples.
+  - Create a tiny controlled test book and tiny controlled dictionary with known entries, aliases, inflections, duplicate lookup entries, punctuation cases, lowercase cases, possessives, and multi-word phrases.
+  - Test on the physical Kindle, not just Kindle Previewer.
+  - Record which selections show Dictionary, X-Ray, Wikipedia, Translate, Search, or no lookup tab.
   - Known confusing case: selecting multi-word proper nouns can suppress the Dictionary tab entirely. Kindle may show X-Ray, Wikipedia, Translate, or Search instead because it decided the selection is a phrase/entity, not a dictionary lookup candidate.
-  - Examples to test manually: `The Valtay Corporation`, `Valtay Corporation`, `Valtay`, `Heal spell`, `street urchin`, `Kua-Tin`, `Lucia Mar`.
+  - Examples to test manually: `The Valtay Corporation`, `Valtay Corporation`, `Valtay`, `Gwendolyn Duet`, `Desperado Club`, `dirigible gnomes`, `Heal spell`, `Heal Spell`, `Carl's`.
+  - Also test lowercase, punctuation, apostrophes, periods attached to selections, text inside italics, and single quotes encoded as `&#x27;` in Kindle XHTML.
+  - Output: a short markdown report plus any fixture files needed to repeat the test.
 
-- Investigate whether lowercase, punctuation, apostrophes, or surrounding markup affect Kindle lookup.
-  - Examples: `Heal spell` versus `Heal Spell`, periods attached to selections, and text inside italics.
-  - Check whether single quotes encoded as `&#x27;` in Kindle XHTML affect lookup display or matching.
-  - Decide whether to add lowercase variants as direct aliases or `idx:infl` entries.
+- Decide whether lowercase, punctuation, possessives, or other true grammatical forms need additional Kindle indexing.
+  - Use the diagnostic workflow results before changing output.
+  - Possible output strategies: lowercase `idx:iform` values, possessive `idx:iform` values, or no change if Kindle already normalizes the selection.
+
+## P1 - Kindle XHTML And Tooling
+
+- Add a Kindle XHTML/index validation command.
+  - Goal: catch Kindle lookup-shape mistakes before building or releasing.
+  - Validate that every `idx:orth` and `idx:iform` value is stripped, nonempty, and free of control characters.
+  - Validate that single-target aliases use `idx:iform`.
+  - Validate that multi-target lookups use duplicate visible `idx:entry` blocks.
+  - Validate that stale direct duplicate alias entries are not emitted for normal aliases.
+  - Validate that unsupported alias constructs such as `idx:orth type="silent"` do not appear.
+  - Validate that expected representative headwords and aliases exist.
+  - Integrate this validation into build or release smoke tests.
+  - Output clear failure messages pointing to the bad entry or alias.
+
+- Evaluate `kindling` as optional Kindle tooling.
+  - Goal: learn whether `kindling` can improve Kindle dictionary validation, compilation, or inspection without replacing the current release flow too soon.
+  - Review <https://github.com/ciscoriordan/kindling>.
+  - Compare it against current KindleGen behavior for OPF/XHTML compatibility, `idx:orth`, `idx:infl`, and `idx:iform` handling, duplicate headword handling, dictionary index inspection, error/warning quality, and StarDict import/export usefulness.
+  - Do not make it a required dependency unless it provides a clear release-quality benefit.
+  - Possible outcome: add `--kindle-compiler kindlegen|kindling|auto`, keeping KindleGen as the official default until physical-device testing proves otherwise.
 
 ## P1 - Fix Known Missing Or Misnamed Entries
 
@@ -36,11 +59,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - we already remove it from body text
   - e.g. Cascadia
 
-- The following are not even triggering a dictionary:
-  - Gwendolyn Duet - exists, working on it. has two aliases in it
-  - Desperado Club
-  - dirigible gnomes
-
 ## P2 - Improve Kindle Indexing
 
 - Add inflection support for selected possessives and other true grammatical forms.
@@ -55,7 +73,25 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
   - Candidate next steps: possessives, lowercase forms, plural forms such as `Brain Boilers`.
 
+- Improve multi-word lookup aliases.
+  - Goal: make common partial selections work better without creating noisy aliases.
+  - Use the Fictionary-style idea that a multi-word fictional term may need lookup help for meaningful component words.
+  - Keep this conservative and collision-safe.
+  - Prioritize `Characters` entries.
+  - Avoid stopwords, honorifics, articles, and generic type words.
+  - Preserve multi-target lookup behavior when one lookup word maps to multiple entries.
+  - Keep exact canonical titles ranked first.
+  - Candidate examples: `Gwendolyn Duet`, `Valtay Corporation`, `Borant Corporation`, `Desperado Club`.
+  - Do not create broad first-word aliases for every title.
+
 ## P3 - Release And User Experience Polish
+
+- Study Fictionary presentation and spoiler UX.
+  - Goal: borrow good reader-facing ideas without copying proprietary dictionary content.
+  - Review public-facing Fictionary material at <https://www.thefictionary.net/home>.
+  - Look specifically for spoiler-level organization, entry phrasing, multi-word term behavior, source/series/book labeling, and install/help-page language.
+  - Turn useful findings into separate implementation TODOs only if they clearly improve this project.
+  - Avoid copying paid/proprietary entry text, styling, or private dictionary files.
 
 - Research Kobo internal links.
   - Kobo output does not currently include internal dictionary links.
@@ -73,12 +109,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
 - Review whether generic first-name/last-name aliases should be configurable by fandom.
   - This may help wikis with many human names.
   - It may also create noisy collisions, so keep it collision-protected and opt-in if expanded.
-
-- Research other dictionary tooling when useful.
-  - Review `kindling`: <https://github.com/ciscoriordan/kindling>
-  - Look for Kindle XHTML/indexing tricks that could improve lookup reliability.
-  - Future format candidates should be justified by reader demand and side-loading practicality.
-  - look at dictionaries in https://www.thefictionary.net/home , see how they look and if we can copy their best ideas
 
 ## Unsorted Stuff
 
