@@ -12,6 +12,7 @@ class BinWrapperTests(unittest.TestCase):
             "audit_entries": "fandom_dict.cli.audit_entries",
             "badges": "fandom_dict.cli.badges",
             "build_kindle_dictionary": "fandom_dict.cli.build_kindle_dictionary",
+            "build_kindle_lookup_experiments": "fandom_dict.cli.build_kindle_lookup_experiments",
             "build_kobo_dictionary": "fandom_dict.cli.build_kobo_dictionary",
             "build_stardict_dictionary": "fandom_dict.cli.build_stardict_dictionary",
             "fetch_entries": "fandom_dict.cli.fetch_entries",
