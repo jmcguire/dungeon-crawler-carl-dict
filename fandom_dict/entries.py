@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 from fandom_dict.config import SidebarField
-from fandom_dict.text import clean_wiki_text_artifacts
+from fandom_dict.text import clean_wiki_text_artifacts, strip_wiki_reference_markers
 
 
 ALLOWED_INLINE_TAGS = {"b": "b", "strong": "b", "i": "i", "em": "i"}
@@ -526,7 +526,7 @@ class SidebarInfoParser(HTMLParser):
 
     def _save_current_field(self) -> None:
         if self.current_source in self.field_labels:
-            value = normalize_text("".join(self._value_chunks))
+            value = normalize_text(strip_wiki_reference_markers("".join(self._value_chunks)))
             if value:
                 self.fields.setdefault(self.current_source, value)
         self.current_source = None

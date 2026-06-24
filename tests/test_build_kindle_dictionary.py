@@ -631,6 +631,25 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             (("Allegiance", "House Stark"), ("Culture", "Northmen")),
         )
 
+    def test_sidebar_details_from_html_strips_numeric_wiki_reference_markers(self) -> None:
+        raw_html = """
+        <aside class="portable-infobox">
+          <div class="pi-data" data-source="origin">
+            <h3 class="pi-data-label">ORIGIN</h3>
+            <div class="pi-data-value">Syndicate[1] Core [abc]</div>
+          </div>
+          <div class="pi-data" data-source="source">
+            <h3 class="pi-data-label">SOURCE</h3>
+            <div class="pi-data-value">Cascadia was founded in 2012. [23]</div>
+          </div>
+        </aside>
+        """
+
+        self.assertEqual(
+            sidebar_details_from_html(raw_html),
+            (("Origin", "Syndicate Core [abc]"), ("Source", "Cascadia was founded in 2012.")),
+        )
+
     def test_build_aliases_does_not_add_unrelated_alias_forms(self) -> None:
         entries = [
             Entry("Red Beret", "https://example/wiki/Red_Beret", "An item."),

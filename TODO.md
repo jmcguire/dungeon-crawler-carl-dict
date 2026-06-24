@@ -55,10 +55,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - `Krakaren Clone (Second Floor)`
   - Determine whether these need better extraction, aliases, disambiguation, or manual cleanup.
 
-- remove wiki-style *[1]* from sidebar entries
-  - we already remove it from body text
-  - e.g. Cascadia
-
 ## P2 - Improve Kindle Indexing
 
 - Add inflection support for selected possessives and other true grammatical forms.
