@@ -34,6 +34,7 @@ This file is prioritized by what is most likely to improve real reader lookup be
 - Evaluate `kindling` as optional Kindle tooling.
   - Goal: learn whether `kindling` can improve Kindle dictionary validation, compilation, or inspection without replacing the current release flow too soon.
   - Review <https://github.com/ciscoriordan/kindling>.
+  - Current notes and findings live in `KINDLING_INVESTIGATION.md`.
   - Compare it against current KindleGen behavior for OPF/XHTML compatibility, `idx:orth`, `idx:infl`, and `idx:iform` handling, duplicate headword handling, dictionary index inspection, error/warning quality, and StarDict import/export usefulness.
   - Do not make it a required dependency unless it provides a clear release-quality benefit.
   - Possible outcome: add `--kindle-compiler kindlegen|kindling|auto`, keeping KindleGen as the official default until physical-device testing proves otherwise.
