@@ -881,6 +881,67 @@ class BuildKindleDictionaryTests(unittest.TestCase):
 
         self.assertEqual(lookups["Katia's"], ("Katia's", "Katia Grim"))
 
+    def test_category_plural_aliases_apply_to_obvious_races_mobs_items_and_groups(self) -> None:
+        entries = [
+            Entry("Dirigible Gnome", "https://example/wiki/Dirigible_Gnome", "A race.", source_categories=("Races",)),
+            Entry("Brain Boiler", "https://example/wiki/Brain_Boiler", "A mob.", source_categories=("Mob_Types",)),
+            Entry("1914 Box", "https://example/wiki/1914_Box", "A box.", source_categories=("Items",)),
+            Entry("Mana Potion", "https://example/wiki/Mana_Potion", "A potion.", source_categories=("Items",)),
+            Entry("Borant Corporation", "https://example/wiki/Borant", "A group.", source_categories=("Groups",)),
+            Entry("Bush Elf", "https://example/wiki/Bush_Elf", "A race.", source_categories=("Races",)),
+            Entry("Dwarf", "https://example/wiki/Dwarf", "A race.", source_categories=("Races",)),
+        ]
+
+        report = build_lookup_report(entries)
+
+        self.assertIn("Dirigible Gnomes", report.aliases["Dirigible Gnome"])
+        self.assertIn("Brain Boilers", report.aliases["Brain Boiler"])
+        self.assertIn("1914 Boxes", report.aliases["1914 Box"])
+        self.assertIn("Mana Potions", report.aliases["Mana Potion"])
+        self.assertIn("Borant Corporations", report.aliases["Borant Corporation"])
+        self.assertIn("Bush Elves", report.aliases["Bush Elf"])
+        self.assertIn("Dwarfs", report.aliases["Dwarf"])
+        self.assertIn("Dwarves", report.aliases["Dwarf"])
+
+    def test_category_plural_aliases_skip_non_target_categories_and_unsafe_titles(self) -> None:
+        entries = [
+            Entry("Dirigible Gnome", "https://example/wiki/Dirigible_Gnome", "A race-like thing."),
+            Entry("Bandages", "https://example/wiki/Bandages", "Already plural.", source_categories=("Items",)),
+            Entry("Celestial", "https://example/wiki/Celestial", "An item adjective.", source_categories=("Items",)),
+            Entry("Club Vanquisher", "https://example/wiki/Club_Vanquisher", "A group.", source_categories=("Groups",)),
+            Entry("Carl's Jug O'Boom", "https://example/wiki/Jug", "An item.", source_categories=("Items",)),
+            Entry("Children of Inpewt", "https://example/wiki/Inpewt", "A mob.", source_categories=("Mob_Types",)),
+            Entry("Dungeon Book of the Floor Club", "https://example/wiki/Club", "A group.", source_categories=("Groups",)),
+            Entry("Eye of the Sky Scroll", "https://example/wiki/Eye", "An item.", source_categories=("Items",)),
+            Entry("Chee", "https://example/wiki/Chee", "A race.", source_categories=("Races",)),
+            Entry("Gondii", "https://example/wiki/Gondii", "A race.", source_categories=("Races",)),
+        ]
+
+        report = build_lookup_report(entries)
+
+        self.assertNotIn("Dirigible Gnomes", report.aliases["Dirigible Gnome"])
+        self.assertNotIn("Bandageses", report.aliases["Bandages"])
+        self.assertNotIn("Celestials", report.aliases["Celestial"])
+        self.assertNotIn("Club Vanquishers", report.aliases["Club Vanquisher"])
+        self.assertNotIn("Carl's Jug O'Booms", report.aliases["Carl's Jug O'Boom"])
+        self.assertNotIn("Children of Inpewts", report.aliases["Children of Inpewt"])
+        self.assertNotIn("Dungeon Book of the Floor Clubs", report.aliases["Dungeon Book of the Floor Club"])
+        self.assertIn("Eye of the Sky Scrolls", report.aliases["Eye of the Sky Scroll"])
+        self.assertNotIn("Chees", report.aliases["Chee"])
+        self.assertNotIn("Gondiis", report.aliases["Gondii"])
+
+    def test_category_plural_alias_canonical_collision_includes_canonical_first(self) -> None:
+        entries = [
+            Entry("Cats", "https://example/wiki/Cats", "A canonical plural."),
+            Entry("Cat", "https://example/wiki/Cat", "A race.", source_categories=("Races",)),
+        ]
+
+        report = build_lookup_report(entries)
+        lookups = {lookup.word: lookup.targets for lookup in report.multi_target_lookups}
+
+        self.assertNotIn("Cats", report.aliases["Cat"])
+        self.assertEqual(lookups["Cats"], ("Cats", "Cat"))
+
     def test_build_aliases_skips_case_insensitive_canonical_and_generated_collisions(self) -> None:
         entries = [
             Entry("Fireball", "https://example/wiki/Fireball", "A thing."),
@@ -1043,6 +1104,21 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertIn(f'<idx:iform value="Katia Grim{chr(0x2019)}s" />', text)
             self.assertIn('<idx:iform value="Katia&#x27;s" />', text)
             self.assertIn(f'<idx:iform value="Katia{chr(0x2019)}s" />', text)
+            self.assertEqual(text.count('<idx:entry name="default"'), 1)
+            ET.parse(output)
+
+    def test_write_xhtml_emits_category_plural_alias_as_inflection(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry("Dirigible Gnome", "https://example/wiki/Dirigible_Gnome", "A race.", source_categories=("Races",)),
+            ]
+
+            write_xhtml(entries, output, "Test Dictionary")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertIn('<idx:orth value="Dirigible Gnome"><b>Dirigible Gnome</b>', text)
+            self.assertIn('<idx:iform value="Dirigible Gnomes" />', text)
             self.assertEqual(text.count('<idx:entry name="default"'), 1)
             ET.parse(output)
 

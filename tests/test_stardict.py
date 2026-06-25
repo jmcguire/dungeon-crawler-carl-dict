@@ -161,6 +161,8 @@ class StarDictTests(unittest.TestCase):
                 source_categories=("Characters",),
             ),
             Entry("Brain Boiler", "https://example/Brain_Boiler", "<b>Brain Boilers</b> are a mob."),
+            Entry("Dirigible Gnome", "https://example/Dirigible_Gnome", "A race.", source_categories=("Races",)),
+            Entry("1914 Box", "https://example/1914_Box", "An item.", source_categories=("Items",)),
         ]
         with TemporaryDirectory() as tmp_dir:
             result = build_stardict(entries, Path(tmp_dir), "Test Dictionary", "Test Author")
@@ -176,6 +178,8 @@ class StarDictTests(unittest.TestCase):
         self.assertEqual(inspection.canonical_word(f"Katia{chr(0x2019)}s"), "Katia Grim")
         self.assertEqual(inspection.canonical_word("Grim"), "Katia Grim")
         self.assertEqual(inspection.canonical_word("Brain Boilers"), "Brain Boiler")
+        self.assertEqual(inspection.canonical_word("Dirigible Gnomes"), "Dirigible Gnome")
+        self.assertEqual(inspection.canonical_word("1914 Boxes"), "1914 Box")
 
     def test_character_possessive_multi_target_lookup_combines_results(self) -> None:
         entries = [

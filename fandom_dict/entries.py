@@ -36,6 +36,61 @@ DEFAULT_SIDEBAR_FIELDS = tuple(
 CHARACTER_CATEGORY = "Characters"
 # Character-only possessives are intentionally hardcoded for now. If another
 # fandom needs this on a different category, we can lift it into config later.
+PLURAL_ALIAS_CATEGORIES = {"Groups", "Items", "Mob_Types", "Races"}
+PLURAL_ITEM_FINAL_WORDS = {
+    "Badge",
+    "Bandage",
+    "Beanie",
+    "Biscuit",
+    "Bolt",
+    "Box",
+    "Card",
+    "Chest",
+    "Chip",
+    "Cloak",
+    "Condom",
+    "Guide",
+    "Grenade",
+    "Kit",
+    "Pass",
+    "Patch",
+    "Pen",
+    "Potion",
+    "Scroll",
+    "Sigil",
+    "Tab",
+    "Table",
+    "Tattoo",
+    "Ticket",
+    "Workshop",
+}
+PLURAL_GROUP_FINAL_WORDS = {
+    "Army",
+    "Club",
+    "Company",
+    "Corporation",
+    "Court",
+    "Empire",
+    "Front",
+    "Guild",
+    "Militia",
+    "Sultanate",
+    "Syndicate",
+}
+PLURAL_SKIP_FINAL_WORDS = {
+    "Blue",
+    "Chee",
+    "Controls",
+    "Daughters",
+    "Experience",
+    "Limited",
+    "Male",
+    "Series",
+}
+IRREGULAR_PLURAL_FORMS = {
+    "Dwarf": ("Dwarfs", "Dwarves"),
+    "Elf": ("Elves",),
+}
 FIRST_NAME_SKIP_WORDS = {
     "A",
     "An",
@@ -158,7 +213,11 @@ class _AliasCandidate:
     def allows_multi_target_lookup(self) -> bool:
         """Return whether collisions should become multi-definition lookups."""
 
-        return self.is_title_rule or self.source in {"character-first-name", "character-possessive"}
+        return self.is_title_rule or self.source in {
+            "category-plural",
+            "character-first-name",
+            "character-possessive",
+        }
 
 
 def normalize_text(text: str) -> str:
@@ -996,10 +1055,49 @@ def character_possessive_alias_candidates(entry: Entry) -> list[_AliasCandidate]
     return candidates
 
 
+def category_plural_alias_candidates(entry: Entry) -> list[_AliasCandidate]:
+    """Return conservative plural lookup forms for race, mob, item, and group entries."""
+
+    if not entry_has_any_source_category(entry, PLURAL_ALIAS_CATEGORIES):
+        return []
+    categories = normalized_source_categories(entry)
+    final_word = final_pluralizable_word(entry.title)
+    if not final_word:
+        return []
+    if "items" in categories and final_word not in PLURAL_ITEM_FINAL_WORDS:
+        return []
+    if "items" not in categories and re.search(r"\bof\b", entry.title, flags=re.I):
+        return []
+    if "groups" in categories and final_word not in PLURAL_GROUP_FINAL_WORDS:
+        return []
+    forms = plural_lookup_forms(entry.title)
+    return [_AliasCandidate(entry.title, alias, "category-plural") for alias in forms]
+
+
 def entry_is_from_characters_category(entry: Entry) -> bool:
     """Return true when an entry was reached from the Characters category."""
 
-    return any(category.casefold() == CHARACTER_CATEGORY.casefold() for category in entry.source_categories)
+    return entry_has_any_source_category(entry, {CHARACTER_CATEGORY})
+
+
+def entry_has_any_source_category(entry: Entry, categories: set[str]) -> bool:
+    """Return true when an entry was reached from any category in ``categories``."""
+
+    wanted = {category.casefold() for category in categories}
+    return bool(normalized_source_categories(entry) & wanted)
+
+
+def normalized_source_categories(entry: Entry) -> set[str]:
+    """Return normalized source category names without the MediaWiki prefix."""
+
+    normalized = set()
+    for category in entry.source_categories:
+        value = category.strip()
+        if value.casefold().startswith("category:"):
+            value = value.split(":", 1)[1]
+        if value:
+            normalized.add(value.casefold())
+    return normalized
 
 
 def is_person_name_token(value: str) -> bool:
@@ -1027,6 +1125,53 @@ def possessive_lookup_forms(value: str) -> tuple[str, ...]:
             ordered.append(form)
             seen.add(folded)
     return tuple(ordered)
+
+
+def plural_lookup_forms(title: str) -> tuple[str, ...]:
+    """Return conservative plural aliases by pluralizing the final title word."""
+
+    normalized = normalize_text(title)
+    final_word = final_pluralizable_word(normalized)
+    if not final_word:
+        return ()
+    plural_words = IRREGULAR_PLURAL_FORMS.get(final_word) or (regular_plural_form(final_word),)
+    forms = []
+    prefix = normalized[: -len(final_word)]
+    for plural_word in plural_words:
+        alias = f"{prefix}{plural_word}"
+        if alias.casefold() != normalized.casefold():
+            forms.append(alias)
+    return tuple(dict.fromkeys(forms))
+
+
+def final_pluralizable_word(title: str) -> str | None:
+    """Return the final simple word in a title when it is safe to pluralize."""
+
+    if "(" in title or ")" in title or "," in title or ":" in title:
+        return None
+    words = title.split()
+    if not words:
+        return None
+    final_word = words[-1].strip("'\"")
+    if final_word in PLURAL_SKIP_FINAL_WORDS:
+        return None
+    if not re.fullmatch(r"[A-Z][A-Za-z'-]*", final_word):
+        return None
+    if final_word.endswith("ii"):
+        return None
+    if final_word.endswith(("s", "S")) and final_word not in IRREGULAR_PLURAL_FORMS:
+        return None
+    return final_word
+
+
+def regular_plural_form(word: str) -> str:
+    """Pluralize one simple English-ish title word."""
+
+    if re.search(r"[^aeiou]y$", word, flags=re.I):
+        return f"{word[:-1]}ies"
+    if re.search(r"(?:s|x|z|ch|sh)$", word, flags=re.I):
+        return f"{word}es"
+    return f"{word}s"
 
 
 def alias_candidate_is_usable(alias: str) -> tuple[bool, str]:
@@ -1078,6 +1223,7 @@ def build_lookup_report(
             raw_candidates.extend(sidebar_alias_candidates(entry, sidebar_alias_labels))
         raw_candidates.extend(character_first_name_alias_candidates(entry))
         raw_candidates.extend(character_possessive_alias_candidates(entry))
+        raw_candidates.extend(category_plural_alias_candidates(entry))
         if include_human_name_aliases:
             raw_candidates.extend(human_name_alias_candidates(entry))
 

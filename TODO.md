@@ -14,9 +14,9 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - Also test lowercase, punctuation, apostrophes, periods attached to selections, text inside italics, and single quotes encoded as `&#x27;` in Kindle XHTML.
   - Output: a short markdown report plus any fixture files needed to repeat the test.
 
-- Decide whether lowercase, punctuation, possessives, or other true grammatical forms need additional Kindle indexing.
+- Decide whether lowercase, punctuation, or other true grammatical forms need additional Kindle indexing.
   - Use the diagnostic workflow results before changing output.
-  - Possible output strategies: lowercase `idx:iform` values, possessive `idx:iform` values, or no change if Kindle already normalizes the selection.
+  - Possible output strategies: lowercase `idx:iform` values or no change if Kindle already normalizes the selection.
 
 ## P1 - Kindle XHTML And Tooling
 
