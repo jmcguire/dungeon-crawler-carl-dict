@@ -31,14 +31,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - Integrate this validation into build or release smoke tests.
   - Output clear failure messages pointing to the bad entry or alias.
 
-- Evaluate `kindling` as optional Kindle tooling.
-  - Goal: learn whether `kindling` can improve Kindle dictionary validation, compilation, or inspection without replacing the current release flow too soon.
-  - Review <https://github.com/ciscoriordan/kindling>.
-  - Current notes and findings live in `KINDLING_INVESTIGATION.md`.
-  - Compare it against current KindleGen behavior for OPF/XHTML compatibility, `idx:orth`, `idx:infl`, and `idx:iform` handling, duplicate headword handling, dictionary index inspection, error/warning quality, and StarDict import/export usefulness.
-  - Do not make it a required dependency unless it provides a clear release-quality benefit.
-  - Possible outcome: add `--kindle-compiler kindlegen|kindling|auto`, keeping KindleGen as the official default until physical-device testing proves otherwise.
-
 ## P1 - Fix Known Missing Or Misnamed Entries
 
 - Investigate true missing entries.
@@ -57,18 +49,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - Determine whether these need better extraction, aliases, disambiguation, or manual cleanup.
 
 ## P2 - Improve Kindle Indexing
-
-- Add inflection support for selected possessives and other true grammatical forms.
-  - Example shape:
-
-```xml
-<idx:orth>Carl</idx:orth>
-<idx:infl>
-  <idx:iform value="carl's" />
-</idx:infl>
-```
-
-  - Candidate next steps: possessives, lowercase forms, plural forms such as `Brain Boilers`.
 
 - Improve multi-word lookup aliases.
   - Goal: make common partial selections work better without creating noisy aliases.
@@ -115,7 +95,7 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
 - get rid of badge tests, add more tests elsewhere, on code that matters
 
-if i want to start releasing dictionaries for other fandoms, how do i organize that? can i still do it on a github.io page, or should i start with my own domain? how would i reorganize the processes and the builds and the releases? what's the information architecture? at what point to a run afoul of copywrite? i want to make sure the original authors are respected on each fandom page. does that mean individual buy-in? probably? maybe a contact page for an admin to request a fandom be added, then a separate page for an individual to ask for a one-off build, just for them (that i won't publish).
+- if i want to start releasing dictionaries for other fandoms, how do i organize that? can i still do it on a github.io page, or should i start with my own domain? how would i reorganize the processes and the builds and the releases? what's the information architecture? at what point to a run afoul of copywrite? i want to make sure the original authors are respected on each fandom page. does that mean individual buy-in? probably? maybe a contact page for an admin to request a fandom be added, then a separate page for an individual to ask for a one-off build, just for them (that i won't publish).
 
 
 ## Reference Notes

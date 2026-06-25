@@ -173,7 +173,7 @@ Re-extract definitions from stored HTML without touching the network:
 
 The entry pipeline extracts the first useful summary text, strips wiki maintenance boxes and citation markers, preserves safe bold/italic inline formatting, adds conservative sidebar details, repairs forwarding-only entries, trims overlong summaries, and skips low-quality final definitions while preserving raw crawled data.
 
-Aliases are discovered from safe title rules, selected sidebar aliases, recognized intro parentheticals, first bold intro names, first names for simple two-word `Characters` entries, and a small older human-name heuristic. Single-target Kindle aliases are emitted as `idx:iform` inflections. StarDict uses `.syn` aliases, and Kobo uses variants. If a lookup collides with a real entry, Kindle emits multiple lookup entries while StarDict and Kobo use one combined result.
+Aliases are discovered from safe title rules, selected sidebar aliases, recognized intro parentheticals, first bold intro names, first names for simple two-word `Characters` entries, possessive forms for `Characters` lookups, and a small older human-name heuristic. Single-target Kindle aliases are emitted as `idx:iform` inflections. StarDict uses `.syn` aliases, and Kobo uses variants. If a lookup collides with a real entry, Kindle emits multiple lookup entries while StarDict and Kobo use one combined result.
 
 With `--link-entries`, known entry names inside definitions become internal links. Kindle links work when opening the dictionary directly as a book, but may not work inside Kindle's lookup popup UI.
 

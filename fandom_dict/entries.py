@@ -34,6 +34,8 @@ DEFAULT_SIDEBAR_FIELDS = tuple(
     for source, label in SIDEBAR_FIELD_LABELS.items()
 )
 CHARACTER_CATEGORY = "Characters"
+# Character-only possessives are intentionally hardcoded for now. If another
+# fandom needs this on a different category, we can lift it into config later.
 FIRST_NAME_SKIP_WORDS = {
     "A",
     "An",
@@ -156,7 +158,7 @@ class _AliasCandidate:
     def allows_multi_target_lookup(self) -> bool:
         """Return whether collisions should become multi-definition lookups."""
 
-        return self.is_title_rule or self.source == "character-first-name"
+        return self.is_title_rule or self.source in {"character-first-name", "character-possessive"}
 
 
 def normalize_text(text: str) -> str:
@@ -976,6 +978,24 @@ def character_first_name_alias_candidates(entry: Entry) -> list[_AliasCandidate]
     return [_AliasCandidate(entry.title, first, "character-first-name")]
 
 
+def character_possessive_alias_candidates(entry: Entry) -> list[_AliasCandidate]:
+    """Return possessive lookup forms for Characters entries and their first names."""
+
+    if not entry_is_from_characters_category(entry):
+        return []
+    bases = [entry.title]
+    bases.extend(candidate.alias for candidate in character_first_name_alias_candidates(entry))
+    candidates: list[_AliasCandidate] = []
+    seen: set[str] = set()
+    for base in bases:
+        for alias in possessive_lookup_forms(base):
+            folded = alias.casefold()
+            if folded not in seen:
+                candidates.append(_AliasCandidate(entry.title, alias, "character-possessive"))
+                seen.add(folded)
+    return candidates
+
+
 def entry_is_from_characters_category(entry: Entry) -> bool:
     """Return true when an entry was reached from the Characters category."""
 
@@ -988,6 +1008,25 @@ def is_person_name_token(value: str) -> bool:
     if len(value) < 2 or not value[0].isupper():
         return False
     return all(char.isalpha() or char in "'-" for char in value)
+
+
+def possessive_lookup_forms(value: str) -> tuple[str, ...]:
+    """Return conservative ASCII and curly-apostrophe possessive lookup forms."""
+
+    normalized = normalize_text(value)
+    if not normalized:
+        return ()
+    forms = [f"{normalized}'s", f"{normalized}\u2019s"]
+    if normalized.endswith(("s", "S")):
+        forms.extend((f"{normalized}'", f"{normalized}\u2019"))
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for form in forms:
+        folded = form.casefold()
+        if folded not in seen:
+            ordered.append(form)
+            seen.add(folded)
+    return tuple(ordered)
 
 
 def alias_candidate_is_usable(alias: str) -> tuple[bool, str]:
@@ -1038,6 +1077,7 @@ def build_lookup_report(
         if include_sidebar_aliases:
             raw_candidates.extend(sidebar_alias_candidates(entry, sidebar_alias_labels))
         raw_candidates.extend(character_first_name_alias_candidates(entry))
+        raw_candidates.extend(character_possessive_alias_candidates(entry))
         if include_human_name_aliases:
             raw_candidates.extend(human_name_alias_candidates(entry))
 

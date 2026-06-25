@@ -149,8 +149,8 @@ class KoboTests(unittest.TestCase):
         ]
         dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(entries)
 
-        self.assertEqual(alias_count, 0)
-        self.assertEqual(multi_lookup_count, 1)
+        self.assertEqual(alias_count, 4)
+        self.assertEqual(multi_lookup_count, 3)
         self.assertEqual(omitted_alias_count, 0)
         self.assertIn("@ Aegon\n::\n<html>", dictfile)
         self.assertNotIn("& Aegon\n", dictfile)
@@ -179,7 +179,13 @@ class KoboTests(unittest.TestCase):
                 "The <b>Valtay Corporation</b> is a massive company.",
                 details=(("Aliases", "The Valtay"),),
             ),
-            Entry("Katia Grim", "https://example/Katia", "A crawler.", details=(("Race", "Human"),)),
+            Entry(
+                "Katia Grim",
+                "https://example/Katia",
+                "A crawler.",
+                details=(("Race", "Human"),),
+                source_categories=("Characters",),
+            ),
             Entry("Brain Boiler", "https://example/Brain_Boiler", "<b>Brain Boilers</b> are a mob."),
         ]
         with TemporaryDirectory() as tmp_dir:
@@ -205,8 +211,40 @@ class KoboTests(unittest.TestCase):
         self.assertEqual(inspection.canonical_word("Valtay"), "Valtay Corporation")
         self.assertEqual(inspection.canonical_word("The Valtay Corporation"), "Valtay Corporation")
         self.assertEqual(inspection.canonical_word("Katia"), "Katia Grim")
+        self.assertEqual(inspection.canonical_word("Katia's"), "Katia Grim")
+        self.assertEqual(inspection.canonical_word(f"Katia{chr(0x2019)}s"), "Katia Grim")
         self.assertEqual(inspection.canonical_word("Grim"), "Katia Grim")
         self.assertEqual(inspection.canonical_word("Brain Boilers"), "Brain Boiler")
+
+    def test_character_possessive_multi_target_lookup_uses_combined_result(self) -> None:
+        entries = [
+            Entry("Aegon Frey", "https://example/Aegon_Frey", "One Aegon.", source_categories=("Characters",)),
+            Entry(
+                "Aegon Targaryen",
+                "https://example/Aegon_Targaryen",
+                "Another Aegon.",
+                source_categories=("Characters",),
+            ),
+        ]
+        dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(entries)
+
+        self.assertEqual(alias_count, 4)
+        self.assertEqual(multi_lookup_count, 3)
+        self.assertEqual(omitted_alias_count, 0)
+        self.assertIn("@ Aegon's\n::\n<html>", dictfile)
+        self.assertIn(f"@ Aegon{chr(0x2019)}s\n::\n<html>", dictfile)
+
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
+            synthetic_kobo_zip(path, entries)
+            inspection = inspect_kobo(path, required_headwords=("Aegon's", f"Aegon{chr(0x2019)}s"))
+
+        ascii_lookup = inspection.lookup("Aegon's") or ""
+        curly_lookup = inspection.lookup(f"Aegon{chr(0x2019)}s") or ""
+        self.assertIn("One Aegon.", ascii_lookup)
+        self.assertIn("Another Aegon.", ascii_lookup)
+        self.assertIn("One Aegon.", curly_lookup)
+        self.assertIn("Another Aegon.", curly_lookup)
 
     def test_title_rule_aliases_become_variants_or_multi_lookup(self) -> None:
         entries = [
