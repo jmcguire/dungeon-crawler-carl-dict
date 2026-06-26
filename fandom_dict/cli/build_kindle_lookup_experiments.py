@@ -620,7 +620,7 @@ def write_test_book(output_dir: Path, *, compile_output: bool) -> None:
     <dc-metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
       <dc:Identifier id="uid">dcdict-lookup-test-book</dc:Identifier>
       <dc:Title>{title}</dc:Title>
-      <dc:Language>en-us</dc:Language>
+      <dc:Language>en</dc:Language>
       <dc:Creator>{EXPERIMENT_AUTHOR}</dc:Creator>
     </dc-metadata>
   </metadata>

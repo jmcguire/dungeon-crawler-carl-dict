@@ -2,35 +2,6 @@
 
 This file is prioritized by what is most likely to improve real reader lookup behavior.
 
-## P0 - Understand Kindle Lookup Failures
-
-- Build a Kindle lookup diagnostic workflow.
-  - Goal: separate dictionary-index problems from Kindle UI selection behavior.
-  - Create a tiny controlled test book and tiny controlled dictionary with known entries, aliases, inflections, duplicate lookup entries, punctuation cases, lowercase cases, possessives, and multi-word phrases.
-  - Test on the physical Kindle, not just Kindle Previewer.
-  - Record which selections show Dictionary, X-Ray, Wikipedia, Translate, Search, or no lookup tab.
-  - Known confusing case: selecting multi-word proper nouns can suppress the Dictionary tab entirely. Kindle may show X-Ray, Wikipedia, Translate, or Search instead because it decided the selection is a phrase/entity, not a dictionary lookup candidate.
-  - Examples to test manually: `The Valtay Corporation`, `Valtay Corporation`, `Valtay`, `Gwendolyn Duet`, `Desperado Club`, `dirigible gnomes`, `Heal spell`, `Heal Spell`, `Carl's`.
-  - Also test lowercase, punctuation, apostrophes, periods attached to selections, text inside italics, and single quotes encoded as `&#x27;` in Kindle XHTML.
-  - Output: a short markdown report plus any fixture files needed to repeat the test.
-
-- Decide whether lowercase, punctuation, or other true grammatical forms need additional Kindle indexing.
-  - Use the diagnostic workflow results before changing output.
-  - Possible output strategies: lowercase `idx:iform` values or no change if Kindle already normalizes the selection.
-
-## P1 - Kindle XHTML And Tooling
-
-- Add a Kindle XHTML/index validation command.
-  - Goal: catch Kindle lookup-shape mistakes before building or releasing.
-  - Validate that every `idx:orth` and `idx:iform` value is stripped, nonempty, and free of control characters.
-  - Validate that single-target aliases use `idx:iform`.
-  - Validate that multi-target lookups use duplicate visible `idx:entry` blocks.
-  - Validate that stale direct duplicate alias entries are not emitted for normal aliases.
-  - Validate that unsupported alias constructs such as `idx:orth type="silent"` do not appear.
-  - Validate that expected representative headwords and aliases exist.
-  - Integrate this validation into build or release smoke tests.
-  - Output clear failure messages pointing to the bad entry or alias.
-
 ## P1 - Fix Known Missing Or Misnamed Entries
 
 - Investigate true missing entries.
@@ -50,13 +21,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
 ## P3 - Release And User Experience Polish
 
-- Study Fictionary presentation and spoiler UX.
-  - Goal: borrow good reader-facing ideas without copying proprietary dictionary content.
-  - Review public-facing Fictionary material at <https://www.thefictionary.net/home>.
-  - Look specifically for spoiler-level organization, entry phrasing, multi-word term behavior, source/series/book labeling, and install/help-page language.
-  - Turn useful findings into separate implementation TODOs only if they clearly improve this project.
-  - Avoid copying paid/proprietary entry text, styling, or private dictionary files.
-
 - Research Kobo internal links.
   - Kobo output does not currently include internal dictionary links.
   - Determine whether Kobo dicthtml supports reliable in-dictionary links before adding them.
@@ -70,30 +34,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
 - Review whether generic first-name/last-name aliases should be configurable by fandom.
   - This may help wikis with many human names.
   - It may also create noisy collisions, so keep it collision-protected and opt-in if expanded.
-
-## P3 - Should the metadata tags be updated?
-
-We have:
-
-    <x-metadata>
-      <DictionaryInLanguage>en-us</DictionaryInLanguage>
-      <DictionaryOutLanguage>en-us</DictionaryOutLanguage>
-      <DefaultLookupIndex>default</DefaultLookupIndex>
-    </x-metadata>
-
-But the modern way is:
-
-    <meta name="dictionary_in_lang" content="en"/>
-    <meta name="dictionary_out_lang" content="en"/>
-    <meta name="keyword" content="headword"/>
-
-I read that the former is a legacy tag, and the latter is what amazon currently uses.
-
-Also lookups of en v en-us could matter, and maybe we should use the broader en, so it works regardless of regional formatting?
-
-Maybe we have both, the x-metadata for fallback and modern metatags afterward for modern kindles.
-
-(also see `<dc:Language>en-us</dc:Language>` and update that to **en**)
 
 ## Unsorted Stuff
 

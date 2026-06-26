@@ -1495,7 +1495,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             write_opf(output, "Title", "Author", "dictionary.xhtml", "urn:test", "cover.xhtml")
 
             text = output.read_text(encoding="utf-8")
-            self.assertIn("<DictionaryInLanguage>en-us</DictionaryInLanguage>", text)
+            self.assertIn("<DictionaryInLanguage>en</DictionaryInLanguage>", text)
             self.assertIn('<dc:Identifier id="uid">urn:test</dc:Identifier>', text)
             self.assertIn("<DefaultLookupIndex>default</DefaultLookupIndex>", text)
             self.assertIn("generated from the fandom wiki page summaries", text)

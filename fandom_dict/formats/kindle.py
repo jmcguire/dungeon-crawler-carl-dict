@@ -54,7 +54,7 @@ from fandom_dict.config import slugify_title
 
 DEFAULT_TITLE = "Dungeon Crawler Carl Dictionary"
 DEFAULT_AUTHOR = "Generated from Dungeon Crawler Carl Wiki contributors"
-LANGUAGE = "en-us"
+LANGUAGE = "en"
 DEFAULT_RELEASE_VERSION = "dev"
 
 
