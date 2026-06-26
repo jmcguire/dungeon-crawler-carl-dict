@@ -209,6 +209,20 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             "<b>Bear Witness Spell</b> is a spell. Spell can be negated by a high enough Mind Balance Skill.",
         )
 
+    def test_summary_expands_short_intro_with_second_description_paragraph(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p>This is an achievement that <a href="/wiki/Donut">Donut</a> says she received for being a good actress when she tricked the Goblin Shamankas on the second floor.</p>
+          <h2><span class="mw-headline" id="Description">Description</span></h2>
+          <p>This achievement and having one trillion views are the two pre-requisites that allow <a href="/wiki/Donut">Donut</a> to select the Former Child Actor Class during class selection on the third floor.</p>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Cut! Achievement", html),
+            "This is an achievement that Donut says she received for being a good actress when she tricked the Goblin Shamankas on the second floor. This achievement and having one trillion views are the two pre-requisites that allow Donut to select the Former Child Actor Class during class selection on the third floor.",
+        )
+
     def test_summary_expands_truncated_description_with_description_block(self) -> None:
         html = """
         <div class="mw-parser-output">
@@ -221,6 +235,23 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         self.assertEqual(
             summary_from_html("201st Security Group Militia", html),
             "<b>The 201st Security Group</b> is a cult of City Elves. They worship Apito, and they believe they must protect Skyfowl from flightless creatures.",
+        )
+
+    def test_summary_replaces_broken_intro_with_later_story_paragraph(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p><b>Commander Stockade</b> is</p>
+          <h2><span class="mw-headline" id="Story">Story</span></h2>
+          <p>He got trapped in the <a href="/wiki/Desperado_Club">Desperado Club</a> when Carl flooded the ninth floor.</p>
+          <div class="mw-collapsible mw-collapsed">
+            <div class="mw-collapsible-content"><p>Book 7 spoiler text should not be used.</p></div>
+          </div>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Commander Stockade", html),
+            "He got trapped in the Desperado Club when Carl flooded the ninth floor.",
         )
 
     def test_summary_trims_overlong_intro_at_sentence_boundary(self) -> None:
@@ -271,6 +302,53 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         self.assertEqual(
             summary_from_html("Sapper's Box", html),
             "The <b>Sapper's Box</b> is a Loot Box that gives various trap supplies.",
+        )
+
+    def test_summary_short_intro_without_safe_later_block_stays_as_is(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p><b>Ping Spell</b> is a spell.</p>
+          <h2><span class="mw-headline" id="References">References</span></h2>
+          <p>For more information: see the references.</p>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Ping Spell", html),
+            "<b>Ping Spell</b> is a spell.",
+        )
+
+    def test_summary_skips_collapsible_spoiler_and_uses_next_safe_later_paragraph(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p><b>Commander Stockade</b> is</p>
+          <div class="mw-collapsible mw-collapsed">
+            <div class="mw-collapsible-content"><p>Book 7 spoiler text should not be used.</p></div>
+          </div>
+          <h2><span class="mw-headline" id="Story">Story</span></h2>
+          <p>He got trapped in the <a href="/wiki/Desperado_Club">Desperado Club</a> when Carl flooded the ninth floor.</p>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Commander Stockade", html),
+            "He got trapped in the Desperado Club when Carl flooded the ninth floor.",
+        )
+
+    def test_summary_skips_bad_later_blocks_and_keeps_looking(self) -> None:
+        html = """
+        <div class="mw-parser-output">
+          <p><b>Cut! Achievement</b> is an achievement.</p>
+          <h2><span class="mw-headline" id="References">References</span></h2>
+          <p>For more information: see references.</p>
+          <h2><span class="mw-headline" id="Story">Story</span></h2>
+          <p>Donut later uses it to qualify for the Former Child Actor Class.</p>
+        </div>
+        """
+
+        self.assertEqual(
+            summary_from_html("Cut! Achievement", html),
+            "<b>Cut! Achievement</b> is an achievement. Donut later uses it to qualify for the Former Child Actor Class.",
         )
 
     def test_summary_leaves_normal_length_description_unchanged(self) -> None:

@@ -9,7 +9,7 @@ from html.parser import HTMLParser
 from fandom_dict.text import clean_wiki_text_artifacts, collapse_whitespace
 
 
-SHORT_DESCRIPTION_THRESHOLD = 100
+SHORT_DESCRIPTION_THRESHOLD = 140
 
 
 class FirstParagraphParser(HTMLParser):
@@ -64,6 +64,7 @@ class FirstParagraphParser(HTMLParser):
         "gallerybox",
         "gallerytext",
         "pi-caption",
+        "mw-collapsible",
     )
 
     def __init__(self) -> None:
@@ -75,7 +76,8 @@ class FirstParagraphParser(HTMLParser):
         self._chunks: list[str] = []
         self._loose_chunks: list[str] = []
         self._inline_stack: list[str] = []
-        self.blocks: list[str] = []
+        self.intro_blocks: list[str] = []
+        self.later_blocks: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         # Fandom pages can contain malformed or loosely nested generated HTML.
@@ -102,7 +104,7 @@ class FirstParagraphParser(HTMLParser):
             if tag not in self.VOID_TAGS:
                 self._skip_until.append(tag)
             return
-        if tag == "p" and len(self.blocks) < 2:
+        if tag == "p":
             self._paragraph_depth += 1
             self._chunks = []
         elif self._paragraph_depth and tag == "br":
@@ -136,12 +138,12 @@ class FirstParagraphParser(HTMLParser):
             self._paragraph_depth -= 1
             self._chunks = []
             if self._accept_summary_block(plain_text):
-                self.blocks.append(text)
+                self._append_block(text)
 
     def handle_data(self, data: str) -> None:
-        if not self._skip_until and self._paragraph_depth and len(self.blocks) < 2:
+        if not self._skip_until and self._paragraph_depth:
             self._chunks.append(html_lib.escape(data, quote=False))
-        elif not self._skip_until and len(self.blocks) < 2:
+        elif not self._skip_until:
             self._loose_chunks.append(html_lib.escape(data, quote=False))
 
     def close(self) -> None:
@@ -151,7 +153,7 @@ class FirstParagraphParser(HTMLParser):
     def _finalize_loose_text(self) -> None:
         """Accept summary text that appears outside paragraph tags."""
 
-        if len(self.blocks) >= 2 or not self._loose_chunks:
+        if not self._loose_chunks:
             self._loose_chunks = []
             return
         self._close_open_inline_tags(self._loose_chunks)
@@ -159,7 +161,7 @@ class FirstParagraphParser(HTMLParser):
         plain_text = text_from_inline_html(text)
         self._loose_chunks = []
         if len(plain_text) >= 20 and self._accept_summary_block(plain_text):
-            self.blocks.append(text)
+            self._append_block(text)
 
     def _open_inline_tag(self, tag: str, chunks: list[str]) -> None:
         kindle_tag = self.ALLOWED_INLINE_TAGS[tag]
@@ -183,11 +185,13 @@ class FirstParagraphParser(HTMLParser):
     def _accept_summary_block(self, plain_text: str) -> bool:
         """Return true when a block belongs to an intro/description summary."""
 
-        return (
-            self._current_section in self.SUMMARY_SECTIONS
-            and bool(plain_text)
-            and not is_non_summary_paragraph(plain_text)
-        )
+        return bool(plain_text) and not is_non_summary_paragraph(plain_text)
+
+    def _append_block(self, text: str) -> None:
+        """Store a useful block, preferring intro/description ordering."""
+
+        target = self.intro_blocks if self._current_section in self.SUMMARY_SECTIONS else self.later_blocks
+        target.append(text)
 
 
 class InfoboxSummaryParser(HTMLParser):
@@ -380,6 +384,12 @@ def is_ai_statline_paragraph(text: str) -> bool:
     )
 
 
+def is_later_story_statline(text: str) -> bool:
+    """Return true for structured later-page blocks that are not prose summaries."""
+
+    return bool(re.search(r"\b(?:loot|reward|cost|target|duration|range|cooldown|type|source)\s*:", text, re.I))
+
+
 def is_non_summary_paragraph(text: str) -> bool:
     """Return true for wiki boilerplate paragraphs that are not page summaries."""
 
@@ -404,16 +414,26 @@ def first_paragraph_from_html(html: str) -> str:
     parser = FirstParagraphParser()
     parser.feed(html)
     parser.close()
-    return parser.blocks[0] if parser.blocks else ""
+    blocks = parser.intro_blocks or parser.later_blocks
+    return blocks[0] if blocks else ""
 
 
 def summary_blocks_from_html(html: str) -> list[str]:
-    """Extract up to two useful summary blocks from article HTML."""
+    """Extract useful intro/description blocks from article HTML."""
 
     parser = FirstParagraphParser()
     parser.feed(html)
     parser.close()
-    return parser.blocks
+    return parser.intro_blocks
+
+
+def later_summary_blocks_from_html(html: str) -> list[str]:
+    """Extract later safe prose blocks that appear below the intro/description."""
+
+    parser = FirstParagraphParser()
+    parser.feed(html)
+    parser.close()
+    return parser.later_blocks
 
 
 def is_small_description(description: str) -> bool:
@@ -443,6 +463,12 @@ def is_generic_small_description(title: str, description: str) -> bool:
     return len(plain_description) < SHORT_DESCRIPTION_THRESHOLD and plain_description in generic_forms
 
 
+def is_broken_description(title: str, description: str) -> bool:
+    """Return true when an intro is too malformed to append onto cleanly."""
+
+    return is_stub_like_description(title, description)
+
+
 def lowercase_first_text_character(fragment: str) -> str:
     """Lowercase the first visible character in a safe inline HTML fragment."""
 
@@ -461,6 +487,24 @@ def expand_small_description(summary: str, blocks: list[str]) -> str:
         return summary
     next_block = lowercase_first_text_character(blocks[1]) if is_truncated_description(summary) else blocks[1]
     return normalize_inline_html(f"{summary} {next_block}")
+
+
+def expand_summary_with_later_blocks(summary: str, later_blocks: list[str]) -> str:
+    """Append one later safe prose block when a short intro needs more context."""
+
+    if not summary or not is_small_description(summary) or not later_blocks:
+        return summary
+    if normalize_text(summary) == normalize_text(later_blocks[0]):
+        return summary
+    return normalize_inline_html(f"{summary} {later_blocks[0]}")
+
+
+def replace_broken_summary_with_later_block(title: str, summary: str, later_blocks: list[str]) -> str:
+    """Replace a clearly broken intro with the first safe later prose block."""
+
+    if not summary or not is_broken_description(title, summary) or not later_blocks:
+        return summary
+    return later_blocks[0]
 
 
 def summary_from_infobox(title: str, html: str) -> str:
@@ -482,6 +526,11 @@ def summary_from_html(title: str, html: str, max_summary_length: int | None = No
     """Extract a page summary, falling back to infobox fields when needed."""
 
     blocks = summary_blocks_from_html(html)
+    later_blocks = [
+        block
+        for block in later_summary_blocks_from_html(html)
+        if not is_later_story_statline(text_from_inline_html(block))
+    ]
     summary = blocks[0] if blocks else ""
     if summary:
         ai_summary = ""
@@ -492,6 +541,8 @@ def summary_from_html(title: str, html: str, max_summary_length: int | None = No
         ):
             ai_summary = ai_description_paragraph_from_html(html)
         summary = ai_summary or expand_small_description(summary, blocks)
+        summary = replace_broken_summary_with_later_block(title, summary, later_blocks)
+        summary = expand_summary_with_later_blocks(summary, later_blocks)
     if not summary:
         summary = summary_from_infobox(title, html)
     return clean_wiki_text_artifacts(trim_inline_html_to_plain_length(summary, max_summary_length))
