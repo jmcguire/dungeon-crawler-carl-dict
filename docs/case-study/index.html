@@ -93,6 +93,11 @@
     <h2>Format constraints</h2>
     <p>Kindle dictionaries use XHTML with Amazon-specific <code>idx:*</code> tags plus an OPF package file. KOReader and BOOX use a StarDict bundle with files kept together in one folder. Kobo uses a compiled custom dictionary ZIP. Each target has different lookup behavior, packaging expectations, and UI limitations.</p>
 
+    <h2>What real Kindle testing changed</h2>
+    <p>One of the most useful lessons only showed up on real hardware. Full multi-word Kindle dictionary entries such as <em>Valtay Corporation</em>, <em>Gwendolyn Duet</em>, <em>Desperado Club</em>, or <em>Earth Box</em> can be valid, present in the generated dictionary, and still fail to appear from the popup lookup UI while reading.</p>
+
+    <p>After testing multiple dictionary markup variants on a physical Kindle, the practical conclusion was not "the entries are missing." It was that Kindle's popup lookup can refuse to invoke dictionary lookup for selected multi-word phrases even when the dictionary itself is correctly built. The reader-friendly workaround is conservative single-word aliases, so selecting the most distinctive word in a phrase is more reliable than expecting the whole phrase to trigger a result.</p>
+
     <h2>Reliability work</h2>
     <p>The test suite covers extraction, SQLite loading, Kindle XHTML/OPF generation, StarDict binary generation and inspection, aliases, release packaging, and compiler wrapper behavior. Release builds also generate checksums and a manifest so users can verify artifacts.</p>
 
