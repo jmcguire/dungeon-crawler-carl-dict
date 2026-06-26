@@ -1,13 +1,17 @@
 :root {
-  --bg: #f7f6ef;
-  --surface: #ffffff;
-  --text: #18211f;
-  --muted: #53615d;
-  --border: #d5ddd7;
-  --accent: #176b5f;
-  --accent-dark: #0f433d;
-  --soft: #e9f1ed;
-  --code: #eef3f0;
+  --bg: #fff7dc;
+  --surface: #fffdf4;
+  --text: #15110d;
+  --muted: #5f5544;
+  --border: #dbc887;
+  --accent: #b80062;
+  --accent-dark: #7f003f;
+  --yellow: #ffd335;
+  --yellow-soft: #fff0a6;
+  --pink: #ff1688;
+  --ink: #0d0b09;
+  --soft: #fff1b8;
+  --code: #fff4c9;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
@@ -61,9 +65,10 @@ button:focus-visible {
   left: 1rem;
   top: 1rem;
   transform: translateY(-200%);
-  background: var(--surface);
+  background: var(--yellow);
+  color: var(--ink);
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
+  border: 2px solid var(--ink);
   border-radius: 0.5rem;
   z-index: 10;
 }
@@ -73,8 +78,8 @@ button:focus-visible {
 }
 
 .site-header {
-  border-bottom: 1px solid var(--border);
-  background: rgba(247, 246, 239, 0.96);
+  border-bottom: 4px solid var(--pink);
+  background: var(--ink);
 }
 
 .header-inner {
@@ -88,8 +93,10 @@ button:focus-visible {
 
 .brand {
   font-weight: 800;
-  color: var(--text);
+  color: var(--yellow);
   text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .site-nav {
@@ -100,18 +107,18 @@ button:focus-visible {
 }
 
 .site-nav a {
-  color: var(--muted);
+  color: #fdf4c4;
   font-size: 0.95rem;
   text-decoration: underline;
   text-decoration-thickness: 1px;
 }
 
 .site-nav a:hover {
-  color: var(--accent);
+  color: var(--yellow);
 }
 
 .site-nav a + a {
-  border-left: 1px solid var(--border);
+  border-left: 1px solid rgba(255, 211, 53, 0.35);
   margin-left: 0.6rem;
   padding-left: 0.6rem;
 }
@@ -123,9 +130,25 @@ button:focus-visible {
 }
 
 .hero {
+  position: relative;
+  overflow: hidden;
   background:
-    linear-gradient(135deg, rgba(23, 107, 95, 0.08), rgba(184, 135, 47, 0.08)),
-    var(--bg);
+    radial-gradient(circle at 12% 22%, rgba(255, 22, 136, 0.26) 0 1px, transparent 2px),
+    radial-gradient(circle at 84% 30%, rgba(255, 211, 53, 0.18) 0 1px, transparent 2px),
+    radial-gradient(circle at 62% 78%, rgba(255, 22, 136, 0.22) 0 1px, transparent 2px),
+    linear-gradient(135deg, #15110d 0%, #080706 100%);
+  background-size: 48px 48px, 62px 62px, 74px 74px, auto;
+  color: #fff7dc;
+}
+
+.hero::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 0.5rem;
+  background: var(--pink);
+  content: "";
 }
 
 .hero-copy {
@@ -141,6 +164,11 @@ button:focus-visible {
   font-size: 0.8rem;
 }
 
+.hero .eyebrow,
+.device-section .eyebrow {
+  color: var(--pink);
+}
+
 h1,
 h2,
 h3 {
@@ -152,6 +180,21 @@ h1 {
   max-width: 900px;
   font-size: 3.25rem;
   letter-spacing: 0;
+}
+
+.hero h1 {
+  font-size: 3.45rem;
+  text-transform: uppercase;
+}
+
+.hero h1 span {
+  display: table;
+  margin-bottom: 0.18rem;
+  padding: 0.04em 0.16em 0.02em;
+  background: var(--yellow);
+  color: var(--ink);
+  font-weight: 950;
+  line-height: 0.96;
 }
 
 .page-title h1 {
@@ -175,18 +218,16 @@ p {
   max-width: 62ch;
   color: var(--muted);
   font-size: 1.18rem;
+  margin-bottom: 0;
+}
+
+.hero .lede {
+  color: #f8efc9;
 }
 
 .small {
   color: var(--muted);
   font-size: 0.92rem;
-}
-
-.button-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.7rem;
-  margin: 1.35rem 0 0.75rem;
 }
 
 .button {
@@ -204,16 +245,21 @@ p {
 }
 
 .button:hover {
-  background: var(--soft);
-}
-
-.button.primary {
-  background: var(--accent);
+  border-color: var(--pink);
+  background: var(--pink);
   color: #fff;
 }
 
+.button.primary {
+  border-color: var(--yellow);
+  background: var(--yellow);
+  color: var(--ink);
+}
+
 .button.primary:hover {
-  background: var(--accent-dark);
+  border-color: var(--pink);
+  background: var(--pink);
+  color: #fff;
 }
 
 .callout,
@@ -248,8 +294,15 @@ p {
 }
 
 .section.muted {
-  background: var(--soft);
+  background: var(--yellow-soft);
   border-block: 1px solid var(--border);
+}
+
+.device-section {
+  background:
+    linear-gradient(180deg, rgba(255, 211, 53, 0.08), transparent 45%),
+    var(--ink);
+  color: #fff8df;
 }
 
 .section-heading {
@@ -260,6 +313,10 @@ p {
 .section-heading p:last-child {
   color: var(--muted);
   font-size: 1.08rem;
+}
+
+.device-section .section-heading p:last-child {
+  color: #f7eabd;
 }
 
 .device-grid {
@@ -274,6 +331,11 @@ p {
   justify-content: space-between;
   min-height: 18rem;
   padding: 1.15rem;
+  border-color: rgba(255, 211, 53, 0.32);
+  background:
+    linear-gradient(180deg, var(--yellow) 0 0.42rem, transparent 0.42rem),
+    var(--surface);
+  color: var(--text);
 }
 
 .device-card h3 {
@@ -409,6 +471,10 @@ pre code {
     font-size: 2.7rem;
   }
 
+  .hero h1 {
+    font-size: 2.7rem;
+  }
+
   h2 {
     font-size: 1.7rem;
   }
@@ -429,7 +495,7 @@ pre code {
 
   .hero,
   .page-title {
-    padding: 2.2rem 0;
+    padding: 1.65rem 0;
   }
 
   h1,
@@ -438,8 +504,12 @@ pre code {
     font-size: 2.25rem;
   }
 
+  .hero h1 {
+    font-size: 2rem;
+  }
+
   .lede {
-    font-size: 1.08rem;
+    font-size: 1rem;
   }
 
   .section {
