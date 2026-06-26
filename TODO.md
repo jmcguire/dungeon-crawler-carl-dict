@@ -84,6 +84,30 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - This may help wikis with many human names.
   - It may also create noisy collisions, so keep it collision-protected and opt-in if expanded.
 
+## P3 - Should the metadata tags be updated?
+
+We have:
+
+    <x-metadata>
+      <DictionaryInLanguage>en-us</DictionaryInLanguage>
+      <DictionaryOutLanguage>en-us</DictionaryOutLanguage>
+      <DefaultLookupIndex>default</DefaultLookupIndex>
+    </x-metadata>
+
+But the modern way is:
+
+    <meta name="dictionary_in_lang" content="en"/>
+    <meta name="dictionary_out_lang" content="en"/>
+    <meta name="keyword" content="headword"/>
+
+I read that the former is a legacy tag, and the latter is what amazon currently uses.
+
+Also lookups of en v en-us could matter, and maybe we should use the broader en, so it works regardless of regional formatting?
+
+Maybe we have both, the x-metadata for fallback and modern metatags afterward for modern kindles.
+
+(also see `<dc:Language>en-us</dc:Language>` and update that to **en**)
+
 ## Unsorted Stuff
 
 - we should look deeper for more sentences if the intro isn't enough.
@@ -97,6 +121,15 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
 - if i want to start releasing dictionaries for other fandoms, how do i organize that? can i still do it on a github.io page, or should i start with my own domain? how would i reorganize the processes and the builds and the releases? what's the information architecture? at what point to a run afoul of copywrite? i want to make sure the original authors are respected on each fandom page. does that mean individual buy-in? probably? maybe a contact page for an admin to request a fandom be added, then a separate page for an individual to ask for a one-off build, just for them (that i won't publish).
 
+## P3 - Verbosity options
+
+- "outputs" will just print output location(s) and nothing.
+- "smaller" for basic steps, things like "number words found", plus warnings.
+- "full" for a word-by-word log of what happened and which aliases were produced.
+
+all levels should include big errors.
+
+i kinda want colors. is that bad? do they downgrade nicely?
 
 ## Reference Notes
 
