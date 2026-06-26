@@ -74,6 +74,27 @@ class StarDictTests(unittest.TestCase):
             canonical = {syn.word: inspection.entries[syn.original_index].word for syn in inspection.synonyms}
             self.assertEqual(canonical, {"1914": "1914 Box", "Fire Fingers": "Fire Fingers Spell"})
 
+    def test_title_component_aliases_resolve_as_synonyms(self) -> None:
+        entries = [
+            Entry("Desperado Club", "https://example/Desperado_Club", "A club."),
+        ]
+        with TemporaryDirectory() as tmp_dir:
+            result = build_stardict(
+                entries,
+                Path(tmp_dir),
+                "Test Dictionary",
+                "Test Author",
+                title_component_ignore_words=("Club",),
+            )
+            inspection = inspect_stardict(
+                result.ifo_path,
+                required_headwords=("Desperado", "Desperado Club"),
+                check_sdcv=False,
+            )
+
+        self.assertEqual(inspection.canonical_word("Desperado"), "Desperado Club")
+        self.assertIn("A club.", inspection.lookup("Desperado") or "")
+
     def test_multi_target_lookup_uses_combined_canonical_result(self) -> None:
         entries = [
             Entry("Earth", "https://example/Earth", "Earth is a planet."),
@@ -81,6 +102,32 @@ class StarDictTests(unittest.TestCase):
         ]
         with TemporaryDirectory() as tmp_dir:
             result = build_stardict(entries, Path(tmp_dir), "Test Dictionary", "Test Author")
+            inspection = inspect_stardict(
+                result.ifo_path,
+                required_headwords=("Earth", "Earth Box"),
+                check_sdcv=False,
+            )
+
+        self.assertEqual(result.alias_count, 0)
+        self.assertEqual(result.multi_lookup_count, 1)
+        earth_lookup = inspection.lookup("Earth") or ""
+        self.assertIn("Earth is a planet.", earth_lookup)
+        self.assertIn("Earth Box is a reward.", earth_lookup)
+
+    def test_title_component_multi_target_lookup_uses_combined_result(self) -> None:
+        entries = [
+            Entry("Earth", "https://example/Earth", "Earth is a planet."),
+            Entry("Earth Box", "https://example/Earth_Box", "Earth Box is a reward."),
+        ]
+        with TemporaryDirectory() as tmp_dir:
+            result = build_stardict(
+                entries,
+                Path(tmp_dir),
+                "Test Dictionary",
+                "Test Author",
+                title_suffix_aliases=(),
+                title_component_ignore_words=("Box",),
+            )
             inspection = inspect_stardict(
                 result.ifo_path,
                 required_headwords=("Earth", "Earth Box"),

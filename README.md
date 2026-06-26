@@ -130,7 +130,7 @@ Important fields:
 - `database_path`: SQLite crawl output.
 - `build_dir`: root build directory for Kindle, StarDict, and Kobo outputs.
 - `sidebar_fields`: infobox fields to extract, with alias fields marked by `"alias": true`.
-- `title_aliases`: safe suffix/prefix lookup rules and parenthetical stripping.
+- `title_aliases`: safe suffix/prefix lookup rules, parenthetical stripping, and noisy words to ignore for component aliases.
 - `max_summary_length`: optional summary trim length.
 - `smoke_headwords`: representative lookups for format inspectors.
 - `kobo_output_name`: Kobo dictionary ZIP filename.
@@ -153,7 +153,8 @@ Minimal shape:
   "title_aliases": {
     "suffixes": [" Spell", " Box"],
     "prefixes": ["Potion of "],
-    "strip_parenthetical": true
+    "strip_parenthetical": true,
+    "component_ignore_words": ["Corporation", "Club", "Achievement", "Spell", "Box"]
   },
   "max_summary_length": 600,
   "smoke_headwords": ["Carl", "Donut", "Mordecai"],
@@ -173,7 +174,7 @@ Re-extract definitions from stored HTML without touching the network:
 
 The entry pipeline extracts the first useful summary text, strips wiki maintenance boxes and citation markers, preserves safe bold/italic inline formatting, adds conservative sidebar details, repairs forwarding-only entries, trims overlong summaries, and skips low-quality final definitions while preserving raw crawled data.
 
-Aliases are discovered from safe title rules, selected sidebar aliases, recognized intro parentheticals, first bold intro names, first names for simple two-word `Characters` entries, possessive forms for `Characters` lookups, conservative plural forms for obvious race/mob/item/group nouns, and a small older human-name heuristic. Single-target Kindle aliases are emitted as `idx:iform` inflections. StarDict uses `.syn` aliases, and Kobo uses variants. If a lookup collides with a real entry, Kindle emits multiple lookup entries while StarDict and Kobo use one combined result.
+Aliases are discovered from safe title rules, selected sidebar aliases, recognized intro parentheticals, first bold intro names, first names for simple two-word `Characters` entries, possessive forms for `Characters` lookups, conservative plural forms for obvious race/mob/item/group nouns, conservative component-word fallbacks for multi-word titles, and a small older human-name heuristic. Single-target Kindle aliases are emitted as `idx:iform` inflections. StarDict uses `.syn` aliases, and Kobo uses variants. If a lookup collides with a real entry, Kindle emits multiple lookup entries while StarDict and Kobo use one combined result.
 
 With `--link-entries`, known entry names inside definitions become internal links. Kindle links work when opening the dictionary directly as a book, but may not work inside Kindle's lookup popup UI.
 

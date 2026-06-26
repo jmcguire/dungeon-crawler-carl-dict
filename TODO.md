@@ -48,19 +48,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - `Krakaren Clone (Second Floor)`
   - Determine whether these need better extraction, aliases, disambiguation, or manual cleanup.
 
-## P2 - Improve Kindle Indexing
-
-- Improve multi-word lookup aliases.
-  - Goal: make common partial selections work better without creating noisy aliases.
-  - Use the Fictionary-style idea that a multi-word fictional term may need lookup help for meaningful component words.
-  - Keep this conservative and collision-safe.
-  - Prioritize `Characters` entries.
-  - Avoid stopwords, honorifics, articles, and generic type words.
-  - Preserve multi-target lookup behavior when one lookup word maps to multiple entries.
-  - Keep exact canonical titles ranked first.
-  - Candidate examples: `Gwendolyn Duet`, `Valtay Corporation`, `Borant Corporation`, `Desperado Club`.
-  - Do not create broad first-word aliases for every title.
-
 ## P3 - Release And User Experience Polish
 
 - Study Fictionary presentation and spoiler UX.

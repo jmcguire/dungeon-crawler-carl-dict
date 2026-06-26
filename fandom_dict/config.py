@@ -29,6 +29,7 @@ class TitleAliasRules:
     suffixes: tuple[str, ...] = ()
     prefixes: tuple[str, ...] = ()
     strip_parenthetical: bool = True
+    component_ignore_words: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -130,6 +131,7 @@ def project_config_from_mapping(data: dict[str, Any]) -> ProjectConfig:
             suffixes=tuple(str(value) for value in title_aliases.get("suffixes", ())),
             prefixes=tuple(str(value) for value in title_aliases.get("prefixes", ())),
             strip_parenthetical=bool(title_aliases.get("strip_parenthetical", True)),
+            component_ignore_words=tuple(str(value) for value in title_aliases.get("component_ignore_words", ())),
         ),
         smoke_headwords=tuple(str(value) for value in require_list(data, "smoke_headwords")),
         kobo_output_name=require_string(data, "kobo_output_name"),

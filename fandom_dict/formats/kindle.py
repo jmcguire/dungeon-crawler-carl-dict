@@ -217,6 +217,7 @@ def write_xhtml_with_options(
     title_suffix_aliases: tuple[str, ...] | None = None,
     title_prefix_aliases: tuple[str, ...] | None = None,
     strip_parenthetical_disambiguation: bool = True,
+    title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> LookupReport:
     """Write the Kindle dictionary XHTML source file with build options."""
@@ -224,6 +225,7 @@ def write_xhtml_with_options(
     lookup_options = {
         "include_sidebar_aliases": include_sidebar_aliases,
         "strip_parenthetical_disambiguation": strip_parenthetical_disambiguation,
+        "title_component_ignore_words": title_component_ignore_words,
         "sidebar_alias_labels": sidebar_alias_labels,
     }
     if title_suffix_aliases is not None:
@@ -392,6 +394,7 @@ def build_dictionary_sources(
     title_suffix_aliases: tuple[str, ...] | None = None,
     title_prefix_aliases: tuple[str, ...] | None = None,
     strip_parenthetical_disambiguation: bool = True,
+    title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> BuildResult:
     """Generate and validate Kindle dictionary source files."""
@@ -414,6 +417,7 @@ def build_dictionary_sources(
         title_suffix_aliases=title_suffix_aliases,
         title_prefix_aliases=title_prefix_aliases,
         strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
+        title_component_ignore_words=title_component_ignore_words,
         sidebar_alias_labels=sidebar_alias_labels,
     )
     write_opf(opf_path, title, author, xhtml_path.name, identifier, cover_path.name)

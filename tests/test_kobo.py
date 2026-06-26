@@ -115,6 +115,55 @@ class KoboTests(unittest.TestCase):
         self.assertEqual(inspection.canonical_word("Earth"), "Earth")
         self.assertEqual(inspection.canonical_word("Earth Box"), "Earth Box")
 
+    def test_title_component_aliases_become_variants(self) -> None:
+        entries = [
+            Entry("Desperado Club", "https://example/Desperado_Club", "A club."),
+        ]
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
+            dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(
+                entries,
+                title_component_ignore_words=("Club",),
+            )
+            self.assertEqual(alias_count, 1)
+            self.assertEqual(multi_lookup_count, 0)
+            self.assertGreaterEqual(omitted_alias_count, 0)
+            self.assertIn("@ Desperado Club\n& Desperado\n::\n<html>", dictfile)
+            synthetic_kobo_zip(path, entries, title_component_ignore_words=("Club",))
+            inspection = inspect_kobo(path, required_headwords=("Desperado", "Desperado Club"))
+
+        self.assertEqual(inspection.canonical_word("Desperado"), "Desperado Club")
+        self.assertIn("A club.", inspection.lookup("Desperado") or "")
+
+    def test_title_component_multi_target_lookup_uses_combined_result(self) -> None:
+        entries = [
+            Entry("Earth", "https://example/Earth", "Earth is a planet."),
+            Entry("Earth Box", "https://example/Earth_Box", "Earth Box is a reward."),
+        ]
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
+            dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(
+                entries,
+                title_suffix_aliases=(),
+                title_component_ignore_words=("Box",),
+            )
+            self.assertEqual(alias_count, 0)
+            self.assertEqual(multi_lookup_count, 1)
+            self.assertGreaterEqual(omitted_alias_count, 0)
+            self.assertIn("@ Earth\n::\n<html>", dictfile)
+            self.assertNotIn("& Earth\n", dictfile)
+            synthetic_kobo_zip(
+                path,
+                entries,
+                title_suffix_aliases=(),
+                title_component_ignore_words=("Box",),
+            )
+            inspection = inspect_kobo(path, required_headwords=("Earth", "Earth Box"))
+
+        earth_lookup = inspection.lookup("Earth") or ""
+        self.assertIn("Earth is a planet.", earth_lookup)
+        self.assertIn("Earth Box is a reward.", earth_lookup)
+
     def test_title_rule_multi_target_lookup_uses_combined_result(self) -> None:
         entries = [
             Entry("Heal Pet Potion", "https://example/Heal_Pet_Potion", "A potion that helps pets."),

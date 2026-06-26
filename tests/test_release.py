@@ -325,7 +325,7 @@ class ReleaseTests(unittest.TestCase):
             )
             manifest = json.loads((release_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
             self.assertEqual(set(manifest["formats"]), {"stardict"})
-            self.assertEqual(manifest["formats"]["stardict"]["smoke_tests"]["alias_count"], 2)
+            self.assertEqual(manifest["formats"]["stardict"]["smoke_tests"]["alias_count"], 3)
             self.assertEqual(manifest["formats"]["stardict"]["multi_lookup_count"], 0)
 
     def test_kobo_only_release_packages_only_kobo_assets(self) -> None:

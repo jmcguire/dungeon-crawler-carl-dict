@@ -91,6 +91,58 @@ IRREGULAR_PLURAL_FORMS = {
     "Dwarf": ("Dwarfs", "Dwarves"),
     "Elf": ("Elves",),
 }
+TITLE_COMPONENT_STOP_WORDS = {
+    "a",
+    "about",
+    "all",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "been",
+    "being",
+    "by",
+    "can",
+    "did",
+    "do",
+    "does",
+    "for",
+    "from",
+    "have",
+    "how",
+    "i",
+    "in",
+    "into",
+    "is",
+    "it",
+    "it's",
+    "its",
+    "just",
+    "my",
+    "not",
+    "of",
+    "on",
+    "or",
+    "out",
+    "that",
+    "the",
+    "then",
+    "these",
+    "this",
+    "those",
+    "to",
+    "was",
+    "what",
+    "when",
+    "where",
+    "who",
+    "why",
+    "with",
+    "you",
+    "your",
+}
 FIRST_NAME_SKIP_WORDS = {
     "A",
     "An",
@@ -217,6 +269,9 @@ class _AliasCandidate:
             "category-plural",
             "character-first-name",
             "character-possessive",
+            "bold-intro",
+            "description-leading-article",
+            "description-parenthetical",
         }
 
 
@@ -862,6 +917,97 @@ def title_alias_candidates(
     return candidates
 
 
+def title_component_alias_candidates(
+    title: str,
+    *,
+    suffixes: tuple[str, ...],
+    prefixes: tuple[str, ...],
+    strip_parenthetical_disambiguation: bool,
+    component_ignore_words: tuple[str, ...],
+    conflict_counts: Mapping[str, int],
+) -> list[_AliasCandidate]:
+    """Return a conservative single-token fallback alias from one title."""
+
+    base = title_component_base_title(
+        title,
+        suffixes=suffixes,
+        prefixes=prefixes,
+        strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
+    )
+    ignored = {word.casefold() for word in component_ignore_words}
+    ignored.update(TITLE_COMPONENT_STOP_WORDS)
+    tokens = [
+        token
+        for token in title_component_tokens(base)
+        if token.casefold() not in ignored and component_token_is_usable(token)
+    ]
+    if not tokens or len(tokens) >= 3:
+        return []
+    if len(tokens) == 1:
+        return [_AliasCandidate(title, tokens[0], "title-component")]
+    alias = min(enumerate(tokens), key=lambda item: (conflict_counts.get(item[1].casefold(), 0), item[0]))[1]
+    return [_AliasCandidate(title, alias, "title-component")]
+
+
+def title_component_base_title(
+    title: str,
+    *,
+    suffixes: tuple[str, ...],
+    prefixes: tuple[str, ...],
+    strip_parenthetical_disambiguation: bool,
+) -> str:
+    """Return a title with configured wrapper words removed for component scoring."""
+
+    base = title
+    if strip_parenthetical_disambiguation:
+        base = strip_parenthetical_suffix(base) or base
+    for prefix in prefixes:
+        if base.casefold().startswith(prefix.casefold()):
+            base = base[len(prefix) :].strip()
+            break
+    for suffix in suffixes:
+        if base.casefold().endswith(suffix.casefold()):
+            base = base[: -len(suffix)].strip()
+            break
+    return normalize_text(base)
+
+
+def title_component_tokens(title: str) -> list[str]:
+    """Return simple title tokens that are candidates for one-word fallbacks."""
+
+    return re.findall(r"[A-Za-z0-9][A-Za-z0-9'\u2019-]*", title)
+
+
+def component_token_is_usable(token: str) -> bool:
+    """Return whether a title token is safe to consider as a standalone alias."""
+
+    if len(token) < 2:
+        return False
+    if "'" in token or "\u2019" in token:
+        return False
+    if not (token[0].isupper() or token[0].isdigit()):
+        return False
+    return bool(re.search(r"[A-Za-z0-9]", token))
+
+
+def title_component_conflict_counts(
+    entries: list[Entry],
+    raw_candidates: list[_AliasCandidate],
+) -> Mapping[str, int]:
+    """Count existing title tokens and single-word lookup forms for alias scoring."""
+
+    targets_by_word: dict[str, set[str]] = {}
+    for entry in entries:
+        for token in title_component_tokens(entry.title):
+            targets_by_word.setdefault(token.casefold(), set()).add(entry.title)
+    for candidate in raw_candidates:
+        alias = normalize_text(candidate.alias)
+        usable, _reason = alias_candidate_is_usable(alias)
+        if usable and len(alias.split()) == 1:
+            targets_by_word.setdefault(alias.casefold(), set()).add(candidate.target)
+    return {word: len(targets) for word, targets in targets_by_word.items()}
+
+
 def suffix_stripped_alias(title: str, folded_titles: set[str] | None = None) -> str | None:
     """Compatibility wrapper returning the first legacy suffix-based alias."""
 
@@ -1202,6 +1348,7 @@ def build_lookup_report(
     title_suffix_aliases: tuple[str, ...] = tuple(suffix for suffix, _source in TITLE_SUFFIX_ALIASES),
     title_prefix_aliases: tuple[str, ...] = tuple(prefix for prefix, _source in TITLE_PREFIX_ALIASES),
     strip_parenthetical_disambiguation: bool = True,
+    title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> LookupReport:
     """Build lookup forms from titles, aliases, and collision-safe groups."""
@@ -1226,6 +1373,19 @@ def build_lookup_report(
         raw_candidates.extend(category_plural_alias_candidates(entry))
         if include_human_name_aliases:
             raw_candidates.extend(human_name_alias_candidates(entry))
+    if title_component_ignore_words:
+        conflict_counts = title_component_conflict_counts(entries, raw_candidates)
+        for entry in entries:
+            raw_candidates.extend(
+                title_component_alias_candidates(
+                    entry.title,
+                    suffixes=title_suffix_aliases,
+                    prefixes=title_prefix_aliases,
+                    strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
+                    component_ignore_words=title_component_ignore_words,
+                    conflict_counts=conflict_counts,
+                )
+            )
 
     candidate_map: dict[tuple[str, str], _AliasCandidate] = {}
     canonical_collisions: dict[str, tuple[str, dict[str, str]]] = {}
@@ -1319,6 +1479,7 @@ def build_alias_report(
     title_suffix_aliases: tuple[str, ...] = tuple(suffix for suffix, _source in TITLE_SUFFIX_ALIASES),
     title_prefix_aliases: tuple[str, ...] = tuple(prefix for prefix, _source in TITLE_PREFIX_ALIASES),
     strip_parenthetical_disambiguation: bool = True,
+    title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> AliasReport:
     """Build unique single-target aliases from titles, descriptions, sidebars, and names."""
@@ -1330,6 +1491,7 @@ def build_alias_report(
         title_suffix_aliases=title_suffix_aliases,
         title_prefix_aliases=title_prefix_aliases,
         strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
+        title_component_ignore_words=title_component_ignore_words,
         sidebar_alias_labels=sidebar_alias_labels,
     )
     return AliasReport(aliases=report.aliases, omissions=report.omissions)

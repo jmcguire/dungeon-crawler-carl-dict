@@ -767,6 +767,73 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertIn("Stark", house_report.aliases["House Stark"])
         self.assertNotIn("the Bells", house_report.aliases["Battle of the Bells"])
 
+    def test_title_component_alias_uses_configured_ignore_words(self) -> None:
+        entries = [
+            Entry("Valtay Corporation", "https://example/wiki/Valtay_Corporation", "A company."),
+            Entry("Desperado Club", "https://example/wiki/Desperado_Club", "A club."),
+        ]
+
+        default_report = build_lookup_report(entries)
+        component_report = build_lookup_report(entries, title_component_ignore_words=("Corporation", "Club"))
+
+        self.assertNotIn("Valtay", default_report.aliases["Valtay Corporation"])
+        self.assertIn("Valtay", component_report.aliases["Valtay Corporation"])
+        self.assertIn("Desperado", component_report.aliases["Desperado Club"])
+        self.assertNotIn("Corporation", component_report.aliases["Valtay Corporation"])
+        self.assertNotIn("Club", component_report.aliases["Desperado Club"])
+
+    def test_title_component_alias_scores_two_remaining_tokens(self) -> None:
+        entries = [
+            Entry("Alpha Beta", "https://example/wiki/Alpha_Beta", "One."),
+            Entry("Alpha Gamma", "https://example/wiki/Alpha_Gamma", "Two."),
+        ]
+
+        report = build_lookup_report(entries, title_component_ignore_words=("Unused",))
+
+        self.assertIn("Beta", report.aliases["Alpha Beta"])
+        self.assertNotIn("Alpha", report.aliases["Alpha Beta"])
+
+    def test_title_component_alias_ties_choose_leftmost_token(self) -> None:
+        entries = [Entry("Silver Hammer", "https://example/wiki/Silver_Hammer", "A hammer.")]
+
+        report = build_lookup_report(entries, title_component_ignore_words=("Unused",))
+
+        self.assertIn("Silver", report.aliases["Silver Hammer"])
+        self.assertNotIn("Hammer", report.aliases["Silver Hammer"])
+
+    def test_title_component_alias_skips_long_remaining_titles(self) -> None:
+        entries = [
+            Entry("Alpha Beta Gamma Box", "https://example/wiki/Alpha_Beta_Gamma_Box", "A joke item."),
+        ]
+
+        report = build_lookup_report(entries, title_component_ignore_words=("Box",))
+
+        self.assertNotIn("Alpha", report.aliases["Alpha Beta Gamma Box"])
+        self.assertNotIn("Beta", report.aliases["Alpha Beta Gamma Box"])
+        self.assertNotIn("Gamma", report.aliases["Alpha Beta Gamma Box"])
+
+    def test_title_component_alias_colliding_with_canonical_title_becomes_multi_lookup(self) -> None:
+        entries = [
+            Entry("Earth", "https://example/wiki/Earth", "A planet."),
+            Entry("Earth Box", "https://example/wiki/Earth_Box", "A box."),
+        ]
+
+        report = build_lookup_report(entries, title_component_ignore_words=("Box",))
+
+        lookups = {lookup.word: lookup.targets for lookup in report.multi_target_lookups}
+        self.assertEqual(lookups["Earth"], ("Earth", "Earth Box"))
+
+    def test_title_component_alias_colliding_with_intro_alias_becomes_multi_lookup(self) -> None:
+        entries = [
+            Entry("Borant Corporation", "https://example/wiki/Borant_Corporation", "A company (aka Borant)."),
+            Entry("Borant System", "https://example/wiki/Borant_System", "A star system."),
+        ]
+
+        report = build_lookup_report(entries, title_component_ignore_words=("Corporation", "System"))
+
+        lookups = {lookup.word: lookup.targets for lookup in report.multi_target_lookups}
+        self.assertEqual(lookups["Borant"], ("Borant Corporation", "Borant System"))
+
     def test_lookup_report_uses_configured_sidebar_alias_label(self) -> None:
         entries = [
             Entry(
@@ -1122,6 +1189,27 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertEqual(text.count('<idx:entry name="default"'), 1)
             ET.parse(output)
 
+    def test_write_xhtml_emits_title_component_alias_as_inflection(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry("Desperado Club", "https://example/wiki/Desperado_Club", "A club."),
+            ]
+
+            write_xhtml_with_options(
+                entries,
+                output,
+                "Test Dictionary",
+                link_entries=False,
+                title_component_ignore_words=("Club",),
+            )
+
+            text = output.read_text(encoding="utf-8")
+            self.assertIn('<idx:orth value="Desperado Club"><b>Desperado Club</b>', text)
+            self.assertIn('<idx:iform value="Desperado" />', text)
+            self.assertEqual(text.count('<idx:entry name="default"'), 1)
+            ET.parse(output)
+
     def test_write_xhtml_emits_duplicate_entry_for_multi_target_lookup(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             output = Path(tmp_dir) / "dictionary.xhtml"
@@ -1156,6 +1244,29 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertIn('<idx:orth value="Heal Pet"><b>Heal Pet Potion</b>', text)
             self.assertIn('<idx:orth value="Heal Pet"><b>Heal Pet Spell</b>', text)
             self.assertNotIn('<idx:iform value="Heal Pet" />', text)
+            ET.parse(output)
+
+    def test_write_xhtml_emits_duplicate_entry_for_title_component_multi_lookup(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry("Earth", "https://example/wiki/Earth", "A planet."),
+                Entry("Earth Box", "https://example/wiki/Earth_Box", "A box."),
+            ]
+
+            write_xhtml_with_options(
+                entries,
+                output,
+                "Test Dictionary",
+                link_entries=False,
+                title_component_ignore_words=("Box",),
+            )
+
+            text = output.read_text(encoding="utf-8")
+            self.assertEqual(text.count('<idx:orth value="Earth">'), 2)
+            self.assertIn('<idx:orth value="Earth"><b>Earth</b>', text)
+            self.assertIn('<idx:orth value="Earth"><b>Earth Box</b>', text)
+            self.assertNotIn('<idx:iform value="Earth" />', text)
             ET.parse(output)
 
     def test_write_xhtml_emits_duplicate_entry_for_character_first_name_multi_lookup(self) -> None:

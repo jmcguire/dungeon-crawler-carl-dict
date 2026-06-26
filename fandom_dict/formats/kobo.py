@@ -190,6 +190,7 @@ def entries_to_dictfile(
     title_suffix_aliases: tuple[str, ...] | None = None,
     title_prefix_aliases: tuple[str, ...] | None = None,
     strip_parenthetical_disambiguation: bool = True,
+    title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> tuple[str, int, int, int]:
     """Render Kobo dictgen input and return it with lookup counts."""
@@ -197,6 +198,7 @@ def entries_to_dictfile(
     lookup_options = {
         "include_sidebar_aliases": include_sidebar_aliases,
         "strip_parenthetical_disambiguation": strip_parenthetical_disambiguation,
+        "title_component_ignore_words": title_component_ignore_words,
         "sidebar_alias_labels": sidebar_alias_labels,
     }
     if title_suffix_aliases is not None:
@@ -260,6 +262,7 @@ def build_kobo(
     title_suffix_aliases: tuple[str, ...] | None = None,
     title_prefix_aliases: tuple[str, ...] | None = None,
     strip_parenthetical_disambiguation: bool = True,
+    title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> KoboBuildResult:
     """Generate a Kobo dictfile and compile it with dictgen."""
@@ -275,6 +278,7 @@ def build_kobo(
         title_suffix_aliases=title_suffix_aliases,
         title_prefix_aliases=title_prefix_aliases,
         strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
+        title_component_ignore_words=title_component_ignore_words,
         sidebar_alias_labels=sidebar_alias_labels,
     )
     dictfile_path = output_dir / DICTFILE_NAME
@@ -462,10 +466,22 @@ def inspect_kobo(
     return inspection
 
 
-def synthetic_kobo_zip(path: Path, entries: list[Entry]) -> None:
+def synthetic_kobo_zip(
+    path: Path,
+    entries: list[Entry],
+    *,
+    title_suffix_aliases: tuple[str, ...] | None = None,
+    title_prefix_aliases: tuple[str, ...] | None = None,
+    title_component_ignore_words: tuple[str, ...] = (),
+) -> None:
     """Write a small inspectable Kobo-like zip for tests which do not run dictgen."""
 
-    lookup_report = build_lookup_report(entries)
+    lookup_options = {"title_component_ignore_words": title_component_ignore_words}
+    if title_suffix_aliases is not None:
+        lookup_options["title_suffix_aliases"] = title_suffix_aliases
+    if title_prefix_aliases is not None:
+        lookup_options["title_prefix_aliases"] = title_prefix_aliases
+    lookup_report = build_lookup_report(entries, **lookup_options)
     aliases = lookup_report.aliases
     entries_by_title = {entry.title: entry for entry in entries}
     combined_definitions = {

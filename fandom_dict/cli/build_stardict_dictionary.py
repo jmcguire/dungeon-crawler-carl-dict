@@ -68,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
         title_suffix_aliases=config.title_aliases.suffixes,
         title_prefix_aliases=config.title_aliases.prefixes,
         strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
+        title_component_ignore_words=config.title_aliases.component_ignore_words,
         sidebar_alias_labels=config.sidebar_alias_labels,
     )
     inspection = inspect_stardict(

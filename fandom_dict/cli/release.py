@@ -480,6 +480,7 @@ def package_release(
                 title_suffix_aliases=DEFAULT_PROJECT.title_aliases.suffixes,
                 title_prefix_aliases=DEFAULT_PROJECT.title_aliases.prefixes,
                 strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
+                title_component_ignore_words=DEFAULT_PROJECT.title_aliases.component_ignore_words,
                 sidebar_alias_labels=DEFAULT_PROJECT.sidebar_alias_labels,
             )
             LOGGER.info(
@@ -534,6 +535,7 @@ def package_release(
                 title_suffix_aliases=DEFAULT_PROJECT.title_aliases.suffixes,
                 title_prefix_aliases=DEFAULT_PROJECT.title_aliases.prefixes,
                 strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
+                title_component_ignore_words=DEFAULT_PROJECT.title_aliases.component_ignore_words,
                 sidebar_alias_labels=DEFAULT_PROJECT.sidebar_alias_labels,
             )
             LOGGER.info(
@@ -571,6 +573,7 @@ def package_release(
                 title_suffix_aliases=DEFAULT_PROJECT.title_aliases.suffixes,
                 title_prefix_aliases=DEFAULT_PROJECT.title_aliases.prefixes,
                 strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
+                title_component_ignore_words=DEFAULT_PROJECT.title_aliases.component_ignore_words,
                 sidebar_alias_labels=DEFAULT_PROJECT.sidebar_alias_labels,
             )
             LOGGER.info(

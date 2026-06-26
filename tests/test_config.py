@@ -13,6 +13,7 @@ class ProjectConfigTests(unittest.TestCase):
         self.assertEqual(config.kindle_dir, Path("build/dungeon-crawler-carl/kindle"))
         self.assertIn("Characters", config.categories)
         self.assertIn(" Box", config.title_aliases.suffixes)
+        self.assertIn("Corporation", config.title_aliases.component_ignore_words)
         self.assertIn("Carl", config.smoke_headwords)
         self.assertEqual(config.sidebar_alias_labels, ("Aliases",))
 
@@ -24,6 +25,7 @@ class ProjectConfigTests(unittest.TestCase):
         self.assertEqual(config.database_path, Path("data/iceandfire.sqlite"))
         self.assertEqual(config.stardict_dir, Path("build/iceandfire/stardict"))
         self.assertEqual(config.title_aliases.prefixes, ("House ",))
+        self.assertEqual(config.title_aliases.component_ignore_words, ())
         self.assertIn("Baelon Targaryen", config.smoke_headwords)
         self.assertEqual(config.sidebar_alias_labels, ("Aliases",))
 

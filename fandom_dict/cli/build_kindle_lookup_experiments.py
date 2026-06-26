@@ -220,6 +220,7 @@ def experiment_items_from_entries(entries: list[Entry], config) -> list[Experime
         title_suffix_aliases=config.title_aliases.suffixes,
         title_prefix_aliases=config.title_aliases.prefixes,
         strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
+        title_component_ignore_words=config.title_aliases.component_ignore_words,
         sidebar_alias_labels=config.sidebar_alias_labels,
     )
     by_title = {entry.title.casefold(): entry for entry in entries}

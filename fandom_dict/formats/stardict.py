@@ -238,6 +238,7 @@ def build_stardict(
     title_suffix_aliases: tuple[str, ...] | None = None,
     title_prefix_aliases: tuple[str, ...] | None = None,
     strip_parenthetical_disambiguation: bool = True,
+    title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
 ) -> StarDictBuildResult:
     """Generate a StarDict 2.4.2 bundle from normalized entries."""
@@ -246,6 +247,7 @@ def build_stardict(
     lookup_options = {
         "include_sidebar_aliases": include_sidebar_aliases,
         "strip_parenthetical_disambiguation": strip_parenthetical_disambiguation,
+        "title_component_ignore_words": title_component_ignore_words,
         "sidebar_alias_labels": sidebar_alias_labels,
     }
     if title_suffix_aliases is not None:
