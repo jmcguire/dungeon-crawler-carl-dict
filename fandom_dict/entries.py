@@ -838,7 +838,7 @@ def filter_low_quality_entries(entries: list[Entry]) -> list[Entry]:
     usable_entries = []
     for entry in entries:
         if is_low_quality_definition(entry):
-            LOGGER.info("skipped low-quality dictionary entry %s", entry.title)
+            LOGGER.debug("skipped low-quality dictionary entry %s", entry.title)
             continue
         usable_entries.append(entry)
     return usable_entries

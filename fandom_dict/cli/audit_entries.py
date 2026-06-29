@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from fandom_dict.cli.output import add_output_arguments, output_from_args
 from fandom_dict.config import DEFAULT_CONFIG_PATH, load_project_config
 from fandom_dict.entries import (
     Entry,
@@ -63,6 +64,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--input", type=Path)
     parser.add_argument("--min-definition-length", type=int, default=8)
+    add_output_arguments(parser)
     return parser.parse_args(argv)
 
 
@@ -70,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     """Run the offline dictionary entry audit."""
 
     args = parse_args(argv)
+    output = output_from_args(args)
     config = load_project_config(args.config)
     input_path = args.input or config.database_path
     entries = load_entries(
@@ -81,8 +84,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     findings = audit_entries(entries)
     for finding in findings:
-        print(finding.format())
-    print(f"audited {len(entries)} entries; findings: {len(findings)}")
+        output.info(finding.format())
+    output.info(f"audited {len(entries)} entries; findings: {len(findings)}")
+    output.close()
     return 0
 
 

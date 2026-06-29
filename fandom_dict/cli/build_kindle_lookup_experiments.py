@@ -6,11 +6,11 @@ from __future__ import annotations
 import argparse
 import html
 import json
-import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from fandom_dict.cli.output import add_output_arguments, output_from_args
 from fandom_dict.config import DEFAULT_CONFIG_PATH, load_project_config, slugify_title
 from fandom_dict.entries import (
     Entry,
@@ -187,14 +187,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--min-definition-length", type=int, default=8)
     parser.add_argument("--compile", action="store_true", help="Compile each OPF with KindleGen when available.")
+    add_output_arguments(parser)
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     """Run the experiment builder."""
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = parse_args(argv)
+    output = output_from_args(args)
     config = load_project_config(args.config)
     entries = load_entries(
         args.input or config.database_path,
@@ -205,10 +206,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     items = experiment_items_from_entries(entries, config)
     builds = build_experiment_bundle(items, args.output_dir, compile_outputs=args.compile)
-    print(f"wrote {args.output_dir / 'MANIFEST.md'}")
-    print(f"wrote {args.output_dir / 'TESTING_CHECKLIST.md'}")
+    output.path(args.output_dir / "MANIFEST.md")
+    output.path(args.output_dir / "TESTING_CHECKLIST.md")
     for build in builds:
-        print(f"wrote {build.directory}")
+        output.path(build.directory)
+    output.info(f"experiment dictionaries: {len(builds)}")
+    output.close()
     return 0
 
 

@@ -14,6 +14,7 @@ import trace
 from dataclasses import dataclass
 from pathlib import Path
 
+from fandom_dict.cli.output import add_output_arguments, output_from_args
 from fandom_dict.config import DEFAULT_CONFIG_PATH, load_project_config
 from fandom_dict.entries import load_entries
 
@@ -292,6 +293,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--input", type=Path)
     parser.add_argument("--output-dir", type=Path, default=Path("badges"))
+    add_output_arguments(parser)
     return parser.parse_args(argv)
 
 
@@ -299,6 +301,7 @@ def main(argv: list[str] | None = None) -> int:
     """Generate badge files for the current release-prep commit."""
 
     args = parse_args(argv)
+    output = output_from_args(args)
     try:
         version = parse_version(args.version)
         repo_root = Path.cwd()
@@ -309,14 +312,16 @@ def main(argv: list[str] | None = None) -> int:
         coverage = run_trace_coverage(repo_root)
         entry_count = count_entries(input_db, args.config)
         write_badge_files(output_dir, build_badges(version, coverage, entry_count))
-        print(f"wrote {output_dir}")
-        print(f"coverage: {coverage.percent}% lines")
-        print(f"entries: {format_count(entry_count)}")
-        print(f"release: {version.tag}")
+        output.path(output_dir)
+        output.info(f"coverage: {coverage.percent}% lines")
+        output.info(f"entries: {format_count(entry_count)}")
+        output.info(f"release: {version.tag}")
         return 0
     except Exception as exc:
-        print(f"badge generation failed: {exc}", file=sys.stderr)
+        output.error(f"badge generation failed: {exc}")
         return 1
+    finally:
+        output.close()
 
 
 if __name__ == "__main__":

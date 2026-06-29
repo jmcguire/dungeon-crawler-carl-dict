@@ -21,6 +21,7 @@ from typing import Callable, Sequence
 
 from fandom_dict.cli.audit_entries import AuditFinding, audit_entries
 from fandom_dict.cli.badges import validate_badges
+from fandom_dict.cli.output import add_output_arguments, configure_logging, output_from_args
 from fandom_dict.config import load_default_project_config
 from fandom_dict.entries import load_entries
 from fandom_dict.cli.fetch_entries import reextract_first_paragraphs
@@ -753,14 +754,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--overwrite", action="store_true", help="Replace an existing local version directory.")
     parser.add_argument("--publish", action="store_true", help="Create and verify a GitHub Release after packaging.")
+    add_output_arguments(parser)
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     """Run the complete release workflow."""
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = parse_args(argv)
+    output = output_from_args(args)
+    configure_logging(output)
     try:
         version = parse_version(args.version)
         repo_root = repository_root(Path.cwd())
@@ -782,6 +785,8 @@ def main(argv: list[str] | None = None) -> int:
             include_sidebar_aliases=not args.no_sidebar_aliases,
         )
         LOGGER.info("release bundle ready: %s", release_dir)
+        for asset in sorted(path for path in release_dir.iterdir() if path.is_file()):
+            output.path(asset)
         if args.publish:
             publish_release(release_dir, version, commit_sha, repo_root)
             LOGGER.info("published and verified GitHub Release %s", version.tag)
@@ -797,6 +802,8 @@ def main(argv: list[str] | None = None) -> int:
     ) as exc:
         LOGGER.error("release failed: %s", exc)
         return 1
+    finally:
+        output.close()
 
 
 if __name__ == "__main__":

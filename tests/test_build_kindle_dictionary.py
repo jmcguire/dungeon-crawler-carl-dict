@@ -1,3 +1,5 @@
+import contextlib
+import io
 import os
 import sqlite3
 import stat
@@ -34,6 +36,55 @@ from fandom_dict.cli.build_kindle_dictionary import normalize_release_version
 
 
 class BuildKindleDictionaryTests(unittest.TestCase):
+    def test_build_cli_outputs_mode_prints_created_paths_only(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            db_path = root / "entries.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, '', 'ok')",
+                [
+                    ("Carl", "https://example/Carl", "Characters", "Carl is a crawler."),
+                    ("Donut", "https://example/Donut", "Characters", "Donut is a crawler."),
+                ],
+            )
+            conn.commit()
+            conn.close()
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                result = build_kindle_main(
+                    [
+                        "--input",
+                        str(db_path),
+                        "--output-dir",
+                        str(root / "kindle"),
+                        "--verbosity",
+                        "outputs",
+                    ]
+                )
+
+        self.assertEqual(result, 0)
+        lines = stdout.getvalue().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].endswith(".xhtml"))
+        self.assertTrue(lines[1].endswith(".opf"))
+        self.assertNotIn("entries:", stdout.getvalue())
+        self.assertEqual(stderr.getvalue(), "")
+
     def test_load_entries_orders_filters_and_normalizes_text(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             db_path = Path(tmp_dir) / "characters.sqlite"
@@ -506,7 +557,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             )
             conn.commit()
 
-            with self.assertLogs("fandom_dict.entries", level="INFO") as logs:
+            with self.assertLogs("fandom_dict.entries", level="DEBUG") as logs:
                 entries = load_entries(db_path, min_definition_length=8)
 
             self.assertEqual([entry.title for entry in entries], ["Carl"])

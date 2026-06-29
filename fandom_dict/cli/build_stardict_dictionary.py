@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import argparse
-import logging
 from pathlib import Path
 
+from fandom_dict.cli.output import add_output_arguments, output_from_args
 from fandom_dict.config import DEFAULT_CONFIG_PATH, load_project_config
 from fandom_dict.entries import load_entries
 from fandom_dict.formats.stardict import build_stardict, inspect_stardict
@@ -33,6 +33,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Add tappable KOReader links between known dictionary entries.",
     )
+    add_output_arguments(parser)
     return parser.parse_args(argv)
 
 
@@ -40,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     """Build and smoke-test a StarDict dictionary."""
 
     args = parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    output = output_from_args(args)
     config = load_project_config(args.config)
     input_path = args.input or config.database_path
     output_dir = args.output_dir or config.stardict_dir
@@ -78,12 +79,13 @@ def main(argv: list[str] | None = None) -> int:
         require_links=args.link_entries,
     )
     for path in result.files:
-        print(f"wrote {path}")
-    print(f"entries: {result.entry_count}")
-    print(f"aliases: {result.alias_count}")
-    print(f"multi-target lookups: {result.multi_lookup_count}")
-    print(f"omitted aliases: {result.omitted_alias_count}")
-    print(f"smoke checks: {len(inspection.checks)}")
+        output.path(path)
+    output.info(f"entries: {result.entry_count}")
+    output.info(f"aliases: {result.alias_count}")
+    output.info(f"multi-target lookups: {result.multi_lookup_count}")
+    output.info(f"omitted aliases: {result.omitted_alias_count}")
+    output.info(f"smoke checks: {len(inspection.checks)}")
+    output.close()
     return 0
 
 

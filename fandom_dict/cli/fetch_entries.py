@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from fandom_dict.cli.output import add_output_arguments, configure_logging, output_from_args
 from fandom_dict.config import DEFAULT_CONFIG_PATH, load_default_project_config, load_project_config
 from fandom_dict.extraction import (
     SHORT_DESCRIPTION_THRESHOLD,
@@ -237,7 +238,7 @@ def reextract_first_paragraphs(conn: sqlite3.Connection, max_summary_length: int
     for pageid, title, raw_html in rows:
         status, first_paragraph = extract_summary_status(title, raw_html, max_summary_length)
         if status == "empty":
-            LOGGER.info("empty entry %s", title)
+            LOGGER.debug("empty entry %s", title)
         conn.execute(
             "UPDATE pages SET first_paragraph = ?, status = ? WHERE pageid = ?",
             (first_paragraph, status, pageid),
@@ -333,10 +334,10 @@ def crawl_pages(
 
     for index, page in enumerate(pages, start=1):
         if not config.refresh and already_fetched(conn, page.pageid):
-            LOGGER.info("[%s/%s] skip %s", index, len(pages), page.title)
+            LOGGER.debug("[%s/%s] skip %s", index, len(pages), page.title)
             continue
 
-        LOGGER.info("[%s/%s] fetch %s", index, len(pages), page.title)
+        LOGGER.debug("[%s/%s] fetch %s", index, len(pages), page.title)
         fetch_and_store_page(conn, client, page, config)
         time.sleep(jitter(config.delay))
 
@@ -362,7 +363,7 @@ def fetch_and_store_page(
         )
         upsert_page(conn, page, url, source_category, status, data, html, first_paragraph or None)
         if status == "empty":
-            LOGGER.info("empty entry %s", page.title)
+            LOGGER.debug("empty entry %s", page.title)
     except Exception as exc:  # noqa: BLE001 - keep crawling and record failures.
         upsert_page(conn, page, url, source_category, "error", error=repr(exc))
         LOGGER.error("error fetching %s: %r", page.title, exc)
@@ -481,6 +482,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Update first_paragraph from stored raw_html without making network requests.",
     )
+    add_output_arguments(parser)
     return parser.parse_args(argv)
 
 
@@ -488,7 +490,8 @@ def main(argv: list[str] | None = None) -> int:
     """Run the crawler command-line workflow."""
 
     args = parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    output = output_from_args(args)
+    configure_logging(output)
     project_config = load_project_config(args.config)
     args.fandom = args.fandom or project_config.fandom
     args.categories = args.categories or list(project_config.categories)
@@ -500,6 +503,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.reextract_only:
             count = reextract_first_paragraphs(conn, project_config.max_summary_length)
             LOGGER.info("re-extracted first paragraphs for %s stored pages in %s", count, args.output)
+            output.path(args.output)
             return 0
 
         if not args.ignore_robots:
@@ -525,8 +529,10 @@ def main(argv: list[str] | None = None) -> int:
         crawl_pages(conn, client, pages, crawl_config)
         fetch_and_store_redirects(conn, client, pages, crawl_config)
         print_crawl_summary(conn, args.output)
+        output.path(args.output)
     finally:
         conn.close()
+        output.close()
     return 0
 
 

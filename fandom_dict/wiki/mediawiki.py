@@ -279,7 +279,7 @@ def api_request(
                 raise
             sleep_for = jitter(delay)
 
-        LOGGER.warning("request failed; retrying in %.1fs: %s", sleep_for, url)
+        LOGGER.debug("request failed; retrying in %.1fs: %s", sleep_for, url)
         time.sleep(sleep_for)
         delay = min(delay * 2, config.max_backoff)
 
