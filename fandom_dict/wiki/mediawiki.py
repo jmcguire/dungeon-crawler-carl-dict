@@ -27,6 +27,16 @@ class PageRef:
 
 
 @dataclass(frozen=True)
+class RedirectRef:
+    """One namespace-0 redirect title resolved to its target page title."""
+
+    source_title: str
+    target_title: str | None
+    ns: int
+    status: str = "ok"
+
+
+@dataclass(frozen=True)
 class RequestConfig:
     """Network and retry settings shared by all MediaWiki API requests."""
 
@@ -123,6 +133,81 @@ class MediaWikiClient:
             }
         )
 
+    def redirects(
+        self,
+        batch_size: int,
+        max_redirects: int,
+        delay: float,
+    ) -> list[RedirectRef]:
+        """Return namespace-0 redirect pages and their resolved target titles."""
+
+        redirects: list[RedirectRef] = []
+        continuation: dict[str, Any] = {}
+
+        while True:
+            params: dict[str, Any] = {
+                "action": "query",
+                "format": "json",
+                "generator": "allpages",
+                "gapnamespace": "0",
+                "gapfilterredir": "redirects",
+                "gaplimit": str(batch_size),
+                "prop": "info",
+            }
+            params.update(continuation)
+            data = self.request(params)
+            pages = sorted(
+                data.get("query", {}).get("pages", {}).values(),
+                key=lambda item: item.get("title", "").casefold(),
+            )
+            if max_redirects:
+                pages = pages[: max(0, max_redirects - len(redirects))]
+            titles = [str(item["title"]) for item in pages if int(item.get("ns", 0)) == 0]
+            for title_batch in chunked(titles, 50):
+                resolved = self.resolve_redirect_targets(title_batch)
+                for title in title_batch:
+                    target = resolved.get(title)
+                    redirects.append(
+                        RedirectRef(
+                            source_title=title,
+                            target_title=target,
+                            ns=0,
+                            status="ok" if target else "error",
+                        )
+                    )
+                    if max_redirects and len(redirects) >= max_redirects:
+                        return redirects
+
+            continuation = data.get("continue") or {}
+            if not continuation:
+                return redirects
+
+            time.sleep(jitter(delay))
+
+    def resolve_redirect_targets(self, titles: list[str]) -> dict[str, str]:
+        """Resolve redirect page titles to target titles in one API request."""
+
+        if not titles:
+            return {}
+        try:
+            data = self.request(
+                {
+                    "action": "query",
+                    "format": "json",
+                    "titles": "|".join(titles),
+                    "redirects": "1",
+                    "prop": "info",
+                }
+            )
+        except Exception as exc:  # noqa: BLE001 - redirect import should be best-effort per batch.
+            LOGGER.error("error resolving redirect batch starting %s: %r", titles[0], exc)
+            return {}
+        return {
+            str(item["from"]): str(item["to"])
+            for item in data.get("query", {}).get("redirects", [])
+            if "from" in item and "to" in item
+        }
+
 
 def api_base(api_url: str) -> str:
     """Return the scheme and host portion of a MediaWiki API URL."""
@@ -153,6 +238,12 @@ def wiki_page_url(fandom_slug: str, title: str) -> str:
     """Build a human-readable wiki page URL from a Fandom wiki slug and page title."""
 
     return f"{fandom_page_base_url(fandom_slug)}{urllib.parse.quote(title.replace(' ', '_'))}"
+
+
+def chunked(values: list[str], size: int) -> list[list[str]]:
+    """Return fixed-size chunks from a list of strings."""
+
+    return [values[index : index + size] for index in range(0, len(values), size)]
 
 
 def api_request(

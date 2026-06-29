@@ -22,14 +22,19 @@ from fandom_dict.extraction import (
 from fandom_dict.cli.fetch_entries import (
     CrawlConfig,
     DEFAULT_CATEGORIES,
+    fetch_and_store_redirects,
     init_db,
     load_category_members,
     parse_args,
     reextract_first_paragraphs,
+    redirect_status,
     upsert_page,
 )
 from fandom_dict.wiki.mediawiki import (
+    MediaWikiClient,
     PageRef,
+    RedirectRef,
+    RequestConfig,
     fandom_api_url,
     wiki_category_title,
     wiki_page_url,
@@ -568,8 +573,153 @@ class FetchCharacterExtractionTests(unittest.TestCase):
 
             upgraded = init_db(db_path)
             columns = [row[1] for row in upgraded.execute("PRAGMA table_info(pages)").fetchall()]
+            upgraded.close()
 
         self.assertIn("source_category", columns)
+
+    def test_init_db_creates_redirects_table(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = init_db(db_path)
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(redirects)").fetchall()}
+            conn.close()
+
+        self.assertIn("redirects", tables)
+        self.assertEqual(
+            {"source_title", "target_title", "source_url", "status", "fetched_at"},
+            columns,
+        )
+
+    def test_mediawiki_client_redirects_pages_and_resolves_targets(self) -> None:
+        class StubClient(MediaWikiClient):
+            def __init__(self) -> None:
+                super().__init__(
+                    "example",
+                    RequestConfig(
+                        user_agent="test",
+                        timeout=1.0,
+                        max_retries=0,
+                        initial_backoff=0.0,
+                        max_backoff=0.0,
+                    ),
+                )
+                self.calls = []
+
+            def request(self, params):
+                self.calls.append(params)
+                if params.get("generator") == "allpages":
+                    if "gapcontinue" in params:
+                        return {
+                            "query": {
+                                "pages": {
+                                    "3": {"pageid": 3, "ns": 0, "title": "System"},
+                                }
+                            }
+                        }
+                    return {
+                        "continue": {"gapcontinue": "System", "continue": "gapcontinue||"},
+                        "query": {
+                            "pages": {
+                                "1": {"pageid": 1, "ns": 0, "title": "AI"},
+                                "2": {"pageid": 2, "ns": 0, "title": "Abyss"},
+                            }
+                        },
+                    }
+                return {
+                    "query": {
+                        "redirects": [
+                            {"from": "AI", "to": "System AI"},
+                            {"from": "Abyss", "to": "Abyss Station"},
+                            {"from": "System", "to": "System AI"},
+                        ]
+                    }
+                }
+
+        redirects = StubClient().redirects(batch_size=2, max_redirects=0, delay=0.0)
+
+        self.assertEqual(
+            [(redirect.source_title, redirect.target_title, redirect.status) for redirect in redirects],
+            [("Abyss", "Abyss Station", "ok"), ("AI", "System AI", "ok"), ("System", "System AI", "ok")],
+        )
+
+    def test_mediawiki_client_redirects_honors_max_redirects_and_marks_resolution_errors(self) -> None:
+        class StubClient(MediaWikiClient):
+            def __init__(self) -> None:
+                super().__init__(
+                    "example",
+                    RequestConfig(
+                        user_agent="test",
+                        timeout=1.0,
+                        max_retries=0,
+                        initial_backoff=0.0,
+                        max_backoff=0.0,
+                    ),
+                )
+
+            def request(self, params):
+                if params.get("generator") == "allpages":
+                    return {
+                        "query": {
+                            "pages": {
+                                "1": {"pageid": 1, "ns": 0, "title": "Broken"},
+                                "2": {"pageid": 2, "ns": 0, "title": "Skipped"},
+                            }
+                        }
+                    }
+                raise RuntimeError("boom")
+
+        redirects = StubClient().redirects(batch_size=10, max_redirects=1, delay=0.0)
+
+        self.assertEqual(len(redirects), 1)
+        self.assertEqual(redirects[0].source_title, "Broken")
+        self.assertIsNone(redirects[0].target_title)
+        self.assertEqual(redirects[0].status, "error")
+
+    def test_fetch_and_store_redirects_keeps_only_selected_targets(self) -> None:
+        class StubClient:
+            def redirects(self, batch_size, max_redirects, delay):
+                return [
+                    RedirectRef("AI", "System AI", 0),
+                    RedirectRef("Outside", "Outside Target", 0),
+                    RedirectRef("Broken", None, 0, "error"),
+                ]
+
+            def page_url(self, title):
+                return f"https://example/wiki/{title.replace(' ', '_')}"
+
+        with TemporaryDirectory() as tmp_dir:
+            conn = init_db(Path(tmp_dir) / "characters.sqlite")
+            targets = [mock.Mock(pageid=1, title="System AI", ns=0)]
+            config = CrawlConfig(
+                categories=("Characters",),
+                delay=0.0,
+                max_pages=0,
+                category_batch_size=50,
+                refresh=False,
+            )
+
+            fetch_and_store_redirects(conn, StubClient(), targets, config)
+            rows = conn.execute(
+                "SELECT source_title, target_title, status FROM redirects ORDER BY source_title"
+            ).fetchall()
+            conn.close()
+
+        self.assertEqual(
+            rows,
+            [
+                ("AI", "System AI", "ok"),
+                ("Broken", None, "error"),
+                ("Outside", "Outside Target", "ignored"),
+            ],
+        )
+
+    def test_redirect_status(self) -> None:
+        targets = {"system ai": "System AI"}
+
+        self.assertEqual(redirect_status(RedirectRef("AI", "System AI", 0), targets), "ok")
+        self.assertEqual(redirect_status(RedirectRef("Outside", "Other", 0), targets), "ignored")
+        self.assertEqual(redirect_status(RedirectRef("Broken", None, 0, "error"), targets), "error")
 
     def test_load_category_members_deduplicates_pages_and_tracks_categories(self) -> None:
         class StubClient:
@@ -682,10 +832,18 @@ class FetchCharacterExtractionTests(unittest.TestCase):
 
         self.assertIsNone(args.categories)
         self.assertEqual(args.config, Path("configs/dungeon-crawler-carl.json"))
+        self.assertTrue(args.include_redirects)
+        self.assertEqual(args.max_redirects, 0)
         self.assertEqual(
             DEFAULT_CATEGORIES,
             ("Characters", "Groups", "Spells", "Achievements", "Races", "Items", "Mob_Types"),
         )
+
+    def test_parse_args_can_disable_and_bound_redirects(self) -> None:
+        args = parse_args(["--no-redirects", "--max-redirects", "10"])
+
+        self.assertFalse(args.include_redirects)
+        self.assertEqual(args.max_redirects, 10)
 
     def test_main_uses_normal_dcc_categories_when_none_are_passed(self) -> None:
         with TemporaryDirectory() as tmp_dir:

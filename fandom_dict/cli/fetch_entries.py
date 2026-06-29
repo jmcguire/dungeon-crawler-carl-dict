@@ -40,6 +40,7 @@ from fandom_dict.extraction import (
 from fandom_dict.wiki.mediawiki import (
     MediaWikiClient,
     PageRef,
+    RedirectRef,
     RequestConfig,
     api_base,
     api_request,
@@ -70,6 +71,8 @@ class CrawlConfig:
     category_batch_size: int
     refresh: bool
     max_summary_length: int | None = None
+    include_redirects: bool = True
+    max_redirects: int = 0
 
 
 @dataclass(frozen=True)
@@ -110,6 +113,17 @@ def init_db(path: Path) -> sqlite3.Connection:
         CREATE TABLE IF NOT EXISTS crawl_meta (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS redirects (
+            source_title TEXT PRIMARY KEY,
+            target_title TEXT,
+            source_url TEXT NOT NULL,
+            status TEXT NOT NULL,
+            fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """
     )
@@ -186,6 +200,30 @@ def upsert_page(
             status,
             error,
         ),
+    )
+    conn.commit()
+
+
+def upsert_redirect(
+    conn: sqlite3.Connection,
+    source_title: str,
+    target_title: str | None,
+    source_url: str,
+    status: str,
+) -> None:
+    """Insert or update one redirect row."""
+
+    conn.execute(
+        """
+        INSERT INTO redirects (source_title, target_title, source_url, status, fetched_at)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(source_title) DO UPDATE SET
+            target_title = excluded.target_title,
+            source_url = excluded.source_url,
+            status = excluded.status,
+            fetched_at = CURRENT_TIMESTAMP
+        """,
+        (source_title, target_title, source_url, status),
     )
     conn.commit()
 
@@ -280,6 +318,8 @@ def crawl_config_from_args(args: argparse.Namespace) -> CrawlConfig:
         category_batch_size=args.category_batch_size,
         refresh=args.refresh,
         max_summary_length=args.max_summary_length,
+        include_redirects=args.include_redirects,
+        max_redirects=args.max_redirects,
     )
 
 
@@ -328,13 +368,63 @@ def fetch_and_store_page(
         LOGGER.error("error fetching %s: %r", page.title, exc)
 
 
+def fetch_and_store_redirects(
+    conn: sqlite3.Connection,
+    client: MediaWikiClient,
+    pages: list[CrawlTarget],
+    config: CrawlConfig,
+) -> None:
+    """Fetch wiki redirects and keep only aliases that target selected pages."""
+
+    if not config.include_redirects:
+        return
+    target_titles = {page.title.casefold(): page.title for page in pages}
+    if not target_titles:
+        LOGGER.info("redirects: skipped because no crawl targets were found")
+        return
+    if not config.max_redirects:
+        conn.execute("DELETE FROM redirects")
+        conn.commit()
+
+    ok_count = ignored_count = error_count = 0
+    for redirect in client.redirects(config.category_batch_size, config.max_redirects, config.delay):
+        status = redirect_status(redirect, target_titles)
+        target_title = target_titles.get((redirect.target_title or "").casefold(), redirect.target_title)
+        upsert_redirect(conn, redirect.source_title, target_title, client.page_url(redirect.source_title), status)
+        if status == "ok":
+            ok_count += 1
+        elif status == "ignored":
+            ignored_count += 1
+        else:
+            error_count += 1
+    LOGGER.info("redirects: %s ok, %s ignored, %s error", ok_count, ignored_count, error_count)
+
+
+def redirect_status(redirect: RedirectRef, target_titles: dict[str, str]) -> str:
+    """Return the storage status for one resolved redirect."""
+
+    if redirect.status != "ok" or not redirect.target_title:
+        return "error"
+    if redirect.target_title.casefold() not in target_titles:
+        return "ignored"
+    return "ok"
+
+
 def print_crawl_summary(conn: sqlite3.Connection, output: Path) -> None:
     """Print final counts for successful and failed page fetches."""
 
     ok_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'ok'").fetchone()[0]
     empty_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'empty'").fetchone()[0]
     error_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'error'").fetchone()[0]
-    LOGGER.info("done: %s ok, %s empty, %s error; wrote %s", ok_count, empty_count, error_count, output)
+    redirect_count = conn.execute("SELECT COUNT(*) FROM redirects WHERE status = 'ok'").fetchone()[0]
+    LOGGER.info(
+        "done: %s ok, %s empty, %s error, %s redirects; wrote %s",
+        ok_count,
+        empty_count,
+        error_count,
+        redirect_count,
+        output,
+    )
 
 
 def assert_robots_allowed(api_url: str, user_agent: str) -> None:
@@ -371,6 +461,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--category-batch-size", type=int, default=200)
     parser.add_argument("--refresh", action="store_true", help="Refetch pages that already succeeded.")
     parser.add_argument("--ignore-robots", action="store_true", help="Skip robots.txt check.")
+    redirect_group = parser.add_mutually_exclusive_group()
+    redirect_group.add_argument(
+        "--include-redirects",
+        dest="include_redirects",
+        action="store_true",
+        default=True,
+        help="Fetch wiki redirect titles and store usable ones as lookup aliases. Enabled by default.",
+    )
+    redirect_group.add_argument(
+        "--no-redirects",
+        dest="include_redirects",
+        action="store_false",
+        help="Skip fetching wiki redirect aliases.",
+    )
+    parser.add_argument("--max-redirects", type=int, default=0, help="Stop after this many redirects; 0 means no cap.")
     parser.add_argument(
         "--reextract-only",
         action="store_true",
@@ -418,6 +523,7 @@ def main(argv: list[str] | None = None) -> int:
         pages = load_category_members(client, crawl_config)
         LOGGER.info("found %s pages across %s", len(pages), ", ".join(args.categories))
         crawl_pages(conn, client, pages, crawl_config)
+        fetch_and_store_redirects(conn, client, pages, crawl_config)
         print_crawl_summary(conn, args.output)
     finally:
         conn.close()

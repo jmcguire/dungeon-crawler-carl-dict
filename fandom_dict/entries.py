@@ -176,6 +176,7 @@ class Entry:
     spoiler_notice: str | None = None
     details: tuple[tuple[str, str], ...] = ()
     source_categories: tuple[str, ...] = ()
+    redirect_aliases: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -272,6 +273,7 @@ class _AliasCandidate:
             "bold-intro",
             "description-leading-article",
             "description-parenthetical",
+            "wiki-redirect",
         }
 
 
@@ -720,6 +722,7 @@ def load_entries(
     try:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(pages)").fetchall()}
         source_category_expression = "source_category" if "source_category" in columns else "NULL AS source_category"
+        redirect_aliases = load_redirect_aliases(conn)
         rows = conn.execute(
             f"""
             SELECT title, url, first_paragraph, raw_html, {source_category_expression}
@@ -747,10 +750,36 @@ def load_entries(
                     spoiler_notice=spoiler_notice_from_html(raw_html),
                     details=details,
                     source_categories=parse_source_categories(source_category),
+                    redirect_aliases=redirect_aliases.get(normalize_text(title).casefold(), ()),
                 )
             )
     entries = apply_title_munging(entries, strip_parenthetical_disambiguation=strip_parenthetical_disambiguation)
     return filter_low_quality_entries(resolve_forwarding_entries(entries))
+
+
+def load_redirect_aliases(conn: sqlite3.Connection) -> dict[str, tuple[str, ...]]:
+    """Return stored redirect aliases grouped by target title casefold."""
+
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()}
+    if "redirects" not in tables:
+        return {}
+    rows = conn.execute(
+        """
+        SELECT source_title, target_title
+        FROM redirects
+        WHERE status = 'ok'
+          AND COALESCE(source_title, '') != ''
+          AND COALESCE(target_title, '') != ''
+        ORDER BY lower(source_title)
+        """
+    ).fetchall()
+    grouped: dict[str, list[str]] = {}
+    for source_title, target_title in rows:
+        source = normalize_text(source_title)
+        target = normalize_text(target_title)
+        if source and target:
+            grouped.setdefault(target.casefold(), []).append(source)
+    return {target: tuple(dict.fromkeys(aliases)) for target, aliases in grouped.items()}
 
 
 def apply_title_munging(entries: list[Entry], *, strip_parenthetical_disambiguation: bool) -> list[Entry]:
@@ -781,6 +810,7 @@ def apply_title_munging(entries: list[Entry], *, strip_parenthetical_disambiguat
                     spoiler_notice=entry.spoiler_notice,
                     details=entry.details,
                     source_categories=entry.source_categories,
+                    redirect_aliases=entry.redirect_aliases,
                 )
             )
         else:
@@ -857,6 +887,7 @@ def resolve_forwarding_entries(entries: list[Entry]) -> list[Entry]:
             spoiler_notice=resolved_target.spoiler_notice,
             details=resolved_target.details,
             source_categories=entry.source_categories,
+            redirect_aliases=entry.redirect_aliases,
         )
         cache[entry.title] = resolved
         return resolved
@@ -1220,6 +1251,12 @@ def category_plural_alias_candidates(entry: Entry) -> list[_AliasCandidate]:
     return [_AliasCandidate(entry.title, alias, "category-plural") for alias in forms]
 
 
+def redirect_alias_candidates(entry: Entry) -> list[_AliasCandidate]:
+    """Return alias candidates imported from stored wiki redirects."""
+
+    return [_AliasCandidate(entry.title, alias, "wiki-redirect") for alias in entry.redirect_aliases]
+
+
 def entry_is_from_characters_category(entry: Entry) -> bool:
     """Return true when an entry was reached from the Characters category."""
 
@@ -1371,6 +1408,7 @@ def build_lookup_report(
         raw_candidates.extend(character_first_name_alias_candidates(entry))
         raw_candidates.extend(character_possessive_alias_candidates(entry))
         raw_candidates.extend(category_plural_alias_candidates(entry))
+        raw_candidates.extend(redirect_alias_candidates(entry))
         if include_human_name_aliases:
             raw_candidates.extend(human_name_alias_candidates(entry))
     if title_component_ignore_words:

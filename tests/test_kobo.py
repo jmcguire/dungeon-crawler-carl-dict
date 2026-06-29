@@ -135,6 +135,28 @@ class KoboTests(unittest.TestCase):
         self.assertEqual(inspection.canonical_word("Desperado"), "Desperado Club")
         self.assertIn("A club.", inspection.lookup("Desperado") or "")
 
+    def test_redirect_aliases_become_variants(self) -> None:
+        entries = [
+            Entry(
+                "System AI",
+                "https://example/System_AI",
+                "System AI runs the crawl.",
+                redirect_aliases=("AI",),
+            ),
+        ]
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
+            dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(entries)
+            self.assertEqual(alias_count, 1)
+            self.assertEqual(multi_lookup_count, 0)
+            self.assertEqual(omitted_alias_count, 0)
+            self.assertIn("@ System AI\n& AI\n::\n<html>", dictfile)
+            synthetic_kobo_zip(path, entries)
+            inspection = inspect_kobo(path, required_headwords=("AI", "System AI"))
+
+        self.assertEqual(inspection.canonical_word("AI"), "System AI")
+        self.assertIn("System AI runs the crawl.", inspection.lookup("AI") or "")
+
     def test_title_component_multi_target_lookup_uses_combined_result(self) -> None:
         entries = [
             Entry("Earth", "https://example/Earth", "Earth is a planet."),

@@ -35,11 +35,6 @@ When building the different dictionaries, why does kindle and kobo have 1205 but
   - This may help wikis with many human names.
   - It may also create noisy collisions, so keep it collision-protected and opt-in if expanded.
 
-## P3 - More aliases work
-
-- get more aliases from Special:ListRedirects
-- is there anything there that we don't already have?
-
 ## P3 - clean up tests
 
 - get rid of badge tests, add more tests elsewhere, on code that matters

@@ -95,6 +95,27 @@ class StarDictTests(unittest.TestCase):
         self.assertEqual(inspection.canonical_word("Desperado"), "Desperado Club")
         self.assertIn("A club.", inspection.lookup("Desperado") or "")
 
+    def test_redirect_aliases_resolve_as_synonyms(self) -> None:
+        entries = [
+            Entry(
+                "System AI",
+                "https://example/System_AI",
+                "System AI runs the crawl.",
+                redirect_aliases=("AI",),
+            ),
+        ]
+        with TemporaryDirectory() as tmp_dir:
+            result = build_stardict(entries, Path(tmp_dir), "Test Dictionary", "Test Author")
+            inspection = inspect_stardict(
+                result.ifo_path,
+                required_headwords=("AI", "System AI"),
+                check_sdcv=False,
+            )
+
+        self.assertEqual(result.alias_count, 1)
+        self.assertEqual(inspection.canonical_word("AI"), "System AI")
+        self.assertIn("System AI runs the crawl.", inspection.lookup("AI") or "")
+
     def test_multi_target_lookup_uses_combined_canonical_result(self) -> None:
         entries = [
             Entry("Earth", "https://example/Earth", "Earth is a planet."),

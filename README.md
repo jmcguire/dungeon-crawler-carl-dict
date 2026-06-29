@@ -164,7 +164,7 @@ Minimal shape:
 
 ## Build Behavior Notes, for curious developers
 
-The crawler uses the MediaWiki API, records pages in SQLite, respects `robots.txt` unless `--ignore-robots` is passed, sleeps between requests with jitter, retries temporary HTTP failures with exponential backoff, records errors, and resumes previous successful fetches unless `--refresh` is passed.
+The crawler uses the MediaWiki API, records pages and usable wiki redirects in SQLite, respects `robots.txt` unless `--ignore-robots` is passed, sleeps between requests with jitter, retries temporary HTTP failures with exponential backoff, records errors, and resumes previous successful fetches unless `--refresh` is passed. Redirect import is enabled by default; use `--no-redirects` to skip it or `--max-redirects N` for bounded local testing.
 
 Re-extract definitions from stored HTML without touching the network:
 
@@ -174,7 +174,7 @@ Re-extract definitions from stored HTML without touching the network:
 
 The entry pipeline extracts the first useful summary text, strips wiki maintenance boxes and citation markers, preserves safe bold/italic inline formatting, adds conservative sidebar details, repairs forwarding-only entries, trims overlong summaries, and skips low-quality final definitions while preserving raw crawled data.
 
-Aliases are discovered from safe title rules, selected sidebar aliases, recognized intro parentheticals, first bold intro names, first names for simple two-word `Characters` entries, possessive forms for `Characters` lookups, conservative plural forms for obvious race/mob/item/group nouns, conservative component-word fallbacks for multi-word titles, and a small older human-name heuristic. Single-target Kindle aliases are emitted as `idx:iform` inflections. StarDict uses `.syn` aliases, and Kobo uses variants. If a lookup collides with a real entry, Kindle emits multiple lookup entries while StarDict and Kobo use one combined result.
+Aliases are discovered from safe title rules, selected sidebar aliases, wiki redirects, recognized intro parentheticals, first bold intro names, first names for simple two-word `Characters` entries, possessive forms for `Characters` lookups, conservative plural forms for obvious race/mob/item/group nouns, conservative component-word fallbacks for multi-word titles, and a small older human-name heuristic. Single-target Kindle aliases are emitted as `idx:iform` inflections. StarDict uses `.syn` aliases, and Kobo uses variants. If a lookup collides with a real entry, Kindle emits multiple lookup entries while StarDict and Kobo use one combined result.
 
 With `--link-entries`, known entry names inside definitions become internal links. Kindle links work when opening the dictionary directly as a book, but may not work inside Kindle's lookup popup UI.
 

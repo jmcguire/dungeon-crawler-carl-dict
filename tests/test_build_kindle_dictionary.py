@@ -123,6 +123,52 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertEqual(entries[0].title, "Katia Grim")
         self.assertEqual(entries[0].source_categories, ())
 
+    def test_load_entries_loads_stored_redirect_aliases(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE redirects (
+                    source_title TEXT,
+                    target_title TEXT,
+                    source_url TEXT,
+                    status TEXT,
+                    fetched_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, '', 'ok')",
+                ("System AI", "https://example/wiki/System_AI", "Characters", "System AI runs the crawl."),
+            )
+            conn.executemany(
+                "INSERT INTO redirects VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                [
+                    ("AI", "System AI", "https://example/wiki/AI", "ok"),
+                    ("Outside", "Outside Target", "https://example/wiki/Outside", "ignored"),
+                ],
+            )
+            conn.commit()
+            conn.close()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        self.assertEqual(entries[0].title, "System AI")
+        self.assertEqual(entries[0].redirect_aliases, ("AI",))
+
     def test_load_entries_parses_category_prefixed_source_categories(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             db_path = Path(tmp_dir) / "characters.sqlite"
@@ -1109,6 +1155,54 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertIn("parenthetical-note", reasons)
         self.assertIn("quoted-noise", reasons)
 
+    def test_build_lookup_report_adds_redirect_aliases(self) -> None:
+        entries = [
+            Entry(
+                "System AI",
+                "https://example/wiki/System_AI",
+                "System AI runs the crawl.",
+                redirect_aliases=("AI",),
+            ),
+        ]
+
+        report = build_lookup_report(entries)
+
+        self.assertIn("AI", report.aliases["System AI"])
+
+    def test_build_lookup_report_ignores_noisy_redirect_aliases(self) -> None:
+        entries = [
+            Entry(
+                "System AI",
+                "https://example/wiki/System_AI",
+                "System AI runs the crawl.",
+                redirect_aliases=("system ai", "System AI (old)"),
+            ),
+        ]
+
+        report = build_lookup_report(entries)
+
+        self.assertNotIn("system ai", report.aliases["System AI"])
+        self.assertNotIn("System AI (old)", report.aliases["System AI"])
+        self.assertIn("not-title-like", {omission.reason for omission in report.omissions})
+        self.assertIn("parenthetical-note", {omission.reason for omission in report.omissions})
+
+    def test_build_lookup_report_redirect_collision_becomes_multi_target_lookup(self) -> None:
+        entries = [
+            Entry("AI", "https://example/wiki/AI", "A canonical entry."),
+            Entry(
+                "System AI",
+                "https://example/wiki/System_AI",
+                "System AI runs the crawl.",
+                redirect_aliases=("AI",),
+            ),
+        ]
+
+        report = build_lookup_report(entries)
+
+        self.assertNotIn("AI", report.aliases["System AI"])
+        self.assertEqual(report.multi_target_lookups[0].word, "AI")
+        self.assertEqual(report.multi_target_lookups[0].targets, ("AI", "System AI"))
+
     def test_build_alias_report_adds_conservative_human_name_aliases(self) -> None:
         entries = [
             Entry("Katia Grim", "https://example/wiki/Katia", "A crawler.", details=(("Race", "Human"),)),
@@ -1171,6 +1265,26 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             self.assertIn(f'<idx:iform value="Katia Grim{chr(0x2019)}s" />', text)
             self.assertIn('<idx:iform value="Katia&#x27;s" />', text)
             self.assertIn(f'<idx:iform value="Katia{chr(0x2019)}s" />', text)
+            self.assertEqual(text.count('<idx:entry name="default"'), 1)
+            ET.parse(output)
+
+    def test_write_xhtml_emits_redirect_alias_as_inflection(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "dictionary.xhtml"
+            entries = [
+                Entry(
+                    "System AI",
+                    "https://example/wiki/System_AI",
+                    "System AI runs the crawl.",
+                    redirect_aliases=("AI",),
+                ),
+            ]
+
+            write_xhtml(entries, output, "Test Dictionary")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertIn('<idx:orth value="System AI"><b>System AI</b>', text)
+            self.assertIn('<idx:iform value="AI" />', text)
             self.assertEqual(text.count('<idx:entry name="default"'), 1)
             ET.parse(output)
 
