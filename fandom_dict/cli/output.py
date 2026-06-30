@@ -13,8 +13,14 @@ VERBOSITY_OUTPUTS = "outputs"
 VERBOSITY_SMALL = "small"
 VERBOSITY_FULL = "full"
 VERBOSITY_CHOICES = (VERBOSITY_OUTPUTS, VERBOSITY_SMALL, VERBOSITY_FULL)
+DIAGNOSTIC_LINE_COLORS = {
+    "alias:": "32",
+    "omitted alias:": "33",
+    "multi-target lookup:": "36",
+}
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+_IMPORTANT_ATTRIBUTE_RE = re.compile(r'(?:alias|lookup)="[^"]*"')
 
 
 class CommandOutput:
@@ -62,14 +68,14 @@ class CommandOutput:
 
         self._write_log(message)
         if self.verbosity in {VERBOSITY_SMALL, VERBOSITY_FULL}:
-            self._write_stdout(message, log=False)
+            self._write_stdout(self._color_diagnostic_line(message), log=False)
 
     def detail(self, message: str) -> None:
         """Print a detailed progress message only at full verbosity."""
 
         self._write_log(message)
         if self.verbosity == VERBOSITY_FULL:
-            self._write_stdout(message, log=False)
+            self._write_stdout(self._color_diagnostic_line(message), log=False)
 
     def warning(self, message: str) -> None:
         """Print a warning unless stdout is reserved for output paths."""
@@ -103,6 +109,18 @@ class CommandOutput:
         if not self._use_color:
             return message
         return f"\x1b[{code}m{message}\x1b[0m"
+
+    def _color_diagnostic_line(self, message: str) -> str:
+        for prefix, code in DIAGNOSTIC_LINE_COLORS.items():
+            if message.startswith(prefix):
+                message = self._bold_important_attributes(message)
+                return self._color(message, code)
+        return message
+
+    def _bold_important_attributes(self, message: str) -> str:
+        if not self._use_color:
+            return message
+        return _IMPORTANT_ATTRIBUTE_RE.sub(lambda match: f"\x1b[1m{match.group(0)}\x1b[22m", message)
 
 
 class OutputLogHandler(logging.Handler):

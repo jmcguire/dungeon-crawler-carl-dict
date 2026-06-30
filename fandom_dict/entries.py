@@ -1526,24 +1526,32 @@ def lookup_report_debug_lines(report: LookupReport) -> list[str]:
     """Return stable full-verbosity lines describing alias lookup decisions."""
 
     lines = []
-    for accepted in sorted(
-        report.accepted_aliases,
-        key=lambda item: (item.target.casefold(), item.alias.casefold(), item.source),
-    ):
-        lines.append(
-            f'alias: alias="{accepted.alias}" main="{accepted.target}" source={accepted.source}'
+    alias_lines = []
+    for accepted in report.accepted_aliases:
+        alias_lines.append(
+            (
+                accepted.target.casefold(),
+                accepted.alias.casefold(),
+                "accepted",
+                accepted.source,
+                f'alias: alias="{accepted.alias}" main="{accepted.target}" source={accepted.source}',
+            )
         )
+    for omission in report.omissions:
+        alias_lines.append(
+            (
+                omission.target.casefold(),
+                omission.alias.casefold(),
+                "omitted",
+                omission.source,
+                f'omitted alias: alias="{omission.alias}" main="{omission.target}" '
+                f"source={omission.source} reason={omission.reason}",
+            )
+        )
+    lines.extend(line for *_sort_keys, line in sorted(alias_lines))
     for lookup in sorted(report.multi_target_lookups, key=lambda item: item.word.casefold()):
         targets = " | ".join(f'"{target}"' for target in lookup.targets)
         lines.append(f'multi-target lookup: lookup="{lookup.word}" targets={targets}')
-    for omission in sorted(
-        report.omissions,
-        key=lambda item: (item.target.casefold(), item.alias.casefold(), item.source, item.reason),
-    ):
-        lines.append(
-            f'omitted alias: alias="{omission.alias}" main="{omission.target}" '
-            f"source={omission.source} reason={omission.reason}"
-        )
     return lines
 
 

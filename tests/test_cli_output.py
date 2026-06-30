@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from fandom_dict.cli.output import CommandOutput, OutputLogHandler
+from fandom_dict.cli.output import CommandOutput, DIAGNOSTIC_LINE_COLORS, OutputLogHandler
 
 
 class Stream(io.StringIO):
@@ -89,6 +89,23 @@ class CliOutputTests(unittest.TestCase):
         pipe_output.error("failure")
         self.assertNotIn("\x1b[", pipe_stdout.getvalue())
         self.assertNotIn("\x1b[", pipe_stderr.getvalue())
+
+    def test_diagnostic_line_types_are_colored_as_whole_lines(self) -> None:
+        stdout = Stream(tty=True)
+        output = CommandOutput("full", stdout=stdout, stderr=Stream(tty=True))
+
+        output.detail('alias: alias="Fireball" main="Fireball Spell" source=title-suffix-spell')
+        output.detail('omitted alias: alias="Carl" main="Carl" source=sidebar reason=self-alias')
+        output.detail('multi-target lookup: lookup="Earth" targets="Earth" | "Earth Box"')
+
+        text = stdout.getvalue()
+        self.assertIn(f"\x1b[{DIAGNOSTIC_LINE_COLORS['alias:']}m", text)
+        self.assertIn(f"\x1b[{DIAGNOSTIC_LINE_COLORS['omitted alias:']}m", text)
+        self.assertIn(f"\x1b[{DIAGNOSTIC_LINE_COLORS['multi-target lookup:']}m", text)
+        self.assertIn('\x1b[1malias="Fireball"\x1b[22m', text)
+        self.assertIn('\x1b[1malias="Carl"\x1b[22m', text)
+        self.assertIn('\x1b[1mlookup="Earth"\x1b[22m', text)
+        self.assertIn(' main="Fireball Spell"', text)
 
     def test_logging_handler_respects_verbosity(self) -> None:
         stdout = Stream()

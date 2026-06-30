@@ -109,7 +109,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                     ("Carl", "https://example/Carl", "Characters", "Carl is a crawler.", """
                     <aside class="portable-infobox">
                       <div class="pi-data" data-source="aliases">
-                        <div class="pi-data-value">Carl</div>
+                        <div class="pi-data-value">Carl, C-Dawg</div>
                       </div>
                     </aside>
                     """),
@@ -136,9 +136,16 @@ class BuildKindleDictionaryTests(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertEqual(result, 0)
+        carl_alias = 'alias: alias="C-Dawg" main="Carl" source=sidebar'
+        carl_omission = 'omitted alias: alias="Carl" main="Carl" source=sidebar reason=self-alias'
+        fireball_alias = 'alias: alias="Fireball" main="Fireball Spell" source=title-suffix-spell'
+        self.assertIn(carl_alias, output)
+        self.assertIn(carl_omission, output)
         self.assertIn('alias: alias="Fireball" main="Fireball Spell" source=title-suffix-spell', output)
         self.assertIn('multi-target lookup: lookup="Earth" targets="Earth" | "Earth Box"', output)
         self.assertIn('omitted alias: alias="Carl" main="Carl" source=sidebar reason=self-alias', output)
+        self.assertLess(output.index(carl_alias), output.index(carl_omission))
+        self.assertLess(output.index(carl_omission), output.index(fireball_alias))
 
     def test_load_entries_orders_filters_and_normalizes_text(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -862,7 +869,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                 "Carl",
                 "https://example/wiki/Carl",
                 "Carl is a crawler.",
-                details=(("Aliases", "Carl"),),
+                details=(("Aliases", "Carl, C-Dawg"),),
             ),
             Entry("Earth", "https://example/wiki/Earth", "A planet."),
             Entry("Earth Box", "https://example/wiki/Earth_Box", "A box."),
@@ -872,9 +879,18 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         report = build_lookup_report(entries)
         lines = lookup_report_debug_lines(report)
 
+        self.assertIn('alias: alias="C-Dawg" main="Carl" source=sidebar', lines)
         self.assertIn('alias: alias="Fireball" main="Fireball Spell" source=title-suffix-spell', lines)
         self.assertIn('multi-target lookup: lookup="Earth" targets="Earth" | "Earth Box"', lines)
         self.assertIn('omitted alias: alias="Carl" main="Carl" source=sidebar reason=self-alias', lines)
+        self.assertLess(
+            lines.index('alias: alias="C-Dawg" main="Carl" source=sidebar'),
+            lines.index('omitted alias: alias="Carl" main="Carl" source=sidebar reason=self-alias'),
+        )
+        self.assertLess(
+            lines.index('omitted alias: alias="Carl" main="Carl" source=sidebar reason=self-alias'),
+            lines.index('alias: alias="Fireball" main="Fireball Spell" source=title-suffix-spell'),
+        )
 
     def test_lookup_report_tracks_title_rule_alias_collisions_as_multi_lookup(self) -> None:
         entries = [
