@@ -23,7 +23,7 @@ from fandom_dict.cli.audit_entries import AuditFinding, audit_entries
 from fandom_dict.cli.badges import validate_badges
 from fandom_dict.cli.output import add_output_arguments, configure_logging, output_from_args
 from fandom_dict.config import load_default_project_config
-from fandom_dict.entries import load_entries
+from fandom_dict.entries import build_lookup_report, load_entries, lookup_report_debug_lines
 from fandom_dict.cli.fetch_entries import reextract_first_paragraphs
 from fandom_dict.formats.kindle import (
     DEFAULT_AUTHOR,
@@ -464,6 +464,17 @@ def package_release(
             detail = "\n".join(finding.format() for finding in fatal_findings)
             raise ReleaseError(f"entry audit found release-blocking issues:\n{detail}")
         LOGGER.info("entry audit passed with %s warning(s)", len(warning_findings))
+        lookup_report = build_lookup_report(
+            entries,
+            include_sidebar_aliases=include_sidebar_aliases,
+            title_suffix_aliases=DEFAULT_PROJECT.title_aliases.suffixes,
+            title_prefix_aliases=DEFAULT_PROJECT.title_aliases.prefixes,
+            strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
+            title_component_ignore_words=DEFAULT_PROJECT.title_aliases.component_ignore_words,
+            sidebar_alias_labels=DEFAULT_PROJECT.sidebar_alias_labels,
+        )
+        for line in lookup_report_debug_lines(lookup_report):
+            LOGGER.debug(line)
 
         payload_paths: list[Path] = []
         format_manifest: dict[str, object] = {}

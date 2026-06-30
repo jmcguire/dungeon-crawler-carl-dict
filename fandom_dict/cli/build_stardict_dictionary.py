@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fandom_dict.cli.output import add_output_arguments, output_from_args
 from fandom_dict.config import DEFAULT_CONFIG_PATH, load_project_config
-from fandom_dict.entries import load_entries
+from fandom_dict.entries import build_lookup_report, load_entries, lookup_report_debug_lines
 from fandom_dict.formats.stardict import build_stardict, inspect_stardict
 
 
@@ -84,6 +84,17 @@ def main(argv: list[str] | None = None) -> int:
     output.info(f"aliases: {result.alias_count}")
     output.info(f"multi-target lookups: {result.multi_lookup_count}")
     output.info(f"omitted aliases: {result.omitted_alias_count}")
+    lookup_report = build_lookup_report(
+        entries,
+        include_sidebar_aliases=not args.no_sidebar_aliases,
+        title_suffix_aliases=config.title_aliases.suffixes,
+        title_prefix_aliases=config.title_aliases.prefixes,
+        strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
+        title_component_ignore_words=config.title_aliases.component_ignore_words,
+        sidebar_alias_labels=config.sidebar_alias_labels,
+    )
+    for line in lookup_report_debug_lines(lookup_report):
+        output.detail(line)
     output.info(f"smoke checks: {len(inspection.checks)}")
     output.close()
     return 0

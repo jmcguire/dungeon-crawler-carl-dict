@@ -40,6 +40,7 @@ from fandom_dict.entries import (
     is_low_quality_definition,
     link_definition_references,
     load_entries,
+    lookup_report_debug_lines,
     normalize_inline_html,
     normalize_text,
     resolve_forwarding_entries,

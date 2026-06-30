@@ -190,6 +190,15 @@ class AliasOmission:
 
 
 @dataclass(frozen=True)
+class AliasAcceptance:
+    """One accepted single-target alias and the main entry it resolves to."""
+
+    alias: str
+    target: str
+    source: str
+
+
+@dataclass(frozen=True)
 class AliasReport:
     """Accepted aliases and rejected alias candidates for one entry set."""
 
@@ -228,6 +237,7 @@ class LookupReport:
     """Resolved lookup words, aliases, and omitted candidates for one entry set."""
 
     aliases: dict[str, list[str]]
+    accepted_aliases: tuple[AliasAcceptance, ...] = ()
     multi_target_lookups: tuple[LookupForm, ...] = ()
     omissions: tuple[AliasOmission, ...] = ()
 
@@ -1455,10 +1465,12 @@ def build_lookup_report(
         grouped_candidates.setdefault(candidate.alias.casefold(), []).append(candidate)
 
     accepted: dict[str, list[str]] = {entry.title: [] for entry in entries}
+    accepted_aliases: list[AliasAcceptance] = []
     for alias_key, grouped in grouped_candidates.items():
         if len(grouped) == 1:
             candidate = grouped[0]
             accepted[candidate.target].append(candidate.alias)
+            accepted_aliases.append(AliasAcceptance(candidate.alias, candidate.target, candidate.source))
             continue
         if all(candidate.allows_multi_target_lookup for candidate in grouped):
             display_alias, targets = alias_collisions.setdefault(
@@ -1504,9 +1516,35 @@ def build_lookup_report(
         aliases[entry.title] = forms
     return LookupReport(
         aliases=aliases,
+        accepted_aliases=tuple(accepted_aliases),
         multi_target_lookups=tuple(multi_target_lookups),
         omissions=tuple(omissions),
     )
+
+
+def lookup_report_debug_lines(report: LookupReport) -> list[str]:
+    """Return stable full-verbosity lines describing alias lookup decisions."""
+
+    lines = []
+    for accepted in sorted(
+        report.accepted_aliases,
+        key=lambda item: (item.target.casefold(), item.alias.casefold(), item.source),
+    ):
+        lines.append(
+            f'alias: alias="{accepted.alias}" main="{accepted.target}" source={accepted.source}'
+        )
+    for lookup in sorted(report.multi_target_lookups, key=lambda item: item.word.casefold()):
+        targets = " | ".join(f'"{target}"' for target in lookup.targets)
+        lines.append(f'multi-target lookup: lookup="{lookup.word}" targets={targets}')
+    for omission in sorted(
+        report.omissions,
+        key=lambda item: (item.target.casefold(), item.alias.casefold(), item.source, item.reason),
+    ):
+        lines.append(
+            f'omitted alias: alias="{omission.alias}" main="{omission.target}" '
+            f"source={omission.source} reason={omission.reason}"
+        )
+    return lines
 
 
 def build_alias_report(

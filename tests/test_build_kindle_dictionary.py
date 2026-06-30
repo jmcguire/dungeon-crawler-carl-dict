@@ -23,6 +23,7 @@ from fandom_dict.formats.kindle import (
     kindle_identifier,
     link_definition_references,
     load_entries,
+    lookup_report_debug_lines,
     sanitize_inline_html,
     sidebar_details_from_html,
     spoiler_notice_from_html,
@@ -84,6 +85,60 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertTrue(lines[1].endswith(".opf"))
         self.assertNotIn("entries:", stdout.getvalue())
         self.assertEqual(stderr.getvalue(), "")
+
+    def test_build_cli_full_verbosity_prints_alias_debug_lines(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            db_path = root / "entries.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, ?, 'ok')",
+                [
+                    ("Carl", "https://example/Carl", "Characters", "Carl is a crawler.", """
+                    <aside class="portable-infobox">
+                      <div class="pi-data" data-source="aliases">
+                        <div class="pi-data-value">Carl</div>
+                      </div>
+                    </aside>
+                    """),
+                    ("Earth", "https://example/Earth", "Groups", "Earth is a planet.", ""),
+                    ("Earth Box", "https://example/Earth_Box", "Items", "Earth Box is a reward.", ""),
+                    ("Fireball Spell", "https://example/Fireball_Spell", "Spells", "Fireball Spell is a spell.", ""),
+                ],
+            )
+            conn.commit()
+            conn.close()
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                result = build_kindle_main(
+                    [
+                        "--input",
+                        str(db_path),
+                        "--output-dir",
+                        str(root / "kindle"),
+                        "--verbosity",
+                        "full",
+                    ]
+                )
+
+        output = stdout.getvalue()
+        self.assertEqual(result, 0)
+        self.assertIn('alias: alias="Fireball" main="Fireball Spell" source=title-suffix-spell', output)
+        self.assertIn('multi-target lookup: lookup="Earth" targets="Earth" | "Earth Box"', output)
+        self.assertIn('omitted alias: alias="Carl" main="Carl" source=sidebar reason=self-alias', output)
 
     def test_load_entries_orders_filters_and_normalizes_text(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -800,6 +855,26 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertEqual(len(report.multi_target_lookups), 1)
         self.assertEqual(report.multi_target_lookups[0].word, "Fireball")
         self.assertEqual(report.multi_target_lookups[0].targets, ("Fireball", "Fireball Spell"))
+
+    def test_lookup_report_debug_lines_show_aliases_multi_targets_and_omissions(self) -> None:
+        entries = [
+            Entry(
+                "Carl",
+                "https://example/wiki/Carl",
+                "Carl is a crawler.",
+                details=(("Aliases", "Carl"),),
+            ),
+            Entry("Earth", "https://example/wiki/Earth", "A planet."),
+            Entry("Earth Box", "https://example/wiki/Earth_Box", "A box."),
+            Entry("Fireball Spell", "https://example/wiki/Fireball_Spell", "A spell."),
+        ]
+
+        report = build_lookup_report(entries)
+        lines = lookup_report_debug_lines(report)
+
+        self.assertIn('alias: alias="Fireball" main="Fireball Spell" source=title-suffix-spell', lines)
+        self.assertIn('multi-target lookup: lookup="Earth" targets="Earth" | "Earth Box"', lines)
+        self.assertIn('omitted alias: alias="Carl" main="Carl" source=sidebar reason=self-alias', lines)
 
     def test_lookup_report_tracks_title_rule_alias_collisions_as_multi_lookup(self) -> None:
         entries = [
