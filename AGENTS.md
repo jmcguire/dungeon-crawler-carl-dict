@@ -63,11 +63,12 @@ python3 -m unittest discover -s tests
 
 ## Badges
 
-- Badges are tracked Shields endpoint JSON files in `badges/`.
+- Coverage, Python, license, and output badges are tracked Shields endpoint JSON files in `badges/`.
+- The Release badge comes from GitHub Releases and should not have a tracked `badges/release.json`.
 - When changing tests, release packaging, dictionary output, supported formats, licenses, output counts, or release version examples, run:
 
 ```sh
-./bin/badges --version <version> --input data/dungeon-crawler-carl.sqlite
+./bin/badges --input data/dungeon-crawler-carl.sqlite
 ```
 
 - Include any changed badge JSON files in the same commit as the related work.

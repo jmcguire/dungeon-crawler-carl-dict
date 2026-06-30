@@ -5,7 +5,7 @@
 A free custom e-reader dictionary for *Dungeon Crawler Carl*.
 
 [![Python](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fpython.json)](#developer-tools)
-[![Release](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Frelease.json)](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases)
+[![Release](https://img.shields.io/github/v/release/jmcguire/dungeon-crawler-carl-dict?label=release)](https://github.com/jmcguire/dungeon-crawler-carl-dict/releases)
 [![Licenses](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Flicenses.json)](#license-and-attribution)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Fcoverage.json)](#tests-and-badges)
 [![Output](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjmcguire%2Fdungeon-crawler-carl-dict%2Fmain%2Fbadges%2Foutput.json)](#release-workflow)
@@ -80,19 +80,19 @@ Run tests and update badges:
 ```sh
 python3 -m unittest discover -s tests
 ./bin/health_report
-./bin/badges --version 0.7.0
+./bin/badges --input data/dungeon-crawler-carl.sqlite
 ```
 
 Create a local release bundle:
 
 ```sh
-./bin/release --version 0.7.0 --link-entries
+./bin/release --version X.Y.Z --link-entries
 ```
 
 Create a release bundle, tag it, and publish it on GitHub (requires **gh**):
 
 ```sh
-./bin/release --version 0.7.0 --link-entries --publish
+./bin/release --version X.Y.Z --link-entries --publish
 ```
 
 Notes:
@@ -103,6 +103,7 @@ Notes:
 - Every command supports `--log-file PATH`. Log files always receive the full uncolored transcript, regardless of stdout verbosity.
 - `--publish` requires `gh`, an authenticated GitHub session, and `HEAD == origin/main`.
 - Release tags are the public dictionary version. The Python package itself does not have a separate version.
+- The Release badge updates from GitHub Releases after publishing; it does not require a badge JSON bump commit.
 
 ## Using Another Fandom
 
@@ -201,9 +202,9 @@ By default it builds all formats.
 For faster local checks:
 
 ```sh
-./bin/release --version 0.7.0 --link-entries --format kindle
-./bin/release --version 0.7.0 --link-entries --format stardict
-./bin/release --version 0.7.0 --link-entries --format kobo
+./bin/release --version X.Y.Z --link-entries --format kindle
+./bin/release --version X.Y.Z --link-entries --format stardict
+./bin/release --version X.Y.Z --link-entries --format kobo
 ```
 
 But a published release must use all formats, so the latest-download links stay complete.

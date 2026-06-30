@@ -19,7 +19,7 @@ from fandom_dict.config import DEFAULT_CONFIG_PATH, load_project_config
 from fandom_dict.entries import load_entries
 
 
-BADGE_NAMES = ("release", "coverage", "python", "licenses", "output")
+BADGE_NAMES = ("coverage", "python", "licenses", "output")
 SHIELDS_SCHEMA_VERSION = 1
 SEMVER_PATTERN = re.compile(
     r"^(?:v)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
@@ -130,8 +130,10 @@ def parse_trace_summary(output: str, repo_root: Path) -> CoverageResult:
         percent = float(match.group(2))
         path = Path(match.group(3)).resolve()
         try:
-            path.relative_to(package_root)
+            relative_path = path.relative_to(package_root)
         except ValueError:
+            continue
+        if _excluded_from_badge_coverage(relative_path):
             continue
         executable_lines += lines
         covered_lines += round(lines * percent / 100)
@@ -147,8 +149,17 @@ def project_python_files(repo_root: Path) -> list[Path]:
     return sorted(
         path
         for path in package_root.rglob("*.py")
-        if path.name != "__main__.py" and "__pycache__" not in path.parts
+        if path.name != "__main__.py"
+        and "__pycache__" not in path.parts
+        and not _excluded_from_badge_coverage(path.relative_to(package_root))
     )
+
+
+def _excluded_from_badge_coverage(relative_path: Path) -> bool:
+    """Return whether badge coverage should ignore presentation-only tooling."""
+
+    # Badge generation is README presentation plumbing, not core dictionary behavior.
+    return relative_path.parts == ("cli", "badges.py")
 
 
 def project_executable_line_count(repo_root: Path) -> int:
@@ -199,7 +210,6 @@ def run_trace_coverage(repo_root: Path) -> CoverageResult:
     return CoverageResult(covered_lines=covered_lines, executable_lines=executable_lines)
 
 
-
 def _trace_ignore_dirs(repo_root: Path) -> str:
     """Return OS-specific trace ignore paths outside this project."""
 
@@ -228,12 +238,11 @@ def count_entries(db_path: Path, config_path: Path = DEFAULT_CONFIG_PATH) -> int
     )
 
 
-def build_badges(version: Version, coverage: CoverageResult, entry_count: int) -> dict[str, dict[str, object]]:
+def build_badges(coverage: CoverageResult, entry_count: int) -> dict[str, dict[str, object]]:
     """Build all tracked badge payloads."""
 
     percent = coverage.percent
     return {
-        "release": badge("release", version.tag, "blue"),
         "coverage": badge("coverage", f"{percent}% lines", coverage_color(percent)),
         "python": badge("python", "3.11+", "blue"),
         "licenses": badge("licenses", "MIT + CC BY-SA 3.0", "blueviolet"),
@@ -268,11 +277,10 @@ def read_badge(path: Path) -> dict[str, object]:
     return payload
 
 
-def validate_badges(badge_dir: Path, version: Version, entry_count: int) -> None:
+def validate_badges(badge_dir: Path, entry_count: int) -> None:
     """Raise if tracked badge metadata is missing or stale for a release."""
 
     expected = {
-        "release": version.tag,
         "output": f"{format_count(entry_count)} entries",
     }
     for name in BADGE_NAMES:
@@ -289,7 +297,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse badge command arguments."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", required=True, help="Dictionary release version, such as 1.0.0")
+    parser.add_argument(
+        "--version",
+        help="Accepted for older workflows, but release badges now come from GitHub Releases.",
+    )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--input", type=Path)
     parser.add_argument("--output-dir", type=Path, default=Path("badges"))
@@ -303,7 +314,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     output = output_from_args(args)
     try:
-        version = parse_version(args.version)
+        if args.version:
+            parse_version(args.version)
         repo_root = Path.cwd()
         config = load_project_config(args.config)
         input_arg = args.input or config.database_path
@@ -311,11 +323,10 @@ def main(argv: list[str] | None = None) -> int:
         output_dir = args.output_dir if args.output_dir.is_absolute() else repo_root / args.output_dir
         coverage = run_trace_coverage(repo_root)
         entry_count = count_entries(input_db, args.config)
-        write_badge_files(output_dir, build_badges(version, coverage, entry_count))
+        write_badge_files(output_dir, build_badges(coverage, entry_count))
         output.path(output_dir)
         output.info(f"coverage: {coverage.percent}% lines")
         output.info(f"entries: {format_count(entry_count)}")
-        output.info(f"release: {version.tag}")
         return 0
     except Exception as exc:
         output.error(f"badge generation failed: {exc}")

@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 from fandom_dict.cli.audit_entries import AuditFinding
-from fandom_dict.cli.badges import CoverageResult, build_badges, parse_version as parse_badge_version, write_badge_files
+from fandom_dict.cli.badges import CoverageResult, build_badges, write_badge_files
 from fandom_dict.formats.kindle import (
     DEFAULT_AUTHOR,
     DEFAULT_TITLE,
@@ -63,6 +63,37 @@ Info(prcgen):I1037: Mobi file built with WARNINGS!
 
 
 class ReleaseTests(unittest.TestCase):
+    def write_release_fixture(self, root: Path, *, badge_entry_count: int = 5) -> Path:
+        for name in ("ATTRIBUTION.md", "LICENSE"):
+            (root / name).write_text(name, encoding="utf-8")
+        write_badge_files(
+            root / "badges",
+            build_badges(CoverageResult(100, 100), badge_entry_count),
+        )
+        database = root / "entries.sqlite"
+        conn = sqlite3.connect(database)
+        conn.execute(
+            """
+            CREATE TABLE pages (
+                title TEXT, url TEXT, first_paragraph TEXT,
+                raw_html TEXT, status TEXT
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO pages VALUES (?, ?, ?, '', 'ok')",
+            [
+                ("Carl", "https://example/Carl", "Carl travels with Donut."),
+                ("Donut", "https://example/Donut", "Donut is a crawler."),
+                ("Mordecai", "https://example/Mordecai", "Mordecai is a guide."),
+                ("1914 Box", "https://example/1914", "A reward box."),
+                ("Fire Fingers Spell", "https://example/Fire", "A fire spell."),
+            ],
+        )
+        conn.commit()
+        conn.close()
+        return database
+
     def test_parse_version_normalizes_semver_tag(self) -> None:
         self.assertEqual(parse_version("1.2.3"), Version("1.2.3", "v1.2.3"))
         self.assertEqual(
@@ -280,7 +311,7 @@ class ReleaseTests(unittest.TestCase):
                 (root / name).write_text(name, encoding="utf-8")
             write_badge_files(
                 root / "badges",
-                build_badges(parse_badge_version("1.2.3"), CoverageResult(100, 100), 5),
+                build_badges(CoverageResult(100, 100), 5),
             )
             database = root / "entries.sqlite"
             conn = sqlite3.connect(database)
@@ -335,7 +366,7 @@ class ReleaseTests(unittest.TestCase):
                 (root / name).write_text(name, encoding="utf-8")
             write_badge_files(
                 root / "badges",
-                build_badges(parse_badge_version("1.2.3"), CoverageResult(100, 100), 5),
+                build_badges(CoverageResult(100, 100), 5),
             )
             database = root / "entries.sqlite"
             conn = sqlite3.connect(database)
@@ -403,7 +434,7 @@ class ReleaseTests(unittest.TestCase):
                 (root / name).write_text(name, encoding="utf-8")
             write_badge_files(
                 root / "badges",
-                build_badges(parse_badge_version("1.2.3"), CoverageResult(100, 100), 3),
+                build_badges(CoverageResult(100, 100), 3),
             )
             database = root / "entries.sqlite"
             conn = sqlite3.connect(database)
@@ -476,14 +507,14 @@ class ReleaseTests(unittest.TestCase):
 
             self.assertEqual(captured["release_version"], "v1.2.3")
 
-    def test_package_release_rejects_stale_badge_metadata(self) -> None:
+    def test_package_release_rejects_stale_output_badge_metadata(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             for name in ("ATTRIBUTION.md", "LICENSE"):
                 (root / name).write_text(name, encoding="utf-8")
             write_badge_files(
                 root / "badges",
-                build_badges(parse_badge_version("1.2.2"), CoverageResult(100, 100), 5),
+                build_badges(CoverageResult(100, 100), 4),
             )
             database = root / "entries.sqlite"
             conn = sqlite3.connect(database)
@@ -521,6 +552,105 @@ class ReleaseTests(unittest.TestCase):
                     formats=frozenset({"stardict"}),
                     link_entries=True,
                 )
+
+    def test_package_release_does_not_require_release_badge_metadata(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            for name in ("ATTRIBUTION.md", "LICENSE"):
+                (root / name).write_text(name, encoding="utf-8")
+            write_badge_files(
+                root / "badges",
+                build_badges(CoverageResult(100, 100), 5),
+            )
+            self.assertFalse((root / "badges" / "release.json").exists())
+            database = root / "entries.sqlite"
+            conn = sqlite3.connect(database)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT, url TEXT, first_paragraph TEXT,
+                    raw_html TEXT, status TEXT
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, '', 'ok')",
+                [
+                    ("Carl", "https://example/Carl", "Carl travels with Donut."),
+                    ("Donut", "https://example/Donut", "Donut is a crawler."),
+                    ("Mordecai", "https://example/Mordecai", "Mordecai is a guide."),
+                    ("1914 Box", "https://example/1914", "A reward box."),
+                    ("Fire Fingers Spell", "https://example/Fire", "A fire spell."),
+                ],
+            )
+            conn.commit()
+            conn.close()
+
+            with mock.patch("fandom_dict.cli.release.run_unit_tests"), mock.patch(
+                "fandom_dict.cli.release.reextract_first_paragraphs", return_value=5
+            ):
+                release_dir = package_release(
+                    version=Version("1.2.3", "v1.2.3"),
+                    repo_root=root,
+                    input_db=database,
+                    dist_root=root / "dist",
+                    commit_sha="abc123",
+                    overwrite=False,
+                    formats=frozenset({"stardict"}),
+                    link_entries=True,
+                )
+
+            self.assertTrue((release_dir / STARDICT_ZIP_NAME).is_file())
+
+    def test_package_release_rejects_malformed_badge_metadata(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            database = self.write_release_fixture(root)
+            badge_dir = root / "badges"
+            (badge_dir / "coverage.json").write_text("not json", encoding="utf-8")
+
+            with mock.patch("fandom_dict.cli.release.run_unit_tests"), mock.patch(
+                "fandom_dict.cli.release.reextract_first_paragraphs", return_value=5
+            ), self.assertRaisesRegex(ReleaseError, "badge metadata is stale"):
+                package_release(
+                    version=Version("1.2.3", "v1.2.3"),
+                    repo_root=root,
+                    input_db=database,
+                    dist_root=root / "dist",
+                    commit_sha="abc123",
+                    overwrite=False,
+                    formats=frozenset({"stardict"}),
+                    link_entries=True,
+                )
+
+    def test_package_release_rejects_missing_badge_metadata(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            database = self.write_release_fixture(root)
+            (root / "badges" / "coverage.json").unlink()
+
+            with mock.patch("fandom_dict.cli.release.run_unit_tests"), mock.patch(
+                "fandom_dict.cli.release.reextract_first_paragraphs", return_value=5
+            ), self.assertRaisesRegex(ReleaseError, "badge metadata is stale"):
+                package_release(
+                    version=Version("1.2.3", "v1.2.3"),
+                    repo_root=root,
+                    input_db=database,
+                    dist_root=root / "dist",
+                    commit_sha="abc123",
+                    overwrite=False,
+                    formats=frozenset({"stardict"}),
+                    link_entries=True,
+                )
+
+    def test_readme_release_badge_comes_from_github_releases(self) -> None:
+        readme = Path("README.md").read_text(encoding="utf-8")
+
+        self.assertIn("img.shields.io/github/v/release/jmcguire/dungeon-crawler-carl-dict?label=release", readme)
+        self.assertNotIn("badges%2Frelease.json", readme)
+        for name in ("coverage", "python", "licenses", "output"):
+            with self.subTest(name=name):
+                self.assertIn(f"badges%2F{name}.json", readme)
 
     def test_publish_release_creates_and_verifies_assets(self) -> None:
         with TemporaryDirectory() as tmp_dir:

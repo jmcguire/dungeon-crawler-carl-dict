@@ -449,11 +449,11 @@ def package_release(
             max_summary_length=DEFAULT_PROJECT.max_summary_length,
         )
         try:
-            validate_badges(repo_root / BADGE_DIR_NAME, version, len(entries))
+            validate_badges(repo_root / BADGE_DIR_NAME, len(entries))
         except ValueError as exc:
             raise ReleaseError(
                 f"badge metadata is stale: {exc}. Run "
-                f"`./bin/badges --version {version.value} --input {input_db}` "
+                f"`./bin/badges --input {input_db}` "
                 "and commit the badge JSON files before releasing."
             ) from exc
         findings = audit_entries(entries)
