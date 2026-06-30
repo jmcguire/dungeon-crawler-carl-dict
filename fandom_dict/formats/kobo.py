@@ -48,6 +48,7 @@ class KoboWordEntry:
     headword: str
     variants: tuple[str, ...]
     html: str
+    links: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,7 @@ class KoboInspection:
             "format": "Kobo dicthtml v2",
             "entry_count": len({entry.headword for entry in self.entries}),
             "alias_count": self.alias_count,
+            "link_count": sum(len(entry.links) for entry in self.entries),
             "words_size": self.words_size,
             "checks": list(self.checks),
         }
@@ -319,6 +321,7 @@ class _KoboDicthtmlParser(HTMLParser):
         self._w_depth = 0
         self._headword: str | None = None
         self._variants: list[str] = []
+        self._links: list[str] = []
         self._chunks: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
@@ -351,12 +354,15 @@ class _KoboDicthtmlParser(HTMLParser):
             self._w_depth = 1
             self._headword = None
             self._variants = []
+            self._links = []
             self._chunks = ["<w>"]
             return
         if not self._w_depth:
             return
         if tag == "a" and "name" in attrs_dict:
             self._headword = normalize_kobo_headword(attrs_dict["name"])
+        if tag == "a" and "href" in attrs_dict:
+            self._links.append(attrs_dict["href"])
         if tag == "variant" and "name" in attrs_dict:
             self._variants.append(normalize_kobo_variant(attrs_dict["name"]))
         rendered_attrs = "".join(
@@ -381,11 +387,13 @@ class _KoboDicthtmlParser(HTMLParser):
                 headword=self._headword,
                 variants=tuple(self._variants),
                 html=html_text,
+                links=tuple(self._links),
             )
         )
         self._w_depth = 0
         self._headword = None
         self._variants = []
+        self._links = []
         self._chunks = []
 
 
@@ -414,6 +422,7 @@ def inspect_kobo(
     dictzip_path: Path,
     *,
     required_headwords: Iterable[str] = (),
+    allowed_href_prefixes: tuple[str, ...] = (),
 ) -> KoboInspection:
     """Parse and smoke-test a complete Kobo dictionary zip."""
 
@@ -452,6 +461,11 @@ def inspect_kobo(
             if key in lookup_words and lookup_words[key] != entry.headword:
                 raise KoboValidationError(f"duplicate Kobo lookup word: {word}")
             lookup_words[key] = entry.headword
+    for entry in entries:
+        for href in entry.links:
+            if not _is_allowed_kobo_href(href, allowed_href_prefixes):
+                raise KoboValidationError(f"unsupported Kobo link href: {href!r}")
+    link_check = "valid Kobo links" if any(entry.links for entry in entries) else "no Kobo internal links requested"
     inspection = KoboInspection(
         entries=tuple(entries),
         words_size=words_size,
@@ -462,12 +476,19 @@ def inspect_kobo(
             "valid Kobo word entries",
             "valid Kobo prefix placement",
             "valid Kobo aliases",
+            link_check,
         ),
     )
     for word in required_headwords:
         if inspection.lookup(word) is None:
             raise KoboValidationError(f"required lookup is missing: {word}")
     return inspection
+
+
+def _is_allowed_kobo_href(href: str, allowed_href_prefixes: tuple[str, ...]) -> bool:
+    """Return whether an experimental Kobo link href is explicitly allowed."""
+
+    return any(href.startswith(prefix) for prefix in allowed_href_prefixes)
 
 
 def synthetic_kobo_zip(

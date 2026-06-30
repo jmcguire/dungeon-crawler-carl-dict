@@ -14,6 +14,7 @@ class BinWrapperTests(unittest.TestCase):
             "build_kindle_dictionary": "fandom_dict.cli.build_kindle_dictionary",
             "build_kindle_lookup_experiments": "fandom_dict.cli.build_kindle_lookup_experiments",
             "build_kobo_dictionary": "fandom_dict.cli.build_kobo_dictionary",
+            "build_kobo_link_experiments": "fandom_dict.cli.build_kobo_link_experiments",
             "build_stardict_dictionary": "fandom_dict.cli.build_stardict_dictionary",
             "fetch_entries": "fandom_dict.cli.fetch_entries",
             "health_report": "fandom_dict.cli.health_report",

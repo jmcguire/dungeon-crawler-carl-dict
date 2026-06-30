@@ -377,6 +377,52 @@ class KoboTests(unittest.TestCase):
             inspection = inspect_kobo(path, required_headwords=("test",))
             self.assertEqual(inspection.canonical_word("test"), "test")
 
+    def test_inspector_reports_preserved_links_when_explicitly_allowed(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("words", b"carl\ndonut")
+                archive.writestr(
+                    "ca.html",
+                    '<html><w><a name="Carl" /><var></var><p>Carl knows <a href="#Donut">Donut</a>.</p></w></html>',
+                )
+                archive.writestr(
+                    "do.html",
+                    '<html><w><a name="Donut" /><var></var><p>Donut knows Carl.</p></w></html>',
+                )
+
+            inspection = inspect_kobo(path, required_headwords=("Carl",), allowed_href_prefixes=("#",))
+
+        self.assertEqual(inspection.entries[0].links, ("#Donut",))
+        self.assertIn("valid Kobo links", inspection.checks)
+        self.assertEqual(inspection.manifest_data()["link_count"], 1)
+
+    def test_inspector_rejects_links_by_default_for_production_smoke_tests(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("words", b"carl")
+                archive.writestr(
+                    "ca.html",
+                    '<html><w><a name="Carl" /><var></var><p><a href="#Donut">Donut</a></p></w></html>',
+                )
+
+            with self.assertRaisesRegex(KoboValidationError, "unsupported Kobo link href"):
+                inspect_kobo(path)
+
+    def test_inspector_rejects_dangerous_link_schemes(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("words", b"carl")
+                archive.writestr(
+                    "ca.html",
+                    '<html><w><a name="Carl" /><var></var><p><a href="javascript:alert(1)">bad</a></p></w></html>',
+                )
+
+            with self.assertRaisesRegex(KoboValidationError, "unsupported Kobo link href"):
+                inspect_kobo(path, allowed_href_prefixes=("#",))
+
     def test_inspector_rejects_bad_zip_layout_and_markup(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)

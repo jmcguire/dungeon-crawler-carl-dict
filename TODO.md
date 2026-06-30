@@ -21,9 +21,11 @@ This file is prioritized by what is most likely to improve real reader lookup be
 
 ## P3 - Release And User Experience Polish
 
-- Research Kobo internal links.
-  - Kobo output does not currently include internal dictionary links.
-  - Determine whether Kobo dicthtml supports reliable in-dictionary links before adding them.
+- Run the Kobo internal-link physical-device experiment.
+  - Build experiment dictionaries with `./bin/build_kobo_link_experiments`.
+  - Test one ZIP at a time on a real Kobo.
+  - Use the generated `TESTING_CHECKLIST.md` to record whether fragment, shard-relative, or `dict:///` links work.
+  - Do not add Kobo links to release output unless one variant reliably opens the intended dictionary entry without blank views, browser handoff, crashes, or firmware-specific setup.
 
 ## P3 - Portability And Future Formats
 
