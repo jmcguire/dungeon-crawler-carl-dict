@@ -79,6 +79,7 @@ Run tests and update badges:
 
 ```sh
 python3 -m unittest discover -s tests
+./bin/health_report
 ./bin/badges --version 0.7.0
 ```
 

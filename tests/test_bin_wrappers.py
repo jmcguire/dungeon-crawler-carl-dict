@@ -16,6 +16,7 @@ class BinWrapperTests(unittest.TestCase):
             "build_kobo_dictionary": "fandom_dict.cli.build_kobo_dictionary",
             "build_stardict_dictionary": "fandom_dict.cli.build_stardict_dictionary",
             "fetch_entries": "fandom_dict.cli.fetch_entries",
+            "health_report": "fandom_dict.cli.health_report",
             "release": "fandom_dict.cli.release",
         }
         for name, module in expected.items():
