@@ -70,6 +70,7 @@ class BuildResult:
     alias_count: int = 0
     multi_lookup_count: int = 0
     omitted_alias_count: int = 0
+    lookup_record_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -200,6 +201,19 @@ def entries_to_xhtml(
                     )
                 )
     return "\n\n      <hr />\n\n".join(rendered_entries)
+
+
+def kindle_lookup_record_count(entries: list[Entry], lookup_report: LookupReport) -> int:
+    """Return the number of visible ``idx:entry`` records emitted for Kindle."""
+
+    folded_titles = {entry.title.casefold() for entry in entries}
+    count = len(entries)
+    for lookup in lookup_report.multi_target_lookups:
+        if lookup.word.casefold() in folded_titles:
+            count += max(0, len(lookup.targets) - 1)
+        else:
+            count += len(lookup.targets)
+    return count
 
 
 def write_xhtml(entries: list[Entry], output: Path, title: str) -> None:
@@ -434,6 +448,7 @@ def build_dictionary_sources(
         alias_count=lookup_report.single_target_alias_count,
         multi_lookup_count=lookup_report.multi_target_lookup_count,
         omitted_alias_count=lookup_report.omitted_alias_count,
+        lookup_record_count=kindle_lookup_record_count(entries, lookup_report),
     )
 
 

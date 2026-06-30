@@ -178,6 +178,8 @@ The entry pipeline extracts the first useful summary text, strips wiki maintenan
 
 Aliases are discovered from safe title rules, selected sidebar aliases, wiki redirects, recognized intro parentheticals, first bold intro names, first names for simple two-word `Characters` entries, possessive forms for `Characters` lookups, conservative plural forms for obvious race/mob/item/group nouns, conservative component-word fallbacks for multi-word titles, and a small older human-name heuristic. Single-target Kindle aliases are emitted as `idx:iform` inflections. StarDict uses `.syn` aliases, and Kobo uses variants. If a lookup collides with a real entry, Kindle emits multiple lookup entries while StarDict and Kobo use one combined result.
 
+Build output distinguishes canonical `entries` from format-specific `lookup records`. Extra lookup records are expected when a multi-target lookup word, such as a shared alias, is not itself a canonical entry. StarDict's `.ifo` `wordcount` must count those lookup records, while the shared release entry count remains the number of normalized dictionary entries.
+
 With `--link-entries`, known entry names inside definitions become internal links. Kindle links work when opening the dictionary directly as a book, but may not work inside Kindle's lookup popup UI.
 
 Default DCC outputs:

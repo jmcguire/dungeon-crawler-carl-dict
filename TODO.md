@@ -19,10 +19,6 @@ This file is prioritized by what is most likely to improve real reader lookup be
   - `Krakaren Clone (Second Floor)`
   - Determine whether these need better extraction, aliases, disambiguation, or manual cleanup.
 
-## P1 - Bugs
-
-When building the different dictionaries, why does kindle and kobo have 1205 but stardict has 1212. they have the same number of aliases
-
 ## P3 - Release And User Experience Polish
 
 - Research Kobo internal links.

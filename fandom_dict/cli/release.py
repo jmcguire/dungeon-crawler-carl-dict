@@ -530,6 +530,7 @@ def package_release(
                 },
                 "smoke_tests": mobi_inspection.manifest_data(),
                 "alias_count": kindle_build.alias_count,
+                "lookup_record_count": kindle_build.lookup_record_count,
                 "multi_lookup_count": kindle_build.multi_lookup_count,
                 "omitted_alias_count": kindle_build.omitted_alias_count,
             }
@@ -571,6 +572,7 @@ def package_release(
                 "generator": "Python standard library",
                 "smoke_tests": stardict_inspection.manifest_data(),
                 "alias_count": stardict_build.alias_count,
+                "lookup_record_count": stardict_build.lookup_record_count,
                 "multi_lookup_count": stardict_build.multi_lookup_count,
                 "omitted_alias_count": stardict_build.omitted_alias_count,
             }
@@ -612,6 +614,7 @@ def package_release(
                 },
                 "smoke_tests": kobo_inspection.manifest_data(),
                 "alias_count": kobo_build.alias_count,
+                "lookup_record_count": kobo_build.lookup_record_count,
                 "multi_lookup_count": kobo_build.multi_lookup_count,
                 "omitted_alias_count": kobo_build.omitted_alias_count,
             }

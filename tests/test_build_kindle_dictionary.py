@@ -1777,6 +1777,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             )
 
             self.assertEqual(result.entry_count, 1)
+            self.assertEqual(result.lookup_record_count, 1)
             self.assertTrue(result.cover_path.exists())
             self.assertTrue(result.xhtml_path.exists())
             self.assertTrue(result.opf_path.exists())
@@ -1789,6 +1790,24 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             ET.parse(result.cover_path)
             ET.parse(result.xhtml_path)
             ET.parse(result.opf_path)
+
+    def test_build_dictionary_sources_counts_extra_kindle_lookup_records(self) -> None:
+        entries = [
+            Entry("Heal Pet Potion", "https://example/Heal_Pet_Potion", "A potion that helps pets."),
+            Entry("Heal Pet Spell", "https://example/Heal_Pet_Spell", "A spell that helps pets."),
+        ]
+
+        with TemporaryDirectory() as tmp_dir:
+            result = build_dictionary_sources(
+                entries,
+                Path(tmp_dir),
+                "Test Dictionary",
+                "Test Author",
+            )
+
+        self.assertEqual(result.entry_count, 2)
+        self.assertEqual(result.lookup_record_count, 4)
+        self.assertEqual(result.multi_lookup_count, 1)
 
     def test_build_dictionary_sources_uses_release_version_in_opf_identifier(self) -> None:
         with TemporaryDirectory() as tmp_dir:

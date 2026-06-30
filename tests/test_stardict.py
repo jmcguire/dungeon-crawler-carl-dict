@@ -130,6 +130,8 @@ class StarDictTests(unittest.TestCase):
             )
 
         self.assertEqual(result.alias_count, 0)
+        self.assertEqual(result.entry_count, 2)
+        self.assertEqual(result.lookup_record_count, 2)
         self.assertEqual(result.multi_lookup_count, 1)
         earth_lookup = inspection.lookup("Earth") or ""
         self.assertIn("Earth is a planet.", earth_lookup)
@@ -156,6 +158,8 @@ class StarDictTests(unittest.TestCase):
             )
 
         self.assertEqual(result.alias_count, 0)
+        self.assertEqual(result.entry_count, 2)
+        self.assertEqual(result.lookup_record_count, 2)
         self.assertEqual(result.multi_lookup_count, 1)
         earth_lookup = inspection.lookup("Earth") or ""
         self.assertIn("Earth is a planet.", earth_lookup)
@@ -177,6 +181,8 @@ class StarDictTests(unittest.TestCase):
             )
 
         self.assertEqual(result.alias_count, 0)
+        self.assertEqual(result.entry_count, 2)
+        self.assertEqual(result.lookup_record_count, 3)
         self.assertEqual(result.multi_lookup_count, 1)
         heal_pet_lookup = inspection.lookup("Heal Pet") or ""
         self.assertIn("A potion that helps pets.", heal_pet_lookup)

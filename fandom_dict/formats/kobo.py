@@ -37,6 +37,7 @@ class KoboBuildResult:
     compiler_version: str | None
     multi_lookup_count: int = 0
     omitted_alias_count: int = 0
+    lookup_record_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -192,7 +193,7 @@ def entries_to_dictfile(
     strip_parenthetical_disambiguation: bool = True,
     title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
-) -> tuple[str, int, int, int]:
+) -> tuple[str, int, int, int, int]:
     """Render Kobo dictgen input and return it with lookup counts."""
 
     lookup_options = {
@@ -223,7 +224,8 @@ def entries_to_dictfile(
         chunks.append("::")
         chunks.append(f"<html>{combined_definitions.get(entry.title, render_definition(entry, source_name))}")
         chunks.append("")
-    for word in sorted(set(combined_definitions) - set(entries_by_title), key=str.casefold):
+    extra_lookup_words = sorted(set(combined_definitions) - set(entries_by_title), key=str.casefold)
+    for word in extra_lookup_words:
         chunks.append(f"@ {word}")
         chunks.append("::")
         chunks.append(f"<html>{combined_definitions[word]}")
@@ -233,6 +235,7 @@ def entries_to_dictfile(
         alias_count,
         lookup_report.multi_target_lookup_count,
         lookup_report.omitted_alias_count,
+        len(entries) + len(extra_lookup_words),
     )
 
 
@@ -271,7 +274,7 @@ def build_kobo(
     if not executable:
         raise KoboValidationError("dictgen was not found")
     output_dir.mkdir(parents=True, exist_ok=True)
-    dictfile_text, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(
+    dictfile_text, alias_count, multi_lookup_count, omitted_alias_count, lookup_record_count = entries_to_dictfile(
         entries,
         include_sidebar_aliases=include_sidebar_aliases,
         source_name=source_name,
@@ -303,6 +306,7 @@ def build_kobo(
         compiler_version=detect_dictgen_version(executable),
         multi_lookup_count=multi_lookup_count,
         omitted_alias_count=omitted_alias_count,
+        lookup_record_count=lookup_record_count,
     )
 
 

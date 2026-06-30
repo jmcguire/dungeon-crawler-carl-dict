@@ -81,6 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     for path in result.files:
         output.path(path)
     output.info(f"entries: {result.entry_count}")
+    output.info(f"lookup records: {result.lookup_record_count}")
     output.info(f"aliases: {result.alias_count}")
     output.info(f"multi-target lookups: {result.multi_lookup_count}")
     output.info(f"omitted aliases: {result.omitted_alias_count}")

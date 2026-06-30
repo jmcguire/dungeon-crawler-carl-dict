@@ -61,10 +61,11 @@ class KoboTests(unittest.TestCase):
                 self.assertEqual(kobo_prefix(word), prefix)
 
     def test_dictfile_preserves_formatting_and_suffix_alias_variants(self) -> None:
-        dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(self.sample_entries())
+        dictfile, alias_count, multi_lookup_count, omitted_alias_count, lookup_record_count = entries_to_dictfile(self.sample_entries())
         self.assertEqual(alias_count, 2)
         self.assertEqual(multi_lookup_count, 0)
         self.assertGreaterEqual(omitted_alias_count, 0)
+        self.assertEqual(lookup_record_count, 6)
         self.assertIn("@ 1914 Box\n& 1914\n::\n<html>", dictfile)
         self.assertIn("@ Fire Fingers Spell\n& Fire Fingers\n::\n<html>", dictfile)
         self.assertIn("@ Red Beret\n::\n<html>", dictfile)
@@ -94,11 +95,12 @@ class KoboTests(unittest.TestCase):
             Entry("Earth", "https://example/Earth", "Earth is a planet."),
             Entry("Earth Box", "https://example/Earth_Box", "Earth Box is a reward."),
         ]
-        dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(entries)
+        dictfile, alias_count, multi_lookup_count, omitted_alias_count, lookup_record_count = entries_to_dictfile(entries)
 
         self.assertEqual(alias_count, 0)
         self.assertEqual(multi_lookup_count, 1)
         self.assertEqual(omitted_alias_count, 0)
+        self.assertEqual(lookup_record_count, 2)
         self.assertIn("@ Earth\n::\n<html>", dictfile)
         self.assertIn("<b>Earth</b>", dictfile)
         self.assertIn("<b>Earth Box</b>", dictfile)
@@ -121,13 +123,14 @@ class KoboTests(unittest.TestCase):
         ]
         with TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
-            dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(
+            dictfile, alias_count, multi_lookup_count, omitted_alias_count, lookup_record_count = entries_to_dictfile(
                 entries,
                 title_component_ignore_words=("Club",),
             )
             self.assertEqual(alias_count, 1)
             self.assertEqual(multi_lookup_count, 0)
             self.assertGreaterEqual(omitted_alias_count, 0)
+            self.assertEqual(lookup_record_count, 1)
             self.assertIn("@ Desperado Club\n& Desperado\n::\n<html>", dictfile)
             synthetic_kobo_zip(path, entries, title_component_ignore_words=("Club",))
             inspection = inspect_kobo(path, required_headwords=("Desperado", "Desperado Club"))
@@ -146,10 +149,11 @@ class KoboTests(unittest.TestCase):
         ]
         with TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
-            dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(entries)
+            dictfile, alias_count, multi_lookup_count, omitted_alias_count, lookup_record_count = entries_to_dictfile(entries)
             self.assertEqual(alias_count, 1)
             self.assertEqual(multi_lookup_count, 0)
             self.assertEqual(omitted_alias_count, 0)
+            self.assertEqual(lookup_record_count, 1)
             self.assertIn("@ System AI\n& AI\n::\n<html>", dictfile)
             synthetic_kobo_zip(path, entries)
             inspection = inspect_kobo(path, required_headwords=("AI", "System AI"))
@@ -164,7 +168,7 @@ class KoboTests(unittest.TestCase):
         ]
         with TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / DICTGEN_OUTPUT_NAME
-            dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(
+            dictfile, alias_count, multi_lookup_count, omitted_alias_count, lookup_record_count = entries_to_dictfile(
                 entries,
                 title_suffix_aliases=(),
                 title_component_ignore_words=("Box",),
@@ -172,6 +176,7 @@ class KoboTests(unittest.TestCase):
             self.assertEqual(alias_count, 0)
             self.assertEqual(multi_lookup_count, 1)
             self.assertGreaterEqual(omitted_alias_count, 0)
+            self.assertEqual(lookup_record_count, 2)
             self.assertIn("@ Earth\n::\n<html>", dictfile)
             self.assertNotIn("& Earth\n", dictfile)
             synthetic_kobo_zip(
@@ -191,11 +196,12 @@ class KoboTests(unittest.TestCase):
             Entry("Heal Pet Potion", "https://example/Heal_Pet_Potion", "A potion that helps pets."),
             Entry("Heal Pet Spell", "https://example/Heal_Pet_Spell", "A spell that helps pets."),
         ]
-        dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(entries)
+        dictfile, alias_count, multi_lookup_count, omitted_alias_count, lookup_record_count = entries_to_dictfile(entries)
 
         self.assertEqual(alias_count, 0)
         self.assertEqual(multi_lookup_count, 1)
         self.assertEqual(omitted_alias_count, 0)
+        self.assertEqual(lookup_record_count, 3)
         self.assertIn("@ Heal Pet\n::\n<html>", dictfile)
         self.assertNotIn("& Heal Pet\n", dictfile)
 
@@ -218,11 +224,12 @@ class KoboTests(unittest.TestCase):
                 source_categories=("Characters",),
             ),
         ]
-        dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(entries)
+        dictfile, alias_count, multi_lookup_count, omitted_alias_count, lookup_record_count = entries_to_dictfile(entries)
 
         self.assertEqual(alias_count, 4)
         self.assertEqual(multi_lookup_count, 3)
         self.assertEqual(omitted_alias_count, 0)
+        self.assertEqual(lookup_record_count, 5)
         self.assertIn("@ Aegon\n::\n<html>", dictfile)
         self.assertNotIn("& Aegon\n", dictfile)
 
@@ -303,11 +310,12 @@ class KoboTests(unittest.TestCase):
                 source_categories=("Characters",),
             ),
         ]
-        dictfile, alias_count, multi_lookup_count, omitted_alias_count = entries_to_dictfile(entries)
+        dictfile, alias_count, multi_lookup_count, omitted_alias_count, lookup_record_count = entries_to_dictfile(entries)
 
         self.assertEqual(alias_count, 4)
         self.assertEqual(multi_lookup_count, 3)
         self.assertEqual(omitted_alias_count, 0)
+        self.assertEqual(lookup_record_count, 5)
         self.assertIn("@ Aegon's\n::\n<html>", dictfile)
         self.assertIn(f"@ Aegon{chr(0x2019)}s\n::\n<html>", dictfile)
 

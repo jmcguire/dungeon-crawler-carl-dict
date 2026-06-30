@@ -50,6 +50,7 @@ class StarDictBuildResult:
     alias_count: int
     multi_lookup_count: int = 0
     omitted_alias_count: int = 0
+    lookup_record_count: int = 0
 
     @property
     def files(self) -> tuple[Path, ...]:
@@ -352,10 +353,11 @@ def build_stardict(
         dict_path=dict_path,
         syn_path=syn_path,
         css_path=css_path,
-        entry_count=len(index_records),
+        entry_count=len(entries),
         alias_count=len(synonym_records),
         multi_lookup_count=lookup_report.multi_target_lookup_count,
         omitted_alias_count=lookup_report.omitted_alias_count,
+        lookup_record_count=len(index_records),
     )
 
 
