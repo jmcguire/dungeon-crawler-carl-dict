@@ -16,6 +16,11 @@ class Stream(io.StringIO):
         return self._tty
 
 
+class BrokenPipeStream(Stream):
+    def write(self, _value: str) -> int:
+        raise BrokenPipeError("pipe closed")
+
+
 class CliOutputTests(unittest.TestCase):
     def test_outputs_mode_prints_paths_and_errors_only(self) -> None:
         stdout = Stream()
@@ -106,6 +111,23 @@ class CliOutputTests(unittest.TestCase):
         self.assertIn('\x1b[1malias="Carl"\x1b[22m', text)
         self.assertIn('\x1b[1mlookup="Earth"\x1b[22m', text)
         self.assertIn(' main="Fireball Spell"', text)
+
+    def test_broken_stdout_pipe_stops_stdout_without_traceback(self) -> None:
+        stdout = BrokenPipeStream()
+        log_path: Path
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "command.log"
+            output = CommandOutput("full", stdout=stdout, stderr=Stream(), log_file=log_path)
+
+            output.detail('alias: alias="Fireball" main="Fireball Spell" source=title-suffix-spell')
+            output.detail("this write is skipped because stdout is already closed")
+            output.close()
+
+            log_text = log_path.read_text(encoding="utf-8")
+
+        self.assertIn('alias: alias="Fireball"', log_text)
+        self.assertIn("this write is skipped", log_text)
+        self.assertTrue(output._stdout_broken)
 
     def test_logging_handler_respects_verbosity(self) -> None:
         stdout = Stream()

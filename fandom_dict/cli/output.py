@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import sys
 from pathlib import Path
@@ -40,6 +41,8 @@ class CommandOutput:
         self.stdout = stdout or sys.stdout
         self.stderr = stderr or sys.stderr
         self._log_handle = None
+        self._stdout_broken = False
+        self._stderr_broken = False
         if log_file is not None:
             log_file.parent.mkdir(parents=True, exist_ok=True)
             self._log_handle = log_file.open("a", encoding="utf-8")
@@ -91,12 +94,34 @@ class CommandOutput:
         self._write_stderr(self._color(f"error: {message}", "31"), log=False)
 
     def _write_stdout(self, message: str, *, log: bool = True) -> None:
-        print(message, file=self.stdout)
+        if self._stdout_broken:
+            if log:
+                self._write_log(message)
+            return
+        try:
+            print(message, file=self.stdout)
+        except BrokenPipeError:
+            self._stdout_broken = True
+            self._redirect_standard_stream_to_devnull(self.stdout)
+            if log:
+                self._write_log(message)
+            return
         if log:
             self._write_log(message)
 
     def _write_stderr(self, message: str, *, log: bool = True) -> None:
-        print(message, file=self.stderr)
+        if self._stderr_broken:
+            if log:
+                self._write_log(message)
+            return
+        try:
+            print(message, file=self.stderr)
+        except BrokenPipeError:
+            self._stderr_broken = True
+            self._redirect_standard_stream_to_devnull(self.stderr)
+            if log:
+                self._write_log(message)
+            return
         if log:
             self._write_log(message)
 
@@ -121,6 +146,25 @@ class CommandOutput:
         if not self._use_color:
             return message
         return _IMPORTANT_ATTRIBUTE_RE.sub(lambda match: f"\x1b[1m{match.group(0)}\x1b[22m", message)
+
+    @staticmethod
+    def _redirect_standard_stream_to_devnull(stream: TextIO) -> None:
+        """Prevent interpreter shutdown flush errors after a closed pipe."""
+
+        if stream is not sys.stdout and stream is not sys.stderr:
+            return
+        try:
+            fd = stream.fileno()
+        except (AttributeError, OSError):
+            return
+        try:
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            try:
+                os.dup2(devnull, fd)
+            finally:
+                os.close(devnull)
+        except OSError:
+            return
 
 
 class OutputLogHandler(logging.Handler):
