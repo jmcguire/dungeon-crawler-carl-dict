@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,6 +49,24 @@ class HealthReport:
     formats: tuple[FormatHealth, ...]
     term_statuses: tuple[TermStatus, ...]
     findings: tuple[AuditFinding, ...]
+    wiki_cleanup_candidates: tuple["WikiCleanupCandidate", ...]
+
+
+@dataclass(frozen=True)
+class WikiCleanupCandidate:
+    """One entry that may be easier to improve on the source wiki."""
+
+    title: str
+    reasons: tuple[str, ...]
+    detail: str
+    url: str
+    severity: int
+
+    def format(self) -> str:
+        """Return a stable one-line report format."""
+
+        reason_text = ", ".join(self.reasons)
+        return f"wiki-cleanup: {self.title}: {reason_text}: {self.detail} ({self.url})"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -103,6 +122,7 @@ def build_health_report(
         formats=format_health(entries, lookup_report),
         term_statuses=term_statuses(terms, entries, lookup_report),
         findings=tuple(audit_entries(entries)),
+        wiki_cleanup_candidates=tuple(wiki_cleanup_candidates(entries)),
     )
 
 
@@ -163,6 +183,147 @@ def finding_counts(findings: tuple[AuditFinding, ...]) -> Counter[str]:
     return Counter(finding.kind for finding in findings)
 
 
+def wiki_cleanup_candidates(entries: list[Entry]) -> list[WikiCleanupCandidate]:
+    """Return entries that probably deserve source-wiki cleanup."""
+
+    candidates = []
+    for entry in entries:
+        text = text_for_cleanup(entry)
+        reasons = cleanup_reasons(entry, text)
+        if not reasons:
+            continue
+        severity = cleanup_severity(reasons)
+        candidates.append(
+            WikiCleanupCandidate(
+                title=entry.title,
+                reasons=tuple(reasons),
+                detail=snippet(text),
+                url=entry.url,
+                severity=severity,
+            )
+        )
+    return sorted(candidates, key=lambda item: (item.severity, item.title.casefold()))
+
+
+def text_for_cleanup(entry: Entry) -> str:
+    """Return plain definition text for source-wiki cleanup checks."""
+
+    from fandom_dict.entries import text_from_inline_html
+
+    return text_from_inline_html(entry.definition)
+
+
+def cleanup_reasons(entry: Entry, text: str) -> list[str]:
+    """Return source-wiki cleanup reasons for one entry."""
+
+    reasons: list[str] = []
+    normalized = " ".join(text.split())
+    if not normalized:
+        return reasons
+    if has_wiki_markup_artifact(normalized):
+        reasons.append("malformed-wiki-markup")
+    if is_title_only(entry.title, normalized):
+        reasons.append("title-only-definition")
+    if is_generated_section_label(normalized):
+        reasons.append("generated-section-label")
+    generic_type = is_generic_type_definition(entry.title, normalized)
+    if generic_type:
+        reasons.append("generic-type-definition")
+    if is_truncated_cleanup_text(normalized) and not generic_type:
+        reasons.append("truncated-looking-definition")
+    if len(normalized) < 80 and not entry.details:
+        reasons.append("short-definition-without-sidebar")
+    if is_quote_intro_ending(normalized):
+        reasons.append("quote-or-description-leadin-ending")
+    return reasons
+
+
+def has_wiki_markup_artifact(text: str) -> bool:
+    """Return true when wiki markup leaked into the generated definition."""
+
+    return bool(re.search(r"'''|‘’’|’’’|‘‘‘", text))
+
+
+def is_title_only(title: str, text: str) -> bool:
+    """Return true when the definition is just the headword."""
+
+    cleaned_text = re.sub(r"[.!?]+$", "", text).strip().casefold()
+    return cleaned_text == title.strip().casefold()
+
+
+def is_generated_section_label(text: str) -> bool:
+    """Return true for generated AI-section labels that are not prose."""
+
+    return bool(re.search(r"\bSection of\s+[^:]{1,160}:\s*$", text))
+
+
+def is_truncated_cleanup_text(text: str) -> bool:
+    """Return true when a short definition looks cut off."""
+
+    if re.search(r"\b(and|or|but|because|with|of|to)\s*$", text, re.I):
+        return True
+    if len(text) < 120 and not re.search(r"[.!?:;\"”']\s*$", text):
+        return True
+    return False
+
+
+def is_generic_type_definition(title: str, text: str) -> bool:
+    """Return true for one-line definitions that only name a broad type."""
+
+    plain_title = re.escape(title.strip())
+    return bool(
+        re.fullmatch(
+            rf"(?:the\s+)?{plain_title}\s+(?:is|are)\s+(?:a|an)\s+"
+            r"(?:item|race|spell|loot box|box|mob)\.?",
+            text.strip(),
+            re.I,
+        )
+    )
+
+
+def is_quote_intro_ending(text: str) -> bool:
+    """Return true for definitions that end by introducing missing quoted text."""
+
+    if not text.rstrip().endswith(":"):
+        return False
+    return bool(
+        re.search(
+            r"\b(?:describes?|description|message|voice|from|part of|as part of|of [^:]{1,80})\s*:\s*$",
+            text,
+            re.I,
+        )
+    )
+
+
+def cleanup_severity(reasons: list[str]) -> int:
+    """Return a sort rank for source-wiki cleanup candidates."""
+
+    if any(
+        reason in reasons
+        for reason in (
+            "malformed-wiki-markup",
+            "title-only-definition",
+            "truncated-looking-definition",
+            "generated-section-label",
+        )
+    ):
+        return 0
+    if "generic-type-definition" in reasons:
+        return 1
+    if "short-definition-without-sidebar" in reasons:
+        return 2
+    return 3
+
+
+def snippet(text: str, max_length: int = 220) -> str:
+    """Return a compact one-line snippet for health report output."""
+
+    normalized = " ".join(text.split())
+    if len(normalized) <= max_length:
+        return normalized
+    return f"{normalized[: max_length - 1].rstrip()}…"
+
+
 def render_health_report(report: HealthReport, input_path: Path, max_findings: int) -> tuple[list[str], list[str], list[str]]:
     """Return small, warning, and full-detail health report lines."""
 
@@ -202,9 +363,31 @@ def render_health_report(report: HealthReport, input_path: Path, max_findings: i
     if hidden_count:
         info.append(f"  ... {hidden_count} more; use --verbosity full to show all details")
 
+    info.append(f"wiki cleanup candidates: {len(report.wiki_cleanup_candidates)}")
+    visible_cleanup = report.wiki_cleanup_candidates[: max(0, max_findings)]
+    if visible_cleanup:
+        info.append("wiki cleanup candidate details:")
+        for candidate in visible_cleanup:
+            info.append(f"  {candidate.format()}")
+    hidden_cleanup_count = max(0, len(report.wiki_cleanup_candidates) - len(visible_cleanup))
+    if hidden_cleanup_count:
+        info.append(f"  ... {hidden_cleanup_count} more; use --verbosity full to show all cleanup candidates")
+    if report.wiki_cleanup_candidates:
+        info.extend(
+            (
+                "wiki cleanup guidance:",
+                "  improve the first non-spoilery paragraph; fix broken lead markup; add useful sidebar fields or redirects when known",
+            )
+        )
+
     detail = lookup_report_debug_lines(report.lookup_report)
     if hidden_count:
         detail.extend(f"audit finding: {finding.format()}" for finding in report.findings[len(visible_findings) :])
+    if hidden_cleanup_count:
+        detail.extend(
+            f"wiki cleanup candidate: {candidate.format()}"
+            for candidate in report.wiki_cleanup_candidates[len(visible_cleanup) :]
+        )
     return info, warnings, detail
 
 

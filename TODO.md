@@ -2,23 +2,6 @@
 
 This file is prioritized by what is most likely to improve real reader lookup behavior.
 
-## P1 - Fix Known Missing Or Misnamed Entries
-
-- Investigate true missing entries.
-  - `Shambling Berserker`
-  - `The Final War` / `The Final War Spell`
-  - These are not present in the current normalized entries.
-
-- Fix parenthetical disambiguation where it is clearly noise.
-  - `Torch (Item)` should display and index as `Torch`, unless another `Torch` entry exists.
-  - Add collision protection before stripping parenthetical suffixes.
-
-- Review specific low-quality or confusing entries.
-  - `Krakaren`
-  - `Krakaren Clone (Fourth Floor)`
-  - `Krakaren Clone (Second Floor)`
-  - Determine whether these need better extraction, aliases, disambiguation, or manual cleanup.
-
 ## P3 - Release And User Experience Polish
 
 - Run the Kobo internal-link physical-device experiment.

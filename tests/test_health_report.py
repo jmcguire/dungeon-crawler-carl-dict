@@ -69,6 +69,34 @@ class HealthReportTests(unittest.TestCase):
         self.assertEqual(statuses["Missing"].kind, "missing")
         self.assertGreaterEqual(len(report.findings), 1)
 
+    def test_build_health_report_flags_wiki_cleanup_candidates(self) -> None:
+        config = project_config_from_mapping(test_config())
+        entries = [
+            Entry("Rats", "https://example/Rats", "‘’’Rats are"),
+            Entry("Red Beret", "https://example/Red_Beret", "Red Beret is an item"),
+            Entry("Krakaren", "https://example/Krakaren", "Krakaren is useful. Section of AI Description of Clone:"),
+            Entry("Fumble Achievement", "https://example/Fumble", "The Fumble Achievement is an achievement awarded"),
+            Entry("Hell-Kissed Potion", "https://example/Potion", "Hell-Kissed Potion"),
+            Entry("Tom", "https://example/Tom", "Tom is a boss.", details=(("Race", "Human"),)),
+            Entry(
+                "Healthy",
+                "https://example/Healthy",
+                "Healthy has a clear, useful, above-the-fold summary with enough context for a reader.",
+            ),
+        ]
+
+        report = build_health_report(entries, config)
+        candidates = {candidate.title: candidate for candidate in report.wiki_cleanup_candidates}
+
+        self.assertIn("malformed-wiki-markup", candidates["Rats"].reasons)
+        self.assertIn("generic-type-definition", candidates["Red Beret"].reasons)
+        self.assertIn("generated-section-label", candidates["Krakaren"].reasons)
+        self.assertIn("truncated-looking-definition", candidates["Fumble Achievement"].reasons)
+        self.assertIn("title-only-definition", candidates["Hell-Kissed Potion"].reasons)
+        self.assertNotIn("Tom", candidates)
+        self.assertNotIn("Healthy", candidates)
+        self.assertLess(candidates["Rats"].severity, candidates["Red Beret"].severity)
+
     def test_render_health_report_includes_summary_warnings_and_full_detail(self) -> None:
         config = project_config_from_mapping(test_config())
         report = build_health_report(self.sample_entries(), config)
@@ -82,6 +110,25 @@ class HealthReportTests(unittest.TestCase):
         self.assertIn("missing expected term: Missing", warnings)
         self.assertIn('alias: alias="Fireball" main="Fireball Spell" source=title-suffix-spell', detail)
         self.assertIn('multi-target lookup: lookup="Heal Pet" targets="Heal Pet Potion" | "Heal Pet Spell"', detail)
+
+    def test_render_health_report_caps_cleanup_candidates_in_small_output(self) -> None:
+        config = project_config_from_mapping(test_config())
+        report = build_health_report(
+            [
+                Entry("Alpha", "https://example/Alpha", "Alpha"),
+                Entry("Beta", "https://example/Beta", "Beta"),
+                Entry("Gamma", "https://example/Gamma", "Gamma"),
+            ],
+            config,
+        )
+
+        info, _warnings, detail = render_health_report(report, Path("data/test.sqlite"), max_findings=1)
+
+        cleanup_lines = [line for line in info if "wiki-cleanup:" in line]
+        self.assertEqual(len(cleanup_lines), 1)
+        self.assertIn("wiki cleanup candidates: 3", info)
+        self.assertTrue(any("use --verbosity full to show all cleanup candidates" in line for line in info))
+        self.assertEqual(sum(1 for line in detail if line.startswith("wiki cleanup candidate:")), 2)
 
     def test_cli_reports_health_from_fixture_database(self) -> None:
         with TemporaryDirectory() as tmp_dir:
