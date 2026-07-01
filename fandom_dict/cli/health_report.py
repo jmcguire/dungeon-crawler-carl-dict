@@ -62,11 +62,16 @@ class WikiCleanupCandidate:
     url: str
     severity: int
 
-    def format(self) -> str:
-        """Return a stable one-line report format."""
+    def format_summary(self) -> str:
+        """Return the small-verbosity one-line summary without the page URL."""
 
         reason_text = ", ".join(self.reasons)
-        return f"wiki-cleanup: {self.title}: {reason_text}: {self.detail} ({self.url})"
+        return f"{bold_headword(self.title)}: {reason_text}: {self.detail}"
+
+    def format_detail(self) -> str:
+        """Return the full-verbosity one-line detail with the page URL."""
+
+        return f"{self.format_summary()} ({self.url})"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -324,6 +329,12 @@ def snippet(text: str, max_length: int = 220) -> str:
     return f"{normalized[: max_length - 1].rstrip()}…"
 
 
+def bold_headword(title: str) -> str:
+    """Return a lightweight bold wrapper for health-report headwords."""
+
+    return f"**{title}**"
+
+
 def render_health_report(report: HealthReport, input_path: Path, max_findings: int) -> tuple[list[str], list[str], list[str]]:
     """Return small, warning, and full-detail health report lines."""
 
@@ -368,7 +379,7 @@ def render_health_report(report: HealthReport, input_path: Path, max_findings: i
     if visible_cleanup:
         info.append("wiki cleanup candidate details:")
         for candidate in visible_cleanup:
-            info.append(f"  {candidate.format()}")
+            info.append(f"  {candidate.format_summary()}")
     hidden_cleanup_count = max(0, len(report.wiki_cleanup_candidates) - len(visible_cleanup))
     if hidden_cleanup_count:
         info.append(f"  ... {hidden_cleanup_count} more; use --verbosity full to show all cleanup candidates")
@@ -383,11 +394,10 @@ def render_health_report(report: HealthReport, input_path: Path, max_findings: i
     detail = lookup_report_debug_lines(report.lookup_report)
     if hidden_count:
         detail.extend(f"audit finding: {finding.format()}" for finding in report.findings[len(visible_findings) :])
-    if hidden_cleanup_count:
-        detail.extend(
-            f"wiki cleanup candidate: {candidate.format()}"
-            for candidate in report.wiki_cleanup_candidates[len(visible_cleanup) :]
-        )
+    detail.extend(
+        f"wiki cleanup candidate: {candidate.format_detail()}"
+        for candidate in report.wiki_cleanup_candidates
+    )
     return info, warnings, detail
 
 

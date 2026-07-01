@@ -95,6 +95,19 @@ class CliOutputTests(unittest.TestCase):
         self.assertNotIn("\x1b[", pipe_stdout.getvalue())
         self.assertNotIn("\x1b[", pipe_stderr.getvalue())
 
+    def test_markdown_bold_renders_for_tty_and_strips_for_pipes(self) -> None:
+        tty_stdout = Stream(tty=True)
+        tty_output = CommandOutput("small", stdout=tty_stdout, stderr=Stream(tty=True))
+        tty_output.info("item: **Krakaren**")
+        self.assertIn("\x1b[1mKrakaren\x1b[22m", tty_stdout.getvalue())
+        self.assertNotIn("**Krakaren**", tty_stdout.getvalue())
+
+        pipe_stdout = Stream()
+        pipe_output = CommandOutput("small", stdout=pipe_stdout, stderr=Stream())
+        pipe_output.info("item: **Krakaren**")
+        self.assertIn("item: Krakaren", pipe_stdout.getvalue())
+        self.assertNotIn("**Krakaren**", pipe_stdout.getvalue())
+
     def test_diagnostic_line_types_are_colored_as_whole_lines(self) -> None:
         stdout = Stream(tty=True)
         output = CommandOutput("full", stdout=stdout, stderr=Stream(tty=True))

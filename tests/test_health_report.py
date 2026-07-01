@@ -124,11 +124,16 @@ class HealthReportTests(unittest.TestCase):
 
         info, _warnings, detail = render_health_report(report, Path("data/test.sqlite"), max_findings=1)
 
-        cleanup_lines = [line for line in info if "wiki-cleanup:" in line]
+        cleanup_lines = [line for line in info if "**Alpha**" in line or "**Beta**" in line or "**Gamma**" in line]
         self.assertEqual(len(cleanup_lines), 1)
         self.assertIn("wiki cleanup candidates: 3", info)
         self.assertTrue(any("use --verbosity full to show all cleanup candidates" in line for line in info))
-        self.assertEqual(sum(1 for line in detail if line.startswith("wiki cleanup candidate:")), 2)
+        self.assertTrue(all("https://example/" not in line for line in cleanup_lines))
+        cleanup_detail = [line for line in detail if line.startswith("wiki cleanup candidate:")]
+        self.assertEqual(len(cleanup_detail), 3)
+        self.assertTrue(all("https://example/" in line for line in cleanup_detail))
+        self.assertTrue(all("wiki-cleanup:" not in line for line in cleanup_lines + cleanup_detail))
+        self.assertTrue(all("**" in line for line in cleanup_lines + cleanup_detail))
 
     def test_cli_reports_health_from_fixture_database(self) -> None:
         with TemporaryDirectory() as tmp_dir:

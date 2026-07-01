@@ -22,6 +22,7 @@ DIAGNOSTIC_LINE_COLORS = {
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 _IMPORTANT_ATTRIBUTE_RE = re.compile(r'(?:alias|lookup)="[^"]*"')
+_MARKDOWN_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 
 
 class CommandOutput:
@@ -71,27 +72,27 @@ class CommandOutput:
 
         self._write_log(message)
         if self.verbosity in {VERBOSITY_SMALL, VERBOSITY_FULL}:
-            self._write_stdout(self._color_diagnostic_line(message), log=False)
+            self._write_stdout(self._format_terminal_message(message), log=False)
 
     def detail(self, message: str) -> None:
         """Print a detailed progress message only at full verbosity."""
 
         self._write_log(message)
         if self.verbosity == VERBOSITY_FULL:
-            self._write_stdout(self._color_diagnostic_line(message), log=False)
+            self._write_stdout(self._format_terminal_message(message), log=False)
 
     def warning(self, message: str) -> None:
         """Print a warning unless stdout is reserved for output paths."""
 
         self._write_log(f"warning: {message}")
         if self.verbosity in {VERBOSITY_SMALL, VERBOSITY_FULL}:
-            self._write_stdout(self._color(f"warning: {message}", "33"), log=False)
+            self._write_stdout(self._color(self._render_terminal_markup(f"warning: {message}"), "33"), log=False)
 
     def error(self, message: str) -> None:
         """Print a major error to stderr regardless of stdout verbosity."""
 
         self._write_log(f"error: {message}")
-        self._write_stderr(self._color(f"error: {message}", "31"), log=False)
+        self._write_stderr(self._color(self._render_terminal_markup(f"error: {message}"), "31"), log=False)
 
     def _write_stdout(self, message: str, *, log: bool = True) -> None:
         if self._stdout_broken:
@@ -135,12 +136,24 @@ class CommandOutput:
             return message
         return f"\x1b[{code}m{message}\x1b[0m"
 
+    def _format_terminal_message(self, message: str) -> str:
+        """Render lightweight inline markup and diagnostic colors for stdout."""
+
+        return self._color_diagnostic_line(self._render_terminal_markup(message))
+
     def _color_diagnostic_line(self, message: str) -> str:
         for prefix, code in DIAGNOSTIC_LINE_COLORS.items():
             if message.startswith(prefix):
                 message = self._bold_important_attributes(message)
                 return self._color(message, code)
         return message
+
+    def _render_terminal_markup(self, message: str) -> str:
+        """Convert simple Markdown-style bold markers into terminal formatting."""
+
+        if self._use_color:
+            return _MARKDOWN_BOLD_RE.sub(lambda match: f"\x1b[1m{match.group(1)}\x1b[22m", message)
+        return _MARKDOWN_BOLD_RE.sub(lambda match: match.group(1), message)
 
     def _bold_important_attributes(self, message: str) -> str:
         if not self._use_color:
