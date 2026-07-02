@@ -34,6 +34,8 @@ from fandom_dict.cli.release import (
     ReleaseError,
     Version,
     classify_audit_findings,
+    display_category_name,
+    human_join,
     install_release_directory,
     package_release,
     parse_args,
@@ -41,6 +43,7 @@ from fandom_dict.cli.release import (
     preflight_local,
     publish_release,
     sha256_file,
+    update_docs_release_status,
     validate_compilation,
     write_checksums,
     write_manifest,
@@ -270,10 +273,16 @@ class ReleaseTests(unittest.TestCase):
                     DICTGEN_OUTPUT_NAME: sha256_file(kobo_dictzip),
                     KOBO_ZIP_NAME: sha256_file(kobo_archive),
                 },
+                source_scope={
+                    "fandom": "dungeon-crawler-carl",
+                    "source_name": "Dungeon Crawler Carl Wiki",
+                    "categories": ["Characters", "Mob_Types"],
+                },
             )
             manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
             self.assertEqual(manifest_data["entry_count"], 575)
             self.assertEqual(manifest_data["schema_version"], 2)
+            self.assertEqual(manifest_data["source_scope"]["categories"], ["Characters", "Mob_Types"])
             self.assertIn("stardict", manifest_data["formats"])
             self.assertIn("kobo", manifest_data["formats"])
 
@@ -303,6 +312,51 @@ class ReleaseTests(unittest.TestCase):
             self.assertFalse((final / "old").exists())
             self.assertEqual((final / "new").read_text(encoding="ascii"), "new")
             self.assertFalse((temp_root / "previous-release").exists())
+
+    def test_release_status_helpers_format_reader_friendly_scope(self) -> None:
+        self.assertEqual(display_category_name("Category:Mob_Types"), "Mob Types")
+        self.assertEqual(
+            human_join(["Characters", "Groups", "Spells"]),
+            "Characters, Groups, and Spells",
+        )
+
+    def test_update_docs_release_status_replaces_marked_homepage_block(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            index = Path(tmp_dir) / "index.html"
+            index.write_text(
+                """
+<section>
+  <!-- release-status:start -->
+  <p class="release-status">Old release text.</p>
+  <!-- release-status:end -->
+</section>
+""".lstrip(),
+                encoding="utf-8",
+            )
+
+            changed = update_docs_release_status(
+                index,
+                version_tag="v1.2.3",
+                entry_count=1208,
+                built_at="2026-07-02T14:30:00Z",
+                categories=["Characters", "Mob_Types"],
+            )
+
+            text = index.read_text(encoding="utf-8")
+            self.assertTrue(changed)
+            self.assertIn("Current version v1.2.3 includes <strong>1,208 entries</strong>", text)
+            self.assertIn("last built <strong>July 2, 2026</strong>", text)
+            self.assertIn("including all <strong>Characters and Mob Types</strong>", text)
+
+            self.assertFalse(
+                update_docs_release_status(
+                    index,
+                    version_tag="v1.2.3",
+                    entry_count=1208,
+                    built_at="2026-07-02T14:30:00Z",
+                    categories=["Characters", "Mob_Types"],
+                )
+            )
 
     def test_stardict_only_release_packages_only_stardict_assets(self) -> None:
         with TemporaryDirectory() as tmp_dir:

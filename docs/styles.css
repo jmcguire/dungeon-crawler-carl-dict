@@ -373,6 +373,19 @@ p {
   margin-top: 1rem;
 }
 
+.release-status {
+  max-width: 78ch;
+  margin: 1.15rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 211, 53, 0.35);
+  color: #f8efc9;
+  font-size: 0.98rem;
+}
+
+.release-status strong {
+  color: var(--yellow);
+}
+
 .two-column,
 .three-column {
   display: grid;

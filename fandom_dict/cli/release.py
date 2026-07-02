@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import json
 import logging
 import re
@@ -72,6 +73,12 @@ RELEASE_ASSET_NAMES = (
 )
 FATAL_AUDIT_KINDS = frozenset({"gallery-credit", "maintenance-text", "source-artifact", "truncated"})
 WARNING_AUDIT_KINDS = frozenset({"short", "unresolved-forward"})
+RELEASE_STATUS_START = "<!-- release-status:start -->"
+RELEASE_STATUS_END = "<!-- release-status:end -->"
+RELEASE_STATUS_PATTERN = re.compile(
+    rf"{re.escape(RELEASE_STATUS_START)}.*?{re.escape(RELEASE_STATUS_END)}",
+    re.DOTALL,
+)
 SEMVER_PATTERN = re.compile(
     r"^(?:v)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
     r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
@@ -362,6 +369,7 @@ def write_manifest(
     database_hash: str,
     formats: dict[str, object],
     artifact_hashes: dict[str, str],
+    source_scope: dict[str, object] | None = None,
 ) -> None:
     """Write machine-readable provenance and smoke-test results."""
 
@@ -376,7 +384,89 @@ def write_manifest(
         "formats": formats,
         "artifact_sha256": artifact_hashes,
     }
+    if source_scope is not None:
+        manifest["source_scope"] = source_scope
     path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def display_category_name(category: str) -> str:
+    """Return a reader-facing category label from a MediaWiki category name."""
+
+    label = category.removeprefix("Category:").replace("_", " ").strip()
+    return label or category
+
+
+def human_join(items: Sequence[str]) -> str:
+    """Join display strings with commas and a final 'and'."""
+
+    clean_items = [item for item in items if item]
+    if not clean_items:
+        return ""
+    if len(clean_items) == 1:
+        return clean_items[0]
+    if len(clean_items) == 2:
+        return f"{clean_items[0]} and {clean_items[1]}"
+    return f"{', '.join(clean_items[:-1])}, and {clean_items[-1]}"
+
+
+def release_status_date(built_at: str) -> str:
+    """Format an ISO release timestamp as a concise public date."""
+
+    normalized = built_at.replace("Z", "+00:00")
+    built = datetime.fromisoformat(normalized)
+    return f"{built.strftime('%B')} {built.day}, {built.year}"
+
+
+def release_status_block(
+    *,
+    version_tag: str,
+    entry_count: int,
+    built_at: str,
+    categories: Sequence[str],
+) -> str:
+    """Render the docs homepage release-status block."""
+
+    category_names = [display_category_name(category) for category in categories]
+    sentence = (
+        f"Current version {html.escape(version_tag)} includes "
+        f"<strong>{entry_count:,} entries</strong>, last built "
+        f"<strong>{html.escape(release_status_date(built_at))}</strong>, including all "
+        f"<strong>{html.escape(human_join(category_names))}</strong>."
+    )
+    return (
+        f"{RELEASE_STATUS_START}\n"
+        f"    <p class=\"release-status\">{sentence}</p>\n"
+        f"    {RELEASE_STATUS_END}"
+    )
+
+
+def update_docs_release_status(
+    index_path: Path,
+    *,
+    version_tag: str,
+    entry_count: int,
+    built_at: str,
+    categories: Sequence[str],
+) -> bool:
+    """Update the marked docs homepage release-status block.
+
+    Returns True when the tracked docs page changed.
+    """
+
+    text = index_path.read_text(encoding="utf-8")
+    replacement = release_status_block(
+        version_tag=version_tag,
+        entry_count=entry_count,
+        built_at=built_at,
+        categories=categories,
+    )
+    updated, count = RELEASE_STATUS_PATTERN.subn(replacement, text, count=1)
+    if count != 1:
+        raise ReleaseError(f"release status block markers not found in {index_path}")
+    if updated == text:
+        return False
+    index_path.write_text(updated, encoding="utf-8")
+    return True
 
 
 def write_checksums(path: Path, assets: Sequence[Path]) -> None:
@@ -629,6 +719,11 @@ def package_release(
             database_hash=sha256_file(snapshot_path),
             formats=format_manifest,
             artifact_hashes=payload_hashes,
+            source_scope={
+                "fandom": DEFAULT_PROJECT.fandom,
+                "source_name": DEFAULT_PROJECT.source_name,
+                "categories": list(DEFAULT_PROJECT.categories),
+            },
         )
         checksums_path = asset_dir / CHECKSUMS_NAME
         write_checksums(checksums_path, (*payload_paths, manifest_path))
@@ -799,6 +894,23 @@ def main(argv: list[str] | None = None) -> int:
             include_sidebar_aliases=not args.no_sidebar_aliases,
         )
         LOGGER.info("release bundle ready: %s", release_dir)
+        manifest = json.loads((release_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
+        source_scope = manifest.get("source_scope") if isinstance(manifest.get("source_scope"), dict) else {}
+        categories = source_scope.get("categories") if isinstance(source_scope, dict) else None
+        docs_changed = update_docs_release_status(
+            repo_root / "docs" / "index.html",
+            version_tag=str(manifest["tag"]),
+            entry_count=int(manifest["entry_count"]),
+            built_at=str(manifest["built_at"]),
+            categories=categories if isinstance(categories, list) else DEFAULT_PROJECT.categories,
+        )
+        if docs_changed:
+            LOGGER.info("updated docs release status on docs/index.html")
+            if args.publish:
+                raise ReleaseError(
+                    "docs release status was updated; commit and push docs/index.html "
+                    "before publishing the GitHub Release"
+                )
         for asset in sorted(path for path in release_dir.iterdir() if path.is_file()):
             output.path(asset)
         if args.publish:
