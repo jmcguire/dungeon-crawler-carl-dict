@@ -61,8 +61,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments for the audit command."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
-    parser.add_argument("--input", type=Path)
+    parser.add_argument("-c", "--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("-i", "--input", type=Path)
     parser.add_argument("--min-definition-length", type=int, default=8)
     add_output_arguments(parser)
     return parser.parse_args(argv)

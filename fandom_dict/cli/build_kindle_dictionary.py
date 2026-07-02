@@ -22,9 +22,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments for the dictionary builder."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
-    parser.add_argument("--input", type=Path)
-    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("-c", "--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("-i", "--input", type=Path)
+    parser.add_argument("-o", "--output-dir", type=Path)
     parser.add_argument("--title")
     parser.add_argument("--author")
     parser.add_argument("--source-name")
@@ -44,7 +44,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Add internal links between dictionary entries. These work when opening the dictionary directly, but may not work in Kindle lookup popups.",
     )
-    add_output_arguments(parser)
+    add_output_arguments(parser, paths_only=True)
     return parser.parse_args(argv)
 
 

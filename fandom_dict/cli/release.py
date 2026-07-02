@@ -748,7 +748,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True, help="Semantic version, such as 1.0.0")
-    parser.add_argument("--input", type=Path, default=DEFAULT_PROJECT.database_path)
+    parser.add_argument("-i", "--input", type=Path, default=DEFAULT_PROJECT.database_path)
     parser.add_argument("--dist-dir", type=Path, default=Path("dist"))
     parser.add_argument(
         "--no-sidebar-aliases",
@@ -768,7 +768,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--overwrite", action="store_true", help="Replace an existing local version directory.")
     parser.add_argument("--publish", action="store_true", help="Create and verify a GitHub Release after packaging.")
-    add_output_arguments(parser)
+    add_output_arguments(parser, paths_only=True)
     return parser.parse_args(argv)
 
 

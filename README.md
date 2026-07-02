@@ -98,8 +98,9 @@ Create a release bundle, tag it, and publish it on GitHub (requires **gh**):
 Notes:
 
 - The release command is currently DCC-specific.
-- The fetch/build commands work with other Fandom configs via `--config`.
-- Every command supports `--verbosity outputs|smaller|full`. The default is `smaller`; use `outputs` when a script only needs generated file paths, and `full` when you want per-page or per-alias detail.
+- The fetch/build commands work with other Fandom configs via `--config` or `-c`.
+- Commands default to concise `small` output. Use `-v` or `--verbose` for full per-page and per-alias detail, or `--verbosity small|full` when an explicit value is useful.
+- Commands that create files support `--paths-only` when a script only needs generated file paths. Report-only commands like `health_report` and `audit_entries` do not support it.
 - Every command supports `--log-file PATH`. Log files always receive the full uncolored transcript, regardless of stdout verbosity.
 - `--publish` requires `gh`, an authenticated GitHub session, and `HEAD == origin/main`.
 - Release tags are the public dictionary version. The Python package itself does not have a separate version.

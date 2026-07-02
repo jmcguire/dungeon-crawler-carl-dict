@@ -1,10 +1,11 @@
 import io
 import logging
 import unittest
+import argparse
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from fandom_dict.cli.output import CommandOutput, DIAGNOSTIC_LINE_COLORS, OutputLogHandler
+from fandom_dict.cli.output import CommandOutput, DIAGNOSTIC_LINE_COLORS, OutputLogHandler, add_output_arguments, output_from_args
 
 
 class Stream(io.StringIO):
@@ -22,10 +23,10 @@ class BrokenPipeStream(Stream):
 
 
 class CliOutputTests(unittest.TestCase):
-    def test_outputs_mode_prints_paths_and_errors_only(self) -> None:
+    def test_paths_only_prints_paths_and_errors_only(self) -> None:
         stdout = Stream()
         stderr = Stream()
-        output = CommandOutput("outputs", stdout=stdout, stderr=stderr)
+        output = CommandOutput("small", paths_only=True, stdout=stdout, stderr=stderr)
 
         output.path("build/file.txt")
         output.info("normal progress")
@@ -53,11 +54,44 @@ class CliOutputTests(unittest.TestCase):
         self.assertIn("summary", full_stdout.getvalue())
         self.assertIn("detail", full_stdout.getvalue())
 
+    def test_output_arguments_parse_verbose_and_paths_only(self) -> None:
+        parser = argparse.ArgumentParser()
+        add_output_arguments(parser, paths_only=True)
+
+        args = parser.parse_args(["-v", "--paths-only"])
+        output = output_from_args(args)
+
+        self.assertEqual(output.verbosity, "full")
+        self.assertTrue(output.paths_only)
+
+    def test_output_arguments_reject_removed_outputs_verbosity(self) -> None:
+        parser = argparse.ArgumentParser()
+        add_output_arguments(parser)
+
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["--verbosity", "outputs"])
+
+    def test_output_arguments_reject_paths_only_when_not_supported(self) -> None:
+        parser = argparse.ArgumentParser()
+        add_output_arguments(parser)
+
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["--paths-only"])
+
+    def test_verbose_conflicts_with_explicit_small_verbosity(self) -> None:
+        parser = argparse.ArgumentParser()
+        add_output_arguments(parser)
+        args = parser.parse_args(["-v", "--verbosity", "small"])
+
+        with self.assertRaises(SystemExit):
+            output_from_args(args)
+
     def test_log_file_receives_full_uncolored_output(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             log_path = Path(tmp_dir) / "command.log"
             output = CommandOutput(
-                "outputs",
+                "small",
+                paths_only=True,
                 stdout=Stream(tty=True),
                 stderr=Stream(tty=True),
                 log_file=log_path,

@@ -1,6 +1,7 @@
 import unittest
 
-from fandom_dict.cli.audit_entries import audit_entries
+from fandom_dict.cli.audit_entries import audit_entries, parse_args
+from fandom_dict.cli.output import output_from_args
 from fandom_dict.formats.kindle import Entry
 
 
@@ -26,6 +27,15 @@ class AuditEntriesTests(unittest.TestCase):
         self.assertIn(("source-artifact", "Broken"), by_kind)
         self.assertIn(("short", "Tiny"), by_kind)
         self.assertNotIn(("short", "Carl"), by_kind)
+
+    def test_audit_cli_accepts_verbose_and_rejects_paths_only(self) -> None:
+        args = parse_args(["-v"])
+        output = output_from_args(args)
+        self.assertEqual(output.verbosity, "full")
+        self.assertFalse(output.paths_only)
+
+        with self.assertRaises(SystemExit):
+            parse_args(["--paths-only"])
 
 
 if __name__ == "__main__":

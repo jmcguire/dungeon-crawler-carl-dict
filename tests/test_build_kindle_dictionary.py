@@ -1,5 +1,6 @@
 import contextlib
 import io
+import json
 import os
 import sqlite3
 import stat
@@ -37,7 +38,7 @@ from fandom_dict.cli.build_kindle_dictionary import normalize_release_version
 
 
 class BuildKindleDictionaryTests(unittest.TestCase):
-    def test_build_cli_outputs_mode_prints_created_paths_only(self) -> None:
+    def test_build_cli_paths_only_prints_created_paths_only(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             db_path = root / "entries.sqlite"
@@ -73,8 +74,7 @@ class BuildKindleDictionaryTests(unittest.TestCase):
                         str(db_path),
                         "--output-dir",
                         str(root / "kindle"),
-                        "--verbosity",
-                        "outputs",
+                        "--paths-only",
                     ]
                 )
 
@@ -85,6 +85,69 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertTrue(lines[1].endswith(".opf"))
         self.assertNotIn("entries:", stdout.getvalue())
         self.assertEqual(stderr.getvalue(), "")
+
+    def test_build_cli_accepts_short_config_input_and_output_flags(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            db_path = root / "entries.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, '', 'ok')",
+                ("Carl", "https://example/Carl", "Characters", "Carl is a crawler."),
+            )
+            conn.commit()
+            conn.close()
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "fandom": "test",
+                        "title": "Test Dictionary",
+                        "author": "Test Author",
+                        "source_name": "Test Wiki",
+                        "categories": ["Characters"],
+                        "database_path": str(db_path),
+                        "build_dir": str(root / "build"),
+                        "sidebar_fields": [{"source": "aliases", "label": "Aliases", "alias": True}],
+                        "title_aliases": {"suffixes": [], "prefixes": [], "strip_parenthetical": True},
+                        "smoke_headwords": ["Carl"],
+                        "kobo_output_name": "dicthtml-test.zip",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                result = build_kindle_main(
+                    [
+                        "-c",
+                        str(config_path),
+                        "-i",
+                        str(db_path),
+                        "-o",
+                        str(root / "kindle"),
+                        "--paths-only",
+                    ]
+                )
+
+            self.assertEqual(result, 0)
+            xhtml_lines = [line for line in stdout.getvalue().splitlines() if line.endswith(".xhtml")]
+            self.assertEqual(len(xhtml_lines), 1)
+            self.assertEqual(len(list((root / "kindle").glob("*.xhtml"))), 2)
+            self.assertTrue((root / "kindle" / "Test-Dictionary-cover.xhtml").exists())
 
     def test_build_cli_full_verbosity_prints_alias_debug_lines(self) -> None:
         with TemporaryDirectory() as tmp_dir:

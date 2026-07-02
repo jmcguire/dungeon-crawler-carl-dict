@@ -16,8 +16,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments for the Kobo builder."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
-    parser.add_argument("--input", type=Path)
+    parser.add_argument("-c", "--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("-i", "--input", type=Path)
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--output-name")
     parser.add_argument("--source-name")
@@ -27,7 +27,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Disable lookup aliases derived from wiki sidebar alias fields.",
     )
-    add_output_arguments(parser)
+    add_output_arguments(parser, paths_only=True)
     return parser.parse_args(argv)
 
 

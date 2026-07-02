@@ -10,10 +10,9 @@ from pathlib import Path
 from typing import TextIO
 
 
-VERBOSITY_OUTPUTS = "outputs"
 VERBOSITY_SMALL = "small"
 VERBOSITY_FULL = "full"
-VERBOSITY_CHOICES = (VERBOSITY_OUTPUTS, VERBOSITY_SMALL, VERBOSITY_FULL)
+VERBOSITY_CHOICES = (VERBOSITY_SMALL, VERBOSITY_FULL)
 DIAGNOSTIC_LINE_COLORS = {
     "alias:": "32",
     "omitted alias:": "33",
@@ -32,6 +31,7 @@ class CommandOutput:
         self,
         verbosity: str = VERBOSITY_SMALL,
         *,
+        paths_only: bool = False,
         stdout: TextIO | None = None,
         stderr: TextIO | None = None,
         log_file: Path | None = None,
@@ -39,6 +39,7 @@ class CommandOutput:
         if verbosity not in VERBOSITY_CHOICES:
             raise ValueError(f"unsupported verbosity: {verbosity}")
         self.verbosity = verbosity
+        self.paths_only = paths_only
         self.stdout = stdout or sys.stdout
         self.stderr = stderr or sys.stderr
         self._log_handle = None
@@ -71,21 +72,21 @@ class CommandOutput:
         """Print a normal high-level progress message."""
 
         self._write_log(message)
-        if self.verbosity in {VERBOSITY_SMALL, VERBOSITY_FULL}:
+        if not self.paths_only and self.verbosity in {VERBOSITY_SMALL, VERBOSITY_FULL}:
             self._write_stdout(self._format_terminal_message(message), log=False)
 
     def detail(self, message: str) -> None:
         """Print a detailed progress message only at full verbosity."""
 
         self._write_log(message)
-        if self.verbosity == VERBOSITY_FULL:
+        if not self.paths_only and self.verbosity == VERBOSITY_FULL:
             self._write_stdout(self._format_terminal_message(message), log=False)
 
     def warning(self, message: str) -> None:
         """Print a warning unless stdout is reserved for output paths."""
 
         self._write_log(f"warning: {message}")
-        if self.verbosity in {VERBOSITY_SMALL, VERBOSITY_FULL}:
+        if not self.paths_only and self.verbosity in {VERBOSITY_SMALL, VERBOSITY_FULL}:
             self._write_stdout(self._color(self._render_terminal_markup(f"warning: {message}"), "33"), log=False)
 
     def error(self, message: str) -> None:
@@ -204,22 +205,27 @@ class OutputLogHandler(logging.Handler):
             self.handleError(record)
 
 
-def add_output_arguments(parser) -> None:
+def add_output_arguments(parser, *, paths_only: bool = False) -> None:
     """Add common verbosity and transcript flags to a command parser."""
 
+    parser.add_argument("-v", "--verbose", action="store_true", help="Print full detailed output.")
     parser.add_argument(
         "--verbosity",
         choices=VERBOSITY_CHOICES,
-        default=VERBOSITY_SMALL,
-        help="Control stdout detail: outputs, small, or full.",
+        help="Control stdout detail explicitly: small or full.",
     )
+    if paths_only:
+        parser.add_argument("--paths-only", action="store_true", help="Print only created output paths to stdout.")
     parser.add_argument("--log-file", type=Path, help="Write a full uncolored command transcript.")
 
 
 def output_from_args(args) -> CommandOutput:
     """Create a ``CommandOutput`` from parsed argparse values."""
 
-    return CommandOutput(args.verbosity, log_file=args.log_file)
+    if getattr(args, "verbose", False) and args.verbosity and args.verbosity != VERBOSITY_FULL:
+        raise SystemExit("--verbose conflicts with --verbosity small")
+    verbosity = VERBOSITY_FULL if getattr(args, "verbose", False) else args.verbosity or VERBOSITY_SMALL
+    return CommandOutput(verbosity, paths_only=getattr(args, "paths_only", False), log_file=args.log_file)
 
 
 def configure_logging(output: CommandOutput) -> None:

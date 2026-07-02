@@ -78,8 +78,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments for the health report."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
-    parser.add_argument("--input", type=Path)
+    parser.add_argument("-c", "--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("-i", "--input", type=Path)
     parser.add_argument("--min-definition-length", type=int, default=8)
     parser.add_argument(
         "--expected-term",

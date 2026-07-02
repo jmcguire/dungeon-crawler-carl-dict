@@ -301,10 +301,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--version",
         help="Accepted for older workflows, but release badges now come from GitHub Releases.",
     )
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
-    parser.add_argument("--input", type=Path)
-    parser.add_argument("--output-dir", type=Path, default=Path("badges"))
-    add_output_arguments(parser)
+    parser.add_argument("-c", "--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("-i", "--input", type=Path)
+    parser.add_argument("-o", "--output-dir", type=Path, default=Path("badges"))
+    add_output_arguments(parser, paths_only=True)
     return parser.parse_args(argv)
 
 

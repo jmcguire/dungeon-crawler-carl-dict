@@ -9,8 +9,10 @@ from tempfile import TemporaryDirectory
 from fandom_dict.cli.health_report import (
     build_health_report,
     main,
+    parse_args,
     render_health_report,
 )
+from fandom_dict.cli.output import output_from_args
 from fandom_dict.config import project_config_from_mapping
 from fandom_dict.entries import Entry
 
@@ -170,13 +172,22 @@ class HealthReportTests(unittest.TestCase):
             stdout = io.StringIO()
 
             with contextlib.redirect_stdout(stdout):
-                result = main(["--config", str(config_path), "--verbosity", "full", "--max-findings", "1"])
+                result = main(["-c", str(config_path), "-v", "--max-findings", "1"])
 
         output = stdout.getvalue()
         self.assertEqual(result, 0)
         self.assertIn("canonical entries: 6", output)
         self.assertIn("missing expected term: Missing", output)
         self.assertIn('alias: alias="Fireball" main="Fireball Spell"', output)
+
+    def test_health_cli_accepts_verbose_and_rejects_paths_only(self) -> None:
+        args = parse_args(["-v"])
+        output = output_from_args(args)
+        self.assertEqual(output.verbosity, "full")
+        self.assertFalse(output.paths_only)
+
+        with self.assertRaises(SystemExit):
+            parse_args(["--paths-only"])
 
 
 if __name__ == "__main__":
