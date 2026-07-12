@@ -83,6 +83,8 @@ python3 -m unittest discover -s tests
 ./bin/badges --input data/dungeon-crawler-carl.sqlite
 ```
 
+The standard-library test suite also runs on GitHub for Python 3.11 and 3.13 after pushes and pull requests. Local KindleGen and `dictgen` integration checks run automatically when those tools are installed.
+
 Create a local release bundle:
 
 ```sh
@@ -117,9 +119,9 @@ This project has been tested with the Ice and Fire fandom, and the config is inc
 ./bin/build_kobo_dictionary --config examples/iceandfire.json
 ```
 
-To use it any fandom, I recommend copying a config file, editing it to your needs, and passing that in to the commands. You can use command-line options for almost all of it, but those get unweildy, so I recommend building the config.
+To use it with any fandom, copy a config file, edit it to your needs, and pass it to the commands. Command-line overrides exist for most settings, but a config is easier to repeat and review.
 
-The most important step will be finding good categories to crawl. Start from a Fandom wiki's `Special:Categories` page and choose broad direct page categories first, such as `Characters`, `Items`, `Locations`. The code does not do not recursively descend categories, however many Fandom pages already appear in several categories, so recursive traversal is often unnecessary. Do a bit of research on your own.
+The most important step is finding good categories to crawl. Start from a Fandom wiki's `Special:Categories` page and choose broad direct page categories first, such as `Characters`, `Items`, or `Locations`. The crawler does not recursively descend categories. Many Fandom pages already appear in several direct categories, so recursion is often unnecessary.
 
 The generic path should produce a good-but-not-refined dictionary. Fandom-specific executable code, via plugins, is not supported yet.
 
@@ -169,7 +171,7 @@ Minimal shape:
 
 ## Build Behavior Notes, for curious developers
 
-The crawler uses the MediaWiki API, records pages and usable wiki redirects in SQLite, respects `robots.txt` unless `--ignore-robots` is passed, sleeps between requests with jitter, retries temporary HTTP failures with exponential backoff, records errors, and resumes previous successful fetches unless `--refresh` is passed. Redirect import is enabled by default; use `--no-redirects` to skip it or `--max-redirects N` for bounded local testing.
+The crawler uses the MediaWiki API, records pages and usable wiki redirects in SQLite, respects `robots.txt` unless `--ignore-robots` is passed, sleeps between requests with jitter, retries temporary HTTP failures with exponential backoff, records errors, and resumes previous successful fetches unless `--refresh` is passed. Failed refreshes retain the last known-good page, and builds use the most recently completed category scope while keeping older raw pages for future work. An incomplete crawl returns a nonzero exit status after preserving all completed work. Redirect import is enabled by default; use `--no-redirects` to skip it or `--max-redirects N` for bounded local testing.
 
 Re-extract definitions from stored HTML without touching the network:
 
@@ -197,6 +199,8 @@ Default DCC outputs:
 ## Release Workflow
 
 The release command snapshots the current SQLite database, re-extracts descriptions from stored HTML, runs tests and entry audit, builds the selected formats, smoke-tests finished artifacts, writes checksums, and packages assets atomically into `dist/vX.Y.Z/`.
+
+The release command embeds version, build date, entry count, and source categories in the GitHub Release notes. The reader homepage loads that metadata from GitHub's Releases API, so publishing does not require a separate documentation version commit.
 
 By default it builds all formats.
 

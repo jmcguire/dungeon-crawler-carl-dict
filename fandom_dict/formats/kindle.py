@@ -12,43 +12,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fandom_dict.entries import (
-    ALLOWED_INLINE_TAGS,
-    AliasReport,
-    BIOGRAPHICAL_FIELD_LABELS,
-    LINKABLE_INLINE_TAGS,
     LookupForm,
     LookupReport,
-    SIDEBAR_FIELD_LABELS,
-    BiographicalInfoParser,
     Entry,
-    EntryReferenceLinker,
-    InlineTextParser,
-    LinkedDefinitionParser,
-    SafeInlineHtmlParser,
-    SidebarInfoParser,
-    SpoilerNoticeParser,
     ascii_fold,
-    biographical_details_from_html,
-    build_aliases,
-    build_alias_report,
     build_lookup_report,
-    compile_title_pattern,
-    filter_low_quality_entries,
-    forwarding_target_from_definition,
-    has_class,
-    is_linkable_title,
-    is_low_quality_definition,
     link_definition_references,
-    load_entries,
-    lookup_report_debug_lines,
-    normalize_inline_html,
     normalize_text,
-    resolve_forwarding_entries,
     sanitize_inline_html,
-    sidebar_details_from_html,
-    spoiler_notice_from_html,
-    suffix_stripped_alias,
-    text_from_inline_html,
 )
 from fandom_dict.config import slugify_title
 
@@ -234,6 +205,7 @@ def write_xhtml_with_options(
     strip_parenthetical_disambiguation: bool = True,
     title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
+    lookup_report: LookupReport | None = None,
 ) -> LookupReport:
     """Write the Kindle dictionary XHTML source file with build options."""
 
@@ -247,7 +219,7 @@ def write_xhtml_with_options(
         lookup_options["title_suffix_aliases"] = title_suffix_aliases
     if title_prefix_aliases is not None:
         lookup_options["title_prefix_aliases"] = title_prefix_aliases
-    lookup_report = build_lookup_report(entries, **lookup_options)
+    lookup_report = lookup_report or build_lookup_report(entries, **lookup_options)
     title_to_id = {entry.title: index for index, entry in enumerate(entries, 1)} if link_entries else None
     body = entries_to_xhtml(entries, lookup_report, title_to_id, source_name)
     output.write_text(
@@ -411,6 +383,7 @@ def build_dictionary_sources(
     strip_parenthetical_disambiguation: bool = True,
     title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
+    lookup_report: LookupReport | None = None,
 ) -> BuildResult:
     """Generate and validate Kindle dictionary source files."""
 
@@ -434,6 +407,7 @@ def build_dictionary_sources(
         strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
         title_component_ignore_words=title_component_ignore_words,
         sidebar_alias_labels=sidebar_alias_labels,
+        lookup_report=lookup_report,
     )
     write_opf(opf_path, title, author, xhtml_path.name, identifier, cover_path.name)
     validate_xml(cover_path)

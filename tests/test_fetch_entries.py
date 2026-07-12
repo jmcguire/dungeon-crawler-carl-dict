@@ -21,13 +21,16 @@ from fandom_dict.extraction import (
 )
 from fandom_dict.cli.fetch_entries import (
     CrawlConfig,
+    CrawlTarget,
     DEFAULT_CATEGORIES,
     fetch_and_store_redirects,
+    fetch_and_store_page,
     init_db,
     load_category_members,
     parse_args,
     reextract_first_paragraphs,
     redirect_status,
+    sync_scope_membership,
     upsert_page,
 )
 from fandom_dict.wiki.mediawiki import (
@@ -721,6 +724,86 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         self.assertEqual(redirect_status(RedirectRef("Outside", "Other", 0), targets), "ignored")
         self.assertEqual(redirect_status(RedirectRef("Broken", None, 0, "error"), targets), "error")
 
+    def test_failed_refresh_preserves_last_known_good_page(self) -> None:
+        class StubClient:
+            def page_url(self, title):
+                return f"https://example.test/wiki/{title}"
+
+            def parse_page(self, page):
+                raise RuntimeError("temporary failure")
+
+        with TemporaryDirectory() as tmp_dir:
+            conn = init_db(Path(tmp_dir) / "entries.sqlite")
+            page = CrawlTarget(1, "Carl", 0, ("Characters",))
+            upsert_page(
+                conn,
+                page,
+                "https://example.test/wiki/Carl",
+                "Characters",
+                "ok",
+                {"parse": {}},
+                "<p>Carl is a crawler.</p>",
+                "Carl is a crawler.",
+            )
+
+            self.assertFalse(fetch_and_store_page(conn, StubClient(), page))
+            row = conn.execute(
+                "SELECT status, raw_html, first_paragraph, last_attempt_error FROM pages WHERE pageid = 1"
+            ).fetchone()
+            conn.close()
+
+        self.assertEqual(row[:3], ("ok", "<p>Carl is a crawler.</p>", "Carl is a crawler."))
+        self.assertIn("temporary failure", row[3])
+
+    def test_scope_sync_updates_categories_and_retains_out_of_scope_raw_pages(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            conn = init_db(Path(tmp_dir) / "entries.sqlite")
+            old = CrawlTarget(1, "Old Box", 0, ("Loot_Boxes",))
+            current = CrawlTarget(2, "Carl", 0, ("Characters",))
+            for page in (old, current):
+                upsert_page(
+                    conn,
+                    page,
+                    f"https://example.test/wiki/{page.title}",
+                    ", ".join(page.source_categories),
+                    "ok",
+                    {},
+                    "<p>Useful definition text.</p>",
+                    "Useful definition text.",
+                )
+
+            refreshed = CrawlTarget(2, "Carl", 0, ("Characters", "Groups"))
+            sync_scope_membership(conn, [refreshed], replace_scope=True)
+            rows = conn.execute(
+                "SELECT pageid, source_category, in_scope, raw_html FROM pages ORDER BY pageid"
+            ).fetchall()
+            conn.close()
+
+        self.assertEqual(rows[0], (1, "Loot_Boxes", 0, "<p>Useful definition text.</p>"))
+        self.assertEqual(rows[1][0:3], (2, "Characters, Groups", 1))
+
+    def test_failed_full_redirect_import_retains_previous_redirects(self) -> None:
+        class StubClient:
+            def redirects(self, batch_size, max_redirects, delay):
+                raise RuntimeError("temporary redirect failure")
+
+        with TemporaryDirectory() as tmp_dir:
+            conn = init_db(Path(tmp_dir) / "entries.sqlite")
+            conn.execute(
+                "INSERT INTO redirects (source_title, target_title, source_url, status) VALUES (?, ?, ?, ?)",
+                ("AI", "System AI", "https://example.test/wiki/AI", "ok"),
+            )
+            conn.commit()
+            targets = [CrawlTarget(1, "System AI", 0, ("Characters",))]
+            config = CrawlConfig(("Characters",), 0.0, 0, 50, False)
+
+            stats = fetch_and_store_redirects(conn, StubClient(), targets, config)
+            rows = conn.execute("SELECT source_title, target_title FROM redirects").fetchall()
+            conn.close()
+
+        self.assertFalse(stats.complete)
+        self.assertEqual(rows, [("AI", "System AI")])
+
     def test_load_category_members_deduplicates_pages_and_tracks_categories(self) -> None:
         class StubClient:
             def __init__(self) -> None:
@@ -862,7 +945,7 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             ), mock.patch("fandom_dict.cli.fetch_entries.assert_robots_allowed"):
                 from fandom_dict.cli.fetch_entries import main
 
-                self.assertEqual(main(["--output", str(db_path)]), 0)
+                self.assertEqual(main(["--output", str(db_path)]), 1)
 
             crawl_config = load_members.call_args.args[1]
             self.assertEqual(crawl_config.categories, DEFAULT_CATEGORIES)
@@ -905,7 +988,7 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             ), mock.patch("fandom_dict.cli.fetch_entries.assert_robots_allowed"):
                 from fandom_dict.cli.fetch_entries import main
 
-                self.assertEqual(main(["--config", str(config_path)]), 0)
+                self.assertEqual(main(["--config", str(config_path)]), 1)
 
             crawl_config = load_members.call_args.args[1]
             self.assertEqual(captured["fandom"], "iceandfire")
@@ -945,7 +1028,7 @@ class FetchCharacterExtractionTests(unittest.TestCase):
 
                 self.assertEqual(
                     main(["--config", str(config_path), "--category", "Battles", "--category", "Cities"]),
-                    0,
+                    1,
                 )
 
             crawl_config = load_members.call_args.args[1]

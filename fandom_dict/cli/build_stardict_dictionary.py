@@ -6,9 +6,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from fandom_dict.cli.common import configured_lookup_report, load_config_for_command, load_entries_for_command
 from fandom_dict.cli.output import add_output_arguments, output_from_args
-from fandom_dict.config import DEFAULT_CONFIG_PATH, load_project_config
-from fandom_dict.entries import build_lookup_report, load_entries, lookup_report_debug_lines
+from fandom_dict.config import DEFAULT_CONFIG_PATH
+from fandom_dict.entries import lookup_report_debug_lines
 from fandom_dict.formats.stardict import build_stardict, inspect_stardict
 
 
@@ -42,21 +43,24 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parse_args(argv)
     output = output_from_args(args)
-    config = load_project_config(args.config)
+    config = load_config_for_command(args.config, output)
+    if config is None:
+        output.close()
+        return 1
     input_path = args.input or config.database_path
     output_dir = args.output_dir or config.stardict_dir
     title = args.title or config.title
     author = args.author or config.author
     source_name = args.source_name or config.source_name
-    entries = load_entries(
-        input_path,
-        args.min_definition_length,
-        sidebar_fields=config.sidebar_fields,
-        strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
-        max_summary_length=config.max_summary_length,
+    entries = load_entries_for_command(input_path, config, args.min_definition_length, output)
+    if entries is None:
+        output.close()
+        return 1
+    lookup_report = configured_lookup_report(
+        entries,
+        config,
+        include_sidebar_aliases=not args.no_sidebar_aliases,
     )
-    if not entries:
-        raise SystemExit(f"no usable entries found in {input_path}")
     result = build_stardict(
         entries,
         output_dir,
@@ -71,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
         title_component_ignore_words=config.title_aliases.component_ignore_words,
         sidebar_alias_labels=config.sidebar_alias_labels,
+        lookup_report=lookup_report,
     )
     inspection = inspect_stardict(
         result.ifo_path,
@@ -85,15 +90,6 @@ def main(argv: list[str] | None = None) -> int:
     output.info(f"aliases: {result.alias_count}")
     output.info(f"multi-target lookups: {result.multi_lookup_count}")
     output.info(f"omitted aliases: {result.omitted_alias_count}")
-    lookup_report = build_lookup_report(
-        entries,
-        include_sidebar_aliases=not args.no_sidebar_aliases,
-        title_suffix_aliases=config.title_aliases.suffixes,
-        title_prefix_aliases=config.title_aliases.prefixes,
-        strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
-        title_component_ignore_words=config.title_aliases.component_ignore_words,
-        sidebar_alias_labels=config.sidebar_alias_labels,
-    )
     for line in lookup_report_debug_lines(lookup_report):
         output.detail(line)
     output.info(f"smoke checks: {len(inspection.checks)}")

@@ -1,37 +1,63 @@
 # TODO
 
-This file is prioritized by what is most likely to improve real reader lookup behavior.
+This file separates engineering work from tasks that require a person, a physical device, or community judgment.
 
-## P3 - Release And User Experience Polish
+## Engineering Priorities
 
-- Run the Kobo internal-link physical-device experiment.
-  - Build experiment dictionaries with `./bin/build_kobo_link_experiments`.
-  - Test one ZIP at a time on a real Kobo.
-  - Use the generated `TESTING_CHECKLIST.md` to record whether fragment, shard-relative, or `dict:///` links work.
-  - Do not add Kobo links to release output unless one variant reliably opens the intended dictionary entry without blank views, browser handoff, crashes, or firmware-specific setup.
+### P1 - Book-Aware Spoiler Editions
 
-## P3 - Portability And Future Formats
+- Research whether source pages contain enough reliable first-appearance or spoiler-level metadata to produce separate dictionaries by book.
+- Do not infer book safety from a page-level spoiler warning alone.
+- Prefer an explicit, inspectable metadata source over AI classification.
 
-- Review whether generic first-name/last-name aliases should be configurable by fandom.
-  - This may help wikis with many human names.
-  - It may also create noisy collisions, so keep it collision-protected and opt-in if expanded.
+### P2 - Generic Fandom Releases
 
-## P3 - Next steps for working with other fandoms?
+- Generalize release packaging only when a second fandom is ready to publish.
+- Decide whether one repository should publish multiple fandoms or whether each published dictionary should have its own repository and release feed.
+- Keep source attribution, reader documentation, release assets, smoke headwords, and download URLs project-specific.
 
-if i want to start releasing dictionaries for other fandoms, how do i organize that? can i still do it on a github.io page, or should i start with my own domain? how would i reorganize the processes and the builds and the releases? what's the information architecture? at what point to a run afoul of copywrite? i want to make sure the original authors are respected on each fandom page. does that mean individual buy-in? probably? maybe a contact page for an admin to request a fandom be added, then a separate page for an individual to ask for a one-off build, just for them (that i won't publish).
+### P2 - Alias Policy Configuration
 
-## Reference Notes
+- Revisit whether character first-name, possessive, plural, and generic-name rules should be configurable by category.
+- Use the Ice and Fire health report as the stress test: useful ambiguity is acceptable, but malformed or generic aliases are not.
+- Keep collision handling deterministic and visible in `health_report`.
 
-- Current normalized-entry scan results:
-  - Present as entries: `Lucia Mar`, `Miss Quill`, `Skull Empire`, `King Rust`, `Katia Grim`, `Kua-Tin`, `Sheol Glass Reaper Case`, `Heal Spell`.
-  - Present through existing suffix alias: `Suppurating Eye` -> `Suppurating Eye Spell`.
-  - Not present: `Shambling Berserker`, `The Final War`, `The Final War Spell`, `street urchin`, `Kua-Tin Company`.
-  - Present but missing desired aliases: `Valtay Corporation`, `Borant Corporation`, `Ferdinand`, `Stalwart`, `Bautista`, `Saccathian`, `Nullian`, `Brain Boiler`, `Grimaldi`.
+### P3 - Optional Kindle Tooling
 
-- Useful local checks:
+- Keep KindleGen as the official compiler until a Kindling-built dictionary passes physical-device lookup tests.
+- See `KINDLING_INVESTIGATION.md` for the completed research and safe experiment boundaries.
 
-```sh
-grep idx:orth build/dungeon-crawler-carl/kindle/dictionary.xhtml | perl -nE'/value="([^"]+)"/; say $1'
-./bin/build_kindle_dictionary --link-entries --compile
-./bin/release --version 0.5.0 --link-entries --format all --overwrite
-```
+## Manual Work For The Maintainer
+
+These are intentionally not automated away.
+
+### Source Wiki Cleanup
+
+- Run `./bin/health_report --verbosity full` and improve the highest-priority wiki cleanup candidates.
+- Fix malformed lead markup, truncated sentences, title-only definitions, and generic one-line definitions on the source wiki.
+- Add concise non-spoilery lead paragraphs, useful sidebar values, and real wiki redirects where appropriate.
+- Re-crawl or run `--reextract-only` after wiki changes, then confirm the candidate disappears from the report.
+
+### Physical Device Testing
+
+- Run the Kobo internal-link experiment with `./bin/build_kobo_link_experiments`, one ZIP at a time, and complete its generated checklist on a real Kobo.
+- Keep testing representative Kindle lookups after meaningful alias/index changes; Kindle Previewer cannot establish popup lookup behavior.
+- Verify installation and dictionary selection instructions after major Kindle, Kobo, KOReader, or BOOX firmware changes.
+
+### Release Review
+
+- Before publishing, read the small health report and inspect any new alias-quality findings or unusually broad multi-target lookups.
+- Confirm the release downloads, install notes, checksums, and homepage status after publishing.
+- Read generated release notes for reader-facing clarity; edit them when commit messages do not explain the practical change.
+
+### Community And Rights
+
+- Get wiki-admin approval before publishing a dictionary based on another Fandom community.
+- Confirm that the source wiki license and attribution requirements are compatible with redistribution.
+- Ask the relevant community whether a public dictionary is wanted; keep one-off private builds private when publication is not appropriate.
+- Decide the site and repository information architecture before offering multiple public fandom dictionaries.
+
+### Reader Support
+
+- Review help-form responses for missing entries, incorrect definitions, failed lookups, and outdated installation steps.
+- Turn repeated reports into reproducible health checks or tests; keep one-off source-content fixes on the wiki.

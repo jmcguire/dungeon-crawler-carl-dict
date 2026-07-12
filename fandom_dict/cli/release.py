@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import html
 import json
 import logging
 import re
@@ -21,14 +20,18 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from fandom_dict.cli.audit_entries import AuditFinding, audit_entries
+from fandom_dict.cli.common import configured_lookup_report
 from fandom_dict.cli.badges import validate_badges
 from fandom_dict.cli.output import add_output_arguments, configure_logging, output_from_args
 from fandom_dict.config import load_default_project_config
-from fandom_dict.entries import build_lookup_report, load_entries, lookup_report_debug_lines
+from fandom_dict.entries import (
+    entries_outside_source_categories,
+    load_entries,
+    lookup_quality_findings,
+    lookup_report_debug_lines,
+)
 from fandom_dict.cli.fetch_entries import reextract_first_paragraphs
 from fandom_dict.formats.kindle import (
-    DEFAULT_AUTHOR,
-    DEFAULT_TITLE,
     CompilationResult,
     build_dictionary_sources,
     compile_with_kindlegen,
@@ -73,12 +76,6 @@ RELEASE_ASSET_NAMES = (
 )
 FATAL_AUDIT_KINDS = frozenset({"gallery-credit", "maintenance-text", "source-artifact", "truncated"})
 WARNING_AUDIT_KINDS = frozenset({"short", "unresolved-forward"})
-RELEASE_STATUS_START = "<!-- release-status:start -->"
-RELEASE_STATUS_END = "<!-- release-status:end -->"
-RELEASE_STATUS_PATTERN = re.compile(
-    rf"{re.escape(RELEASE_STATUS_START)}.*?{re.escape(RELEASE_STATUS_END)}",
-    re.DOTALL,
-)
 SEMVER_PATTERN = re.compile(
     r"^(?:v)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
     r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
@@ -201,6 +198,21 @@ def snapshot_database(source: Path, destination: Path) -> None:
     finally:
         destination_conn.close()
         source_conn.close()
+
+
+def crawler_database_failures(conn: sqlite3.Connection) -> tuple[int, int]:
+    """Return unrecovered page errors and failed refresh attempts."""
+
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(pages)").fetchall()}
+    error_count = int(conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'error'").fetchone()[0])
+    retained_failure_count = 0
+    if "last_attempt_error" in columns:
+        retained_failure_count = int(
+            conn.execute(
+                "SELECT COUNT(*) FROM pages WHERE status != 'error' AND COALESCE(last_attempt_error, '') != ''"
+            ).fetchone()[0]
+        )
+    return error_count, retained_failure_count
 
 
 def run_unit_tests(repo_root: Path, runner: CommandRunner = run_command) -> None:
@@ -389,86 +401,6 @@ def write_manifest(
     path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def display_category_name(category: str) -> str:
-    """Return a reader-facing category label from a MediaWiki category name."""
-
-    label = category.removeprefix("Category:").replace("_", " ").strip()
-    return label or category
-
-
-def human_join(items: Sequence[str]) -> str:
-    """Join display strings with commas and a final 'and'."""
-
-    clean_items = [item for item in items if item]
-    if not clean_items:
-        return ""
-    if len(clean_items) == 1:
-        return clean_items[0]
-    if len(clean_items) == 2:
-        return f"{clean_items[0]} and {clean_items[1]}"
-    return f"{', '.join(clean_items[:-1])}, and {clean_items[-1]}"
-
-
-def release_status_date(built_at: str) -> str:
-    """Format an ISO release timestamp as a concise public date."""
-
-    normalized = built_at.replace("Z", "+00:00")
-    built = datetime.fromisoformat(normalized)
-    return f"{built.strftime('%B')} {built.day}, {built.year}"
-
-
-def release_status_block(
-    *,
-    version_tag: str,
-    entry_count: int,
-    built_at: str,
-    categories: Sequence[str],
-) -> str:
-    """Render the docs homepage release-status block."""
-
-    category_names = [display_category_name(category) for category in categories]
-    sentence = (
-        f"Current version {html.escape(version_tag)} includes "
-        f"<strong>{entry_count:,} entries</strong>, last built "
-        f"<strong>{html.escape(release_status_date(built_at))}</strong>, including all "
-        f"<strong>{html.escape(human_join(category_names))}</strong>."
-    )
-    return (
-        f"{RELEASE_STATUS_START}\n"
-        f"    <p class=\"release-status\">{sentence}</p>\n"
-        f"    {RELEASE_STATUS_END}"
-    )
-
-
-def update_docs_release_status(
-    index_path: Path,
-    *,
-    version_tag: str,
-    entry_count: int,
-    built_at: str,
-    categories: Sequence[str],
-) -> bool:
-    """Update the marked docs homepage release-status block.
-
-    Returns True when the tracked docs page changed.
-    """
-
-    text = index_path.read_text(encoding="utf-8")
-    replacement = release_status_block(
-        version_tag=version_tag,
-        entry_count=entry_count,
-        built_at=built_at,
-        categories=categories,
-    )
-    updated, count = RELEASE_STATUS_PATTERN.subn(replacement, text, count=1)
-    if count != 1:
-        raise ReleaseError(f"release status block markers not found in {index_path}")
-    if updated == text:
-        return False
-    index_path.write_text(updated, encoding="utf-8")
-    return True
-
-
 def write_checksums(path: Path, assets: Sequence[Path]) -> None:
     """Write conventional SHA-256 lines for release payloads."""
 
@@ -526,9 +458,16 @@ def package_release(
         conn = sqlite3.connect(snapshot_path)
         try:
             reextract_count = reextract_first_paragraphs(conn, DEFAULT_PROJECT.max_summary_length)
+            page_errors, retained_refresh_errors = crawler_database_failures(conn)
         finally:
             conn.close()
         LOGGER.info("re-extracted %s stored pages from the database snapshot", reextract_count)
+        if page_errors or retained_refresh_errors:
+            raise ReleaseError(
+                "crawler database has unresolved fetch failures: "
+                f"{page_errors} page error(s), {retained_refresh_errors} retained refresh error(s). "
+                "Run a successful crawl before releasing."
+            )
 
         run_unit_tests(repo_root, runner)
         entries = load_entries(
@@ -538,6 +477,14 @@ def package_release(
             strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
             max_summary_length=DEFAULT_PROJECT.max_summary_length,
         )
+        scope_mismatches = entries_outside_source_categories(entries, DEFAULT_PROJECT.categories)
+        if scope_mismatches:
+            preview = ", ".join(entry.title for entry in scope_mismatches[:10])
+            more = f" and {len(scope_mismatches) - 10} more" if len(scope_mismatches) > 10 else ""
+            raise ReleaseError(
+                "database contains entries outside the configured category scope: "
+                f"{preview}{more}. Run a complete successful crawl before releasing."
+            )
         try:
             validate_badges(repo_root / BADGE_DIR_NAME, len(entries))
         except ValueError as exc:
@@ -554,15 +501,20 @@ def package_release(
             detail = "\n".join(finding.format() for finding in fatal_findings)
             raise ReleaseError(f"entry audit found release-blocking issues:\n{detail}")
         LOGGER.info("entry audit passed with %s warning(s)", len(warning_findings))
-        lookup_report = build_lookup_report(
+        lookup_report = configured_lookup_report(
             entries,
+            DEFAULT_PROJECT,
             include_sidebar_aliases=include_sidebar_aliases,
-            title_suffix_aliases=DEFAULT_PROJECT.title_aliases.suffixes,
-            title_prefix_aliases=DEFAULT_PROJECT.title_aliases.prefixes,
-            strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
-            title_component_ignore_words=DEFAULT_PROJECT.title_aliases.component_ignore_words,
-            sidebar_alias_labels=DEFAULT_PROJECT.sidebar_alias_labels,
         )
+        alias_findings = lookup_quality_findings(lookup_report)
+        malformed_aliases = [
+            finding for finding in alias_findings if finding.kind == "possibly-joined-sidebar-alias"
+        ]
+        if malformed_aliases:
+            detail = "\n".join(finding.format() for finding in malformed_aliases)
+            raise ReleaseError(f"accepted aliases contain likely joined sidebar text:\n{detail}")
+        for finding in alias_findings:
+            LOGGER.warning("alias quality warning: %s", finding.format())
         for line in lookup_report_debug_lines(lookup_report):
             LOGGER.debug(line)
 
@@ -584,6 +536,7 @@ def package_release(
                 strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
                 title_component_ignore_words=DEFAULT_PROJECT.title_aliases.component_ignore_words,
                 sidebar_alias_labels=DEFAULT_PROJECT.sidebar_alias_labels,
+                lookup_report=lookup_report,
             )
             LOGGER.info(
                 "Kindle aliases: %s accepted, %s multi-target, %s omitted",
@@ -640,6 +593,7 @@ def package_release(
                 strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
                 title_component_ignore_words=DEFAULT_PROJECT.title_aliases.component_ignore_words,
                 sidebar_alias_labels=DEFAULT_PROJECT.sidebar_alias_labels,
+                lookup_report=lookup_report,
             )
             LOGGER.info(
                 "StarDict aliases: %s accepted, %s multi-target, %s omitted",
@@ -679,6 +633,7 @@ def package_release(
                 strip_parenthetical_disambiguation=DEFAULT_PROJECT.title_aliases.strip_parenthetical,
                 title_component_ignore_words=DEFAULT_PROJECT.title_aliases.component_ignore_words,
                 sidebar_alias_labels=DEFAULT_PROJECT.sidebar_alias_labels,
+                lookup_report=lookup_report,
             )
             LOGGER.info(
                 "Kobo aliases: %s accepted, %s multi-target, %s omitted",
@@ -732,10 +687,19 @@ def package_release(
     return final_dir
 
 
-def release_notes(version: Version) -> str:
+def release_notes(version: Version, manifest: dict[str, object] | None = None) -> str:
     """Return the maintained preface placed before generated GitHub notes."""
 
-    return f"""## Kindle
+    status_comment = ""
+    if manifest is not None:
+        status = {
+            "built_at": manifest.get("built_at"),
+            "categories": (manifest.get("source_scope") or {}).get("categories", []),
+            "entry_count": manifest.get("entry_count"),
+        }
+        status_comment = f"<!-- dictionary-status:{json.dumps(status, separators=(',', ':'))} -->\n\n"
+
+    return f"""{status_comment}## Kindle
 
 Download `{MOBI_NAME}`, connect the Kindle by USB, and copy the file into
 `documents/dictionaries`. Then select **Dungeon Crawler Carl Dictionary** under
@@ -803,7 +767,8 @@ def publish_release(
 
     with tempfile.TemporaryDirectory(prefix="fandom_dict-publish-") as temp_name:
         notes_path = Path(temp_name) / "release-notes.md"
-        notes_path.write_text(release_notes(version), encoding="utf-8")
+        manifest = json.loads((release_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
+        notes_path.write_text(release_notes(version, manifest), encoding="utf-8")
         command = (
             "gh",
             "release",
@@ -894,23 +859,6 @@ def main(argv: list[str] | None = None) -> int:
             include_sidebar_aliases=not args.no_sidebar_aliases,
         )
         LOGGER.info("release bundle ready: %s", release_dir)
-        manifest = json.loads((release_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
-        source_scope = manifest.get("source_scope") if isinstance(manifest.get("source_scope"), dict) else {}
-        categories = source_scope.get("categories") if isinstance(source_scope, dict) else None
-        docs_changed = update_docs_release_status(
-            repo_root / "docs" / "index.html",
-            version_tag=str(manifest["tag"]),
-            entry_count=int(manifest["entry_count"]),
-            built_at=str(manifest["built_at"]),
-            categories=categories if isinstance(categories, list) else DEFAULT_PROJECT.categories,
-        )
-        if docs_changed:
-            LOGGER.info("updated docs release status on docs/index.html")
-            if args.publish:
-                raise ReleaseError(
-                    "docs release status was updated; commit and push docs/index.html "
-                    "before publishing the GitHub Release"
-                )
         for asset in sorted(path for path in release_dir.iterdir() if path.is_file()):
             output.path(asset)
         if args.publish:

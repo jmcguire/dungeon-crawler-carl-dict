@@ -9,12 +9,12 @@ from unittest import mock
 
 from fandom_dict.cli.audit_entries import AuditFinding
 from fandom_dict.cli.badges import CoverageResult, build_badges, write_badge_files
+from fandom_dict.entries import Entry
 from fandom_dict.formats.kindle import (
     DEFAULT_AUTHOR,
     DEFAULT_TITLE,
     BuildResult,
     CompilationResult,
-    Entry,
     build_dictionary_sources,
     compile_with_kindlegen,
     find_kindlegen,
@@ -34,16 +34,15 @@ from fandom_dict.cli.release import (
     ReleaseError,
     Version,
     classify_audit_findings,
-    display_category_name,
-    human_join,
+    crawler_database_failures,
     install_release_directory,
     package_release,
     parse_args,
     parse_version,
     preflight_local,
     publish_release,
+    release_notes,
     sha256_file,
-    update_docs_release_status,
     validate_compilation,
     write_checksums,
     write_manifest,
@@ -313,50 +312,44 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual((final / "new").read_text(encoding="ascii"), "new")
             self.assertFalse((temp_root / "previous-release").exists())
 
-    def test_release_status_helpers_format_reader_friendly_scope(self) -> None:
-        self.assertEqual(display_category_name("Category:Mob_Types"), "Mob Types")
-        self.assertEqual(
-            human_join(["Characters", "Groups", "Spells"]),
-            "Characters, Groups, and Spells",
+    def test_docs_release_status_loads_the_latest_release_manifest(self) -> None:
+        index = Path(__file__).resolve().parents[1] / "docs" / "index.html"
+        text = index.read_text(encoding="utf-8")
+
+        self.assertIn('id="release-status"', text)
+        self.assertIn("api.github.com/repos/jmcguire/dungeon-crawler-carl-dict/releases/latest", text)
+        self.assertNotIn("release-status:start", text)
+
+    def test_release_notes_embed_reader_status_metadata(self) -> None:
+        notes = release_notes(
+            Version("1.2.3", "v1.2.3"),
+            {
+                "built_at": "2026-07-11T12:00:00Z",
+                "entry_count": 1206,
+                "source_scope": {"categories": ["Characters", "Mob_Types"]},
+            },
         )
 
-    def test_update_docs_release_status_replaces_marked_homepage_block(self) -> None:
+        self.assertIn(
+            '<!-- dictionary-status:{"built_at":"2026-07-11T12:00:00Z",'
+            '"categories":["Characters","Mob_Types"],"entry_count":1206} -->',
+            notes,
+        )
+
+    def test_crawler_database_failures_counts_errors_and_failed_refreshes(self) -> None:
         with TemporaryDirectory() as tmp_dir:
-            index = Path(tmp_dir) / "index.html"
-            index.write_text(
-                """
-<section>
-  <!-- release-status:start -->
-  <p class="release-status">Old release text.</p>
-  <!-- release-status:end -->
-</section>
-""".lstrip(),
-                encoding="utf-8",
+            path = Path(tmp_dir) / "entries.sqlite"
+            conn = sqlite3.connect(path)
+            conn.execute("CREATE TABLE pages (status TEXT, last_attempt_error TEXT)")
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?)",
+                [("ok", None), ("error", "first fetch failed"), ("ok", "refresh failed")],
             )
 
-            changed = update_docs_release_status(
-                index,
-                version_tag="v1.2.3",
-                entry_count=1208,
-                built_at="2026-07-02T14:30:00Z",
-                categories=["Characters", "Mob_Types"],
-            )
+            result = crawler_database_failures(conn)
+            conn.close()
 
-            text = index.read_text(encoding="utf-8")
-            self.assertTrue(changed)
-            self.assertIn("Current version v1.2.3 includes <strong>1,208 entries</strong>", text)
-            self.assertIn("last built <strong>July 2, 2026</strong>", text)
-            self.assertIn("including all <strong>Characters and Mob Types</strong>", text)
-
-            self.assertFalse(
-                update_docs_release_status(
-                    index,
-                    version_tag="v1.2.3",
-                    entry_count=1208,
-                    built_at="2026-07-02T14:30:00Z",
-                    categories=["Characters", "Mob_Types"],
-                )
-            )
+        self.assertEqual(result, (1, 1))
 
     def test_stardict_only_release_packages_only_stardict_assets(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -713,6 +706,16 @@ class ReleaseTests(unittest.TestCase):
             release_dir.mkdir()
             for name in RELEASE_ASSET_NAMES:
                 (release_dir / name).write_bytes(f"asset:{name}".encode("ascii"))
+            (release_dir / MANIFEST_NAME).write_text(
+                json.dumps(
+                    {
+                        "built_at": "2026-07-11T12:00:00Z",
+                        "entry_count": 1206,
+                        "source_scope": {"categories": ["Characters"]},
+                    }
+                ),
+                encoding="utf-8",
+            )
             commands = []
 
             def runner(command, cwd):

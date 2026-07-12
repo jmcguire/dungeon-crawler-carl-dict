@@ -113,6 +113,43 @@ class HealthReportTests(unittest.TestCase):
         self.assertIn('alias: alias="Fireball" main="Fireball Spell" source=title-suffix-spell', detail)
         self.assertIn('multi-target lookup: lookup="Heal Pet" targets="Heal Pet Potion" | "Heal Pet Spell"', detail)
 
+    def test_health_report_flags_suspicious_accepted_aliases(self) -> None:
+        config = project_config_from_mapping(test_config())
+        entries = [
+            Entry(
+                "Nebular",
+                "https://example/Nebular",
+                "A religious group.",
+                details=(("Aliases", "NebsNebular"),),
+            )
+        ]
+        entries.extend(
+            Entry(
+                f"Target {name}",
+                f"https://example/{name}",
+                "A useful definition.",
+                redirect_aliases=("Shared",),
+            )
+            for name in ("One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine")
+        )
+
+        report = build_health_report(entries, config)
+        kinds = {finding.kind for finding in report.alias_quality_findings}
+
+        self.assertIn("possibly-joined-sidebar-alias", kinds)
+        self.assertIn("broad-multi-target-lookup", kinds)
+
+    def test_health_report_flags_entries_outside_configured_categories(self) -> None:
+        config = project_config_from_mapping(test_config())
+        entries = [
+            Entry("Carl", "https://example/Carl", "A crawler.", source_categories=("Characters",)),
+            Entry("Old Box", "https://example/Old_Box", "A box.", source_categories=("Loot_Boxes",)),
+        ]
+
+        report = build_health_report(entries, config)
+
+        self.assertEqual([entry.title for entry in report.out_of_config_scope], ["Old Box"])
+
     def test_render_health_report_caps_cleanup_candidates_in_small_output(self) -> None:
         config = project_config_from_mapping(test_config())
         report = build_health_report(

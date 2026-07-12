@@ -28,7 +28,6 @@ SIDEBAR_FIELD_LABELS = {
     "first_appearance": "First scene",
     "source": "Source",
 }
-BIOGRAPHICAL_FIELD_LABELS = SIDEBAR_FIELD_LABELS
 DEFAULT_SIDEBAR_FIELDS = tuple(
     SidebarField(source=source, label=label, alias=(label == "Aliases"))
     for source, label in SIDEBAR_FIELD_LABELS.items()
@@ -143,6 +142,34 @@ TITLE_COMPONENT_STOP_WORDS = {
     "you",
     "your",
 }
+GENERIC_ALIAS_WORDS = {
+    "achievement",
+    "box",
+    "captain",
+    "class",
+    "club",
+    "commander",
+    "company",
+    "corporation",
+    "doctor",
+    "duke",
+    "duchess",
+    "group",
+    "item",
+    "king",
+    "lady",
+    "lord",
+    "militia",
+    "potion",
+    "prince",
+    "princess",
+    "queen",
+    "race",
+    "scroll",
+    "spell",
+    "system",
+}
+TITLE_COMPONENT_STOP_WORDS.update(GENERIC_ALIAS_WORDS)
 FIRST_NAME_SKIP_WORDS = {
     "A",
     "An",
@@ -258,6 +285,23 @@ class LookupReport:
         """Return the number of alias candidates rejected."""
 
         return len(self.omissions)
+
+
+@dataclass(frozen=True)
+class AliasQualityFinding:
+    """One accepted lookup form that deserves human review."""
+
+    kind: str
+    alias: str
+    targets: tuple[str, ...]
+    source: str = ""
+
+    def format(self) -> str:
+        """Return a stable one-line diagnostic."""
+
+        target_text = " | ".join(self.targets)
+        source_text = f" source={self.source}" if self.source else ""
+        return f'{self.kind}: alias="{self.alias}" targets="{target_text}"{source_text}'
 
 
 @dataclass(frozen=True)
@@ -631,10 +675,19 @@ class SidebarInfoParser(HTMLParser):
             self._value_depth = 1
             self._value_chunks = []
             return
+        if self._value_depth and tag == "br":
+            self._append_value_separator()
+            return
+        if self._value_depth and tag == "li" and self._value_chunks:
+            self._append_value_separator()
         if self._label_depth:
             self._label_depth += 1
         if self._value_depth:
             self._value_depth += 1
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self._value_depth and tag == "br":
+            self._append_value_separator()
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "aside" and self.in_infobox:
@@ -652,6 +705,12 @@ class SidebarInfoParser(HTMLParser):
         if self._value_depth:
             self._value_chunks.append(data)
 
+    def _append_value_separator(self) -> None:
+        """Keep distinct infobox values distinct after whitespace normalization."""
+
+        if self._value_chunks and not self._value_chunks[-1].endswith("; "):
+            self._value_chunks.append("; ")
+
     def _save_current_field(self) -> None:
         if self.current_source in self.field_labels:
             value = normalize_text(strip_wiki_reference_markers("".join(self._value_chunks)))
@@ -659,9 +718,6 @@ class SidebarInfoParser(HTMLParser):
                 self.fields.setdefault(self.current_source, value)
         self.current_source = None
         self._value_chunks = []
-
-
-BiographicalInfoParser = SidebarInfoParser
 
 
 def has_class(classes: str, class_name: str) -> bool:
@@ -689,12 +745,6 @@ def sidebar_details_from_html(
     return tuple(details)
 
 
-def biographical_details_from_html(raw_html: str | None) -> tuple[tuple[str, str], ...]:
-    """Compatibility wrapper for the old sidebar details function name."""
-
-    return sidebar_details_from_html(raw_html)
-
-
 def ascii_fold(text: str) -> str:
     """Return an ASCII-only form used for alphabet section labels."""
 
@@ -718,6 +768,29 @@ def parse_source_categories(value: str | None) -> tuple[str, ...]:
     return tuple(categories)
 
 
+def entries_outside_source_categories(
+    entries: list[Entry],
+    categories: tuple[str, ...],
+) -> list[Entry]:
+    """Return entries whose recorded categories do not overlap a configured corpus."""
+
+    configured = {
+        category.removeprefix("Category:").replace("_", " ").casefold()
+        for category in categories
+    }
+    findings = []
+    for entry in entries:
+        if not entry.source_categories:
+            continue
+        recorded = {
+            category.removeprefix("Category:").replace("_", " ").casefold()
+            for category in entry.source_categories
+        }
+        if recorded.isdisjoint(configured):
+            findings.append(entry)
+    return sorted(findings, key=lambda entry: entry.title.casefold())
+
+
 def load_entries(
     db_path: Path,
     min_definition_length: int,
@@ -728,16 +801,18 @@ def load_entries(
 ) -> list[Entry]:
     """Load usable dictionary entries from the crawler SQLite database."""
 
-    conn = sqlite3.connect(db_path)
+    conn = open_crawler_database_readonly(db_path)
     try:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(pages)").fetchall()}
         source_category_expression = "source_category" if "source_category" in columns else "NULL AS source_category"
+        scope_filter = "AND in_scope = 1" if "in_scope" in columns else ""
         redirect_aliases = load_redirect_aliases(conn)
         rows = conn.execute(
             f"""
             SELECT title, url, first_paragraph, raw_html, {source_category_expression}
             FROM pages
             WHERE status = 'ok' AND COALESCE(first_paragraph, '') != ''
+              {scope_filter}
             ORDER BY lower(title)
             """
         ).fetchall()
@@ -765,6 +840,15 @@ def load_entries(
             )
     entries = apply_title_munging(entries, strip_parenthetical_disambiguation=strip_parenthetical_disambiguation)
     return filter_low_quality_entries(resolve_forwarding_entries(entries))
+
+
+def open_crawler_database_readonly(db_path: Path) -> sqlite3.Connection:
+    """Open an existing crawler database without creating or mutating it."""
+
+    path = db_path.resolve()
+    if not path.is_file():
+        raise sqlite3.OperationalError(f"crawler database does not exist: {db_path}")
+    return sqlite3.connect(f"{path.as_uri()}?mode=ro&immutable=1", uri=True)
 
 
 def load_redirect_aliases(conn: sqlite3.Connection) -> dict[str, tuple[str, ...]]:
@@ -1047,16 +1131,6 @@ def title_component_conflict_counts(
         if usable and len(alias.split()) == 1:
             targets_by_word.setdefault(alias.casefold(), set()).add(candidate.target)
     return {word: len(targets) for word, targets in targets_by_word.items()}
-
-
-def suffix_stripped_alias(title: str, folded_titles: set[str] | None = None) -> str | None:
-    """Compatibility wrapper returning the first legacy suffix-based alias."""
-
-    del folded_titles
-    for candidate in title_alias_candidates(title):
-        if candidate.source in {"title-suffix-spell", "title-suffix-box"}:
-            return candidate.alias
-    return None
 
 
 def inline_alias_data(fragment: str) -> tuple[str, list[str]]:
@@ -1367,7 +1441,7 @@ def regular_plural_form(word: str) -> str:
     return f"{word}s"
 
 
-def alias_candidate_is_usable(alias: str) -> tuple[bool, str]:
+def alias_candidate_is_usable(alias: str, source: str = "") -> tuple[bool, str]:
     """Validate an alias candidate before collision checks."""
 
     if not alias:
@@ -1384,6 +1458,10 @@ def alias_candidate_is_usable(alias: str) -> tuple[bool, str]:
         return False, "quoted-noise"
     if not (alias[0].isupper() or alias[0].isdigit()):
         return False, "not-title-like"
+    if len(alias.split()) == 1 and alias.casefold() in GENERIC_ALIAS_WORDS:
+        return False, "generic-word"
+    if source.startswith("sidebar") and len(alias) > 80:
+        return False, "suspiciously-long"
     return True, ""
 
 
@@ -1440,7 +1518,7 @@ def build_lookup_report(
     alias_collisions: dict[str, tuple[str, dict[str, str]]] = {}
     for candidate in raw_candidates:
         alias = normalize_text(candidate.alias)
-        usable, reason = alias_candidate_is_usable(alias)
+        usable, reason = alias_candidate_is_usable(alias, candidate.source)
         omission = AliasOmission(alias, candidate.target, candidate.source, reason)
         if not usable:
             omissions.append(omission)
@@ -1553,6 +1631,31 @@ def lookup_report_debug_lines(report: LookupReport) -> list[str]:
         targets = " | ".join(f'"{target}"' for target in lookup.targets)
         lines.append(f'multi-target lookup: lookup="{lookup.word}" targets={targets}')
     return lines
+
+
+def lookup_quality_findings(lookup_report: LookupReport) -> list[AliasQualityFinding]:
+    """Return suspicious accepted aliases and overly broad lookup groups."""
+
+    findings: list[AliasQualityFinding] = []
+    for accepted in lookup_report.accepted_aliases:
+        alias = accepted.alias
+        if len(alias) > 60:
+            findings.append(
+                AliasQualityFinding("long-accepted-alias", alias, (accepted.target,), accepted.source)
+            )
+        elif (
+            accepted.source.startswith("sidebar")
+            and " " not in alias
+            and len(alias) > 10
+            and re.search(r"[a-z][A-Z]", alias)
+        ):
+            findings.append(
+                AliasQualityFinding("possibly-joined-sidebar-alias", alias, (accepted.target,), accepted.source)
+            )
+    for lookup in lookup_report.multi_target_lookups:
+        if len(lookup.targets) > 8:
+            findings.append(AliasQualityFinding("broad-multi-target-lookup", lookup.word, lookup.targets))
+    return sorted(findings, key=lambda item: (item.kind, item.alias.casefold()))
 
 
 def build_alias_report(

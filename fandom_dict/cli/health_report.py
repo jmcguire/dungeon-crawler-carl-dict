@@ -10,9 +10,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fandom_dict.cli.audit_entries import AuditFinding, audit_entries
+from fandom_dict.cli.common import configured_lookup_report, load_config_for_command, load_entries_for_command
 from fandom_dict.cli.output import add_output_arguments, output_from_args
-from fandom_dict.config import DEFAULT_CONFIG_PATH, ProjectConfig, load_project_config
-from fandom_dict.entries import Entry, LookupReport, build_lookup_report, load_entries, lookup_report_debug_lines
+from fandom_dict.config import DEFAULT_CONFIG_PATH, ProjectConfig
+from fandom_dict.entries import (
+    AliasQualityFinding,
+    Entry,
+    LookupReport,
+    entries_outside_source_categories,
+    lookup_quality_findings,
+    lookup_report_debug_lines,
+)
 from fandom_dict.formats.kindle import kindle_lookup_record_count
 
 
@@ -50,6 +58,8 @@ class HealthReport:
     term_statuses: tuple[TermStatus, ...]
     findings: tuple[AuditFinding, ...]
     wiki_cleanup_candidates: tuple["WikiCleanupCandidate", ...]
+    alias_quality_findings: tuple["AliasQualityFinding", ...]
+    out_of_config_scope: tuple[Entry, ...]
 
 
 @dataclass(frozen=True)
@@ -111,14 +121,10 @@ def build_health_report(
 ) -> HealthReport:
     """Return counts and findings for one normalized entry set."""
 
-    lookup_report = build_lookup_report(
+    lookup_report = configured_lookup_report(
         entries,
+        config,
         include_sidebar_aliases=include_sidebar_aliases,
-        title_suffix_aliases=config.title_aliases.suffixes,
-        title_prefix_aliases=config.title_aliases.prefixes,
-        strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
-        title_component_ignore_words=config.title_aliases.component_ignore_words,
-        sidebar_alias_labels=config.sidebar_alias_labels,
     )
     terms = tuple(dict.fromkeys((*config.smoke_headwords, *expected_terms)))
     return HealthReport(
@@ -128,6 +134,8 @@ def build_health_report(
         term_statuses=term_statuses(terms, entries, lookup_report),
         findings=tuple(audit_entries(entries)),
         wiki_cleanup_candidates=tuple(wiki_cleanup_candidates(entries)),
+        alias_quality_findings=tuple(lookup_quality_findings(lookup_report)),
+        out_of_config_scope=tuple(entries_outside_source_categories(entries, config.categories)),
     )
 
 
@@ -341,6 +349,7 @@ def render_health_report(report: HealthReport, input_path: Path, max_findings: i
     info: list[str] = [
         f"input: {input_path}",
         f"canonical entries: {len(report.entries)}",
+        f"entries outside configured category scope: {len(report.out_of_config_scope)}",
         "format counts:",
     ]
     for item in report.formats:
@@ -351,10 +360,15 @@ def render_health_report(report: HealthReport, input_path: Path, max_findings: i
             f"  single-target aliases: {report.lookup_report.single_target_alias_count}",
             f"  multi-target lookups: {report.lookup_report.multi_target_lookup_count}",
             f"  omitted aliases: {report.lookup_report.omitted_alias_count}",
+            f"  alias quality findings: {len(report.alias_quality_findings)}",
             "expected terms:",
         )
     )
     warnings: list[str] = []
+    for entry in report.out_of_config_scope[: max(0, max_findings)]:
+        warnings.append(
+            f"out-of-config-scope: {entry.title}: {', '.join(entry.source_categories)}"
+        )
     for status in report.term_statuses:
         if status.kind == "missing":
             warnings.append(f"missing expected term: {status.term}")
@@ -391,13 +405,30 @@ def render_health_report(report: HealthReport, input_path: Path, max_findings: i
             )
         )
 
+    visible_alias_findings = report.alias_quality_findings[: max(0, max_findings)]
+    if visible_alias_findings:
+        info.append("alias quality details:")
+        info.extend(f"  {finding.format()}" for finding in visible_alias_findings)
+    hidden_alias_findings = max(0, len(report.alias_quality_findings) - len(visible_alias_findings))
+    if hidden_alias_findings:
+        info.append(f"  ... {hidden_alias_findings} more; use --verbosity full to show all alias findings")
+
     detail = lookup_report_debug_lines(report.lookup_report)
+    detail.extend(
+        f"out-of-config-scope: {entry.title}: {', '.join(entry.source_categories)}"
+        for entry in report.out_of_config_scope[max(0, max_findings) :]
+    )
     if hidden_count:
         detail.extend(f"audit finding: {finding.format()}" for finding in report.findings[len(visible_findings) :])
     detail.extend(
         f"wiki cleanup candidate: {candidate.format_detail()}"
         for candidate in report.wiki_cleanup_candidates
     )
+    if hidden_alias_findings:
+        detail.extend(
+            f"alias quality finding: {finding.format()}"
+            for finding in report.alias_quality_findings[len(visible_alias_findings) :]
+        )
     return info, warnings, detail
 
 
@@ -406,18 +437,14 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parse_args(argv)
     output = output_from_args(args)
-    config = load_project_config(args.config)
+    config = load_config_for_command(args.config, output)
+    if config is None:
+        output.close()
+        return 1
     input_path = args.input or config.database_path
     try:
-        entries = load_entries(
-            input_path,
-            args.min_definition_length,
-            sidebar_fields=config.sidebar_fields,
-            strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
-            max_summary_length=config.max_summary_length,
-        )
-        if not entries:
-            output.error(f"no usable entries found in {input_path}")
+        entries = load_entries_for_command(input_path, config, args.min_definition_length, output)
+        if entries is None:
             return 1
         report = build_health_report(
             entries,

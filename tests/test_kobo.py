@@ -453,7 +453,10 @@ class KoboTests(unittest.TestCase):
         self.assertIsNone(args.output_name)
 
     def test_cli_reports_missing_dictgen_cleanly(self) -> None:
-        with mock.patch("fandom_dict.cli.build_kobo_dictionary.load_entries", return_value=self.sample_entries()), mock.patch(
+        with mock.patch(
+            "fandom_dict.cli.build_kobo_dictionary.load_entries_for_command",
+            return_value=self.sample_entries(),
+        ), mock.patch(
             "fandom_dict.formats.kobo.find_dictgen", return_value=None
         ):
             self.assertEqual(main(["--input", "ignored.sqlite"]), 1)

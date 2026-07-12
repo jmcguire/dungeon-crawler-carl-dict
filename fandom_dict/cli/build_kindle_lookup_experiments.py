@@ -10,12 +10,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from fandom_dict.cli.common import load_config_for_command, load_entries_for_command
 from fandom_dict.cli.output import add_output_arguments, output_from_args
-from fandom_dict.config import DEFAULT_CONFIG_PATH, load_project_config, slugify_title
+from fandom_dict.config import DEFAULT_CONFIG_PATH, slugify_title
 from fandom_dict.entries import (
     Entry,
     build_lookup_report,
-    load_entries,
     sanitize_inline_html,
 )
 from fandom_dict.formats.kindle import compile_with_kindlegen, write_cover_xhtml, write_opf
@@ -196,14 +196,19 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parse_args(argv)
     output = output_from_args(args)
-    config = load_project_config(args.config)
-    entries = load_entries(
+    config = load_config_for_command(args.config, output)
+    if config is None:
+        output.close()
+        return 1
+    entries = load_entries_for_command(
         args.input or config.database_path,
+        config,
         args.min_definition_length,
-        sidebar_fields=config.sidebar_fields,
-        strip_parenthetical_disambiguation=config.title_aliases.strip_parenthetical,
-        max_summary_length=config.max_summary_length,
+        output,
     )
+    if entries is None:
+        output.close()
+        return 1
     items = experiment_items_from_entries(entries, config)
     builds = build_experiment_bundle(items, args.output_dir, compile_outputs=args.compile)
     output.path(args.output_dir / "MANIFEST.md")

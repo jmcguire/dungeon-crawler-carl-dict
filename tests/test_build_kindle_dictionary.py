@@ -13,21 +13,23 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 from fandom_dict.config import SidebarField
-from fandom_dict.formats.kindle import (
+from fandom_dict.entries import (
     Entry,
     build_alias_report,
     build_aliases,
     build_lookup_report,
-    build_dictionary_sources,
-    compile_with_kindlegen,
     forwarding_target_from_definition,
-    kindle_identifier,
     link_definition_references,
     load_entries,
     lookup_report_debug_lines,
     sanitize_inline_html,
     sidebar_details_from_html,
     spoiler_notice_from_html,
+)
+from fandom_dict.formats.kindle import (
+    build_dictionary_sources,
+    compile_with_kindlegen,
+    kindle_identifier,
     write_cover_xhtml,
     write_opf,
     write_xhtml,
@@ -595,6 +597,37 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         definitions = {entry.title: entry.definition for entry in entries}
         self.assertEqual(definitions["That's the Spirit! Box"], "A useful box.")
 
+    def test_load_entries_uses_current_scope_without_deleting_stored_pages(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "characters.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE pages (
+                    title TEXT,
+                    url TEXT,
+                    source_category TEXT,
+                    first_paragraph TEXT,
+                    raw_html TEXT,
+                    status TEXT,
+                    in_scope INTEGER NOT NULL DEFAULT 1
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?, ?, ?, ?, '', 'ok', ?)",
+                [
+                    ("Carl", "https://example/wiki/Carl", "Characters", "Carl is a crawler.", 1),
+                    ("Old Box", "https://example/wiki/Old_Box", "Loot_Boxes", "An old box.", 0),
+                ],
+            )
+            conn.commit()
+            conn.close()
+
+            entries = load_entries(db_path, min_definition_length=8)
+
+        self.assertEqual([entry.title for entry in entries], ["Carl"])
+
     def test_forwarding_target_from_definition_supports_maintenance_forms(self) -> None:
         self.assertEqual(
             forwarding_target_from_definition("duplicate page - please see That's the Spirit box."),
@@ -872,6 +905,20 @@ class BuildKindleDictionaryTests(unittest.TestCase):
             (("Origin", "Syndicate Core [abc]"), ("Source", "Cascadia was founded in 2012.")),
         )
 
+    def test_sidebar_details_keep_break_separated_aliases_distinct(self) -> None:
+        raw_html = """
+        <aside class="portable-infobox">
+          <div class="pi-data" data-source="aliases">
+            <div class="pi-data-value">Nebs<br />Nebular<br>Soothe Singer</div>
+          </div>
+        </aside>
+        """
+
+        self.assertEqual(
+            sidebar_details_from_html(raw_html),
+            (("Aliases", "Nebs; Nebular; Soothe Singer"),),
+        )
+
     def test_build_aliases_does_not_add_unrelated_alias_forms(self) -> None:
         entries = [
             Entry("Red Beret", "https://example/wiki/Red_Beret", "An item."),
@@ -886,6 +933,23 @@ class BuildKindleDictionaryTests(unittest.TestCase):
         self.assertEqual(aliases["Reaper Spider Minion Patch"], ["Reaper Spider Minion Patch"])
         self.assertEqual(aliases["José Sanchez"], ["José Sanchez"])
         self.assertEqual(aliases["Under_score"], ["Under_score"])
+
+    def test_lookup_report_omits_generic_single_word_aliases(self) -> None:
+        entries = [
+            Entry(
+                "Magic & Spells",
+                "https://example/wiki/Magic",
+                "<b>Magic</b> is everywhere.",
+                redirect_aliases=("Spell",),
+            ),
+            Entry("Commander Stockade", "https://example/wiki/Stockade", "A guard."),
+        ]
+
+        report = build_lookup_report(entries, title_component_ignore_words=("Unused",))
+
+        self.assertNotIn("Spell", report.aliases["Magic & Spells"])
+        self.assertNotIn("Commander", report.aliases["Commander Stockade"])
+        self.assertTrue(any(item.reason == "generic-word" for item in report.omissions))
 
     def test_build_aliases_adds_title_rule_lookup_aliases(self) -> None:
         entries = [

@@ -13,7 +13,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Iterable
 
-from fandom_dict.entries import Entry, build_lookup_report, sanitize_inline_html
+from fandom_dict.entries import Entry, LookupReport, build_lookup_report, sanitize_inline_html
 
 
 DICTGEN_OUTPUT_NAME = "dicthtml-dc.zip"
@@ -195,6 +195,7 @@ def entries_to_dictfile(
     strip_parenthetical_disambiguation: bool = True,
     title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
+    lookup_report: LookupReport | None = None,
 ) -> tuple[str, int, int, int, int]:
     """Render Kobo dictgen input and return it with lookup counts."""
 
@@ -208,7 +209,7 @@ def entries_to_dictfile(
         lookup_options["title_suffix_aliases"] = title_suffix_aliases
     if title_prefix_aliases is not None:
         lookup_options["title_prefix_aliases"] = title_prefix_aliases
-    lookup_report = build_lookup_report(entries, **lookup_options)
+    lookup_report = lookup_report or build_lookup_report(entries, **lookup_options)
     aliases = lookup_report.aliases
     entries_by_title = {entry.title: entry for entry in entries}
     combined_definitions = {
@@ -269,6 +270,7 @@ def build_kobo(
     strip_parenthetical_disambiguation: bool = True,
     title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
+    lookup_report: LookupReport | None = None,
 ) -> KoboBuildResult:
     """Generate a Kobo dictfile and compile it with dictgen."""
 
@@ -285,6 +287,7 @@ def build_kobo(
         strip_parenthetical_disambiguation=strip_parenthetical_disambiguation,
         title_component_ignore_words=title_component_ignore_words,
         sidebar_alias_labels=sidebar_alias_labels,
+        lookup_report=lookup_report,
     )
     dictfile_path = output_dir / DICTFILE_NAME
     dictfile_path.write_text(dictfile_text, encoding="utf-8")

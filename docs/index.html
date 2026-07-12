@@ -3,6 +3,7 @@
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
+      <link rel="icon" href="favicon.svg" type="image/svg+xml">
       <title>Dungeon Crawler Carl Lookup Dictionary</title>
       <meta name="description" content="Free e-reader lookup dictionary downloads and install guides for Kindle, Kobo, KOReader, and BOOX.">
       <link rel="canonical" href="https://jmcguire.github.io/dungeon-crawler-carl-dict/">
@@ -125,9 +126,7 @@
         </div>
       </article>
     </div>
-    <!-- release-status:start -->
-    <p class="release-status">Current version v0.8.0 includes <strong>1,207 entries</strong>, last built <strong>June 26, 2026</strong>, including all <strong>Characters, Groups, Spells, Achievements, Races, Items, and Mob Types</strong>.</p>
-    <!-- release-status:end -->
+    <p class="release-status" id="release-status">Current version v0.8.0 includes <strong>1,207 entries</strong>, last built <strong>June 26, 2026</strong>, including all <strong>Characters, Groups, Spells, Achievements, Races, Items, and Mob Types</strong>.</p>
     <p class="small release-note">Download links point to the newest published version.</p>
   </div>
 </section>
@@ -180,5 +179,56 @@
           <p><a href="https://github.com/jmcguire/dungeon-crawler-carl-dict">View source on GitHub</a> · <a href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/SHA256SUMS.txt">Latest checksums</a> · <a href="https://github.com/jmcguire/dungeon-crawler-carl-dict/releases/latest/download/release-manifest.json">Release manifest</a></p>
         </div>
       </footer>
+      <script>
+      (() => {
+        const status = document.getElementById("release-status");
+        const releaseApiUrl = "https://api.github.com/repos/jmcguire/dungeon-crawler-carl-dict/releases/latest";
+        if (!status) return;
+
+        const humanJoin = (items) => {
+          if (items.length < 2) return items[0] || "";
+          if (items.length === 2) return `${items[0]} and ${items[1]}`;
+          return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+        };
+        const append = (text, strong = false) => {
+          const node = strong ? document.createElement("strong") : document.createTextNode(text);
+          if (strong) node.textContent = text;
+          status.appendChild(node);
+        };
+
+        fetch(releaseApiUrl, { cache: "no-store" })
+          .then((response) => {
+            if (!response.ok) throw new Error(`manifest request failed: ${response.status}`);
+            return response.json();
+          })
+          .then((release) => {
+            const match = String(release.body || "").match(/<!-- dictionary-status:(\{.*?\}) -->/s);
+            if (!match) throw new Error("release status metadata is unavailable");
+            const metadata = JSON.parse(match[1]);
+            const categories = (metadata.categories || []).map((category) =>
+              String(category).replace(/^Category:/, "").replaceAll("_", " ")
+            );
+            const date = new Intl.DateTimeFormat("en", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              timeZone: "UTC",
+            }).format(new Date(metadata.built_at));
+            status.replaceChildren();
+            append(`Current version ${release.tag_name} includes `);
+            append(`${Number(metadata.entry_count).toLocaleString("en-US")} entries`, true);
+            append(", last built ");
+            append(date, true);
+            if (categories.length) {
+              append(", including all ");
+              append(humanJoin(categories), true);
+            }
+            append(".");
+          })
+          .catch(() => {
+            // Keep the checked-in release text when the network is unavailable.
+          });
+      })();
+      </script>
     </body>
     </html>

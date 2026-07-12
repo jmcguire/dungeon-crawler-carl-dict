@@ -2,7 +2,7 @@ import unittest
 
 from fandom_dict.cli.audit_entries import audit_entries, parse_args
 from fandom_dict.cli.output import output_from_args
-from fandom_dict.formats.kindle import Entry
+from fandom_dict.entries import Entry
 
 
 class AuditEntriesTests(unittest.TestCase):

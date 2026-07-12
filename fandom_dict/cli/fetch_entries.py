@@ -13,8 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from fandom_dict.cli.common import load_config_for_command
 from fandom_dict.cli.output import add_output_arguments, configure_logging, output_from_args
-from fandom_dict.config import DEFAULT_CONFIG_PATH, load_default_project_config, load_project_config
+from fandom_dict.config import DEFAULT_CONFIG_PATH, load_default_project_config
 from fandom_dict.extraction import (
     SHORT_DESCRIPTION_THRESHOLD,
     FirstParagraphParser,
@@ -86,6 +87,25 @@ class CrawlTarget:
     source_categories: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class CrawlStats:
+    """Outcome counts for one page crawl."""
+
+    fetched: int = 0
+    skipped: int = 0
+    errors: int = 0
+
+
+@dataclass(frozen=True)
+class RedirectStats:
+    """Outcome counts for one redirect import."""
+
+    ok: int = 0
+    ignored: int = 0
+    errors: int = 0
+    complete: bool = True
+
+
 def init_db(path: Path) -> sqlite3.Connection:
     """Create or open the crawl database and ensure its tables exist."""
 
@@ -105,6 +125,8 @@ def init_db(path: Path) -> sqlite3.Connection:
             first_paragraph TEXT,
             status TEXT NOT NULL,
             error TEXT,
+            in_scope INTEGER NOT NULL DEFAULT 1,
+            last_attempt_error TEXT,
             fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """
@@ -134,6 +156,10 @@ def init_db(path: Path) -> sqlite3.Connection:
     }
     if "source_category" not in columns:
         conn.execute("ALTER TABLE pages ADD COLUMN source_category TEXT")
+    if "in_scope" not in columns:
+        conn.execute("ALTER TABLE pages ADD COLUMN in_scope INTEGER NOT NULL DEFAULT 1")
+    if "last_attempt_error" not in columns:
+        conn.execute("ALTER TABLE pages ADD COLUMN last_attempt_error TEXT")
     conn.commit()
     return conn
 
@@ -174,9 +200,10 @@ def upsert_page(
     conn.execute(
         """
         INSERT INTO pages (
-            pageid, title, ns, url, source_category, raw_json, raw_html, first_paragraph, status, error, fetched_at
+            pageid, title, ns, url, source_category, raw_json, raw_html, first_paragraph,
+            status, error, in_scope, last_attempt_error, fetched_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, CURRENT_TIMESTAMP)
         ON CONFLICT(pageid) DO UPDATE SET
             title = excluded.title,
             ns = excluded.ns,
@@ -187,6 +214,8 @@ def upsert_page(
             first_paragraph = excluded.first_paragraph,
             status = excluded.status,
             error = excluded.error,
+            in_scope = 1,
+            last_attempt_error = NULL,
             fetched_at = CURRENT_TIMESTAMP
         """,
         (
@@ -205,12 +234,61 @@ def upsert_page(
     conn.commit()
 
 
+def record_page_failure(
+    conn: sqlite3.Connection,
+    page: PageRef | CrawlTarget,
+    url: str,
+    source_category: str,
+    error: str,
+) -> None:
+    """Record a failed attempt without destroying last-known-good page data."""
+
+    existing = conn.execute("SELECT status FROM pages WHERE pageid = ?", (page.pageid,)).fetchone()
+    if existing and existing[0] in {"ok", "empty"}:
+        conn.execute(
+            """
+            UPDATE pages
+            SET title = ?, ns = ?, url = ?, source_category = ?, in_scope = 1,
+                last_attempt_error = ?, fetched_at = CURRENT_TIMESTAMP
+            WHERE pageid = ?
+            """,
+            (page.title, page.ns, url, source_category, error, page.pageid),
+        )
+        conn.commit()
+        return
+    upsert_page(conn, page, url, source_category, "error", error=error)
+
+
+def sync_scope_membership(
+    conn: sqlite3.Connection,
+    pages: list[CrawlTarget],
+    *,
+    replace_scope: bool,
+) -> None:
+    """Mark the latest successfully listed corpus without deleting stored pages."""
+
+    if replace_scope:
+        conn.execute("UPDATE pages SET in_scope = 0")
+    for page in pages:
+        conn.execute(
+            """
+            UPDATE pages
+            SET source_category = ?, in_scope = 1
+            WHERE pageid = ?
+            """,
+            (", ".join(page.source_categories), page.pageid),
+        )
+    conn.commit()
+
+
 def upsert_redirect(
     conn: sqlite3.Connection,
     source_title: str,
     target_title: str | None,
     source_url: str,
     status: str,
+    *,
+    commit: bool = True,
 ) -> None:
     """Insert or update one redirect row."""
 
@@ -226,7 +304,8 @@ def upsert_redirect(
         """,
         (source_title, target_title, source_url, status),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
 
 
 def reextract_first_paragraphs(conn: sqlite3.Connection, max_summary_length: int | None = None) -> int:
@@ -247,7 +326,11 @@ def reextract_first_paragraphs(conn: sqlite3.Connection, max_summary_length: int
     return len(rows)
 
 
-def load_category_members(client: MediaWikiClient, config: CrawlConfig) -> list[CrawlTarget]:
+def load_category_members(
+    client: MediaWikiClient,
+    config: CrawlConfig,
+    failed_categories: list[str] | None = None,
+) -> list[CrawlTarget]:
     """Load and deduplicate crawl targets from the configured wiki categories."""
 
     targets: dict[int, CrawlTarget] = {}
@@ -269,6 +352,8 @@ def load_category_members(client: MediaWikiClient, config: CrawlConfig) -> list[
             )
         except Exception as exc:  # noqa: BLE001 - keep later categories moving.
             LOGGER.error("error listing category %s: %r", category, exc)
+            if failed_categories is not None:
+                failed_categories.append(category)
             continue
         for page in pages:
             if page.pageid not in targets:
@@ -329,17 +414,23 @@ def crawl_pages(
     client: MediaWikiClient,
     pages: list[CrawlTarget],
     config: CrawlConfig,
-) -> None:
+) -> CrawlStats:
     """Fetch and store each page, respecting resume and delay settings."""
 
+    fetched = skipped = errors = 0
     for index, page in enumerate(pages, start=1):
         if not config.refresh and already_fetched(conn, page.pageid):
             LOGGER.debug("[%s/%s] skip %s", index, len(pages), page.title)
+            skipped += 1
             continue
 
         LOGGER.debug("[%s/%s] fetch %s", index, len(pages), page.title)
-        fetch_and_store_page(conn, client, page, config)
+        if fetch_and_store_page(conn, client, page, config):
+            fetched += 1
+        else:
+            errors += 1
         time.sleep(jitter(config.delay))
+    return CrawlStats(fetched=fetched, skipped=skipped, errors=errors)
 
 
 def fetch_and_store_page(
@@ -347,7 +438,7 @@ def fetch_and_store_page(
     client: MediaWikiClient,
     page: CrawlTarget,
     config: CrawlConfig | None = None,
-) -> None:
+) -> bool:
     """Fetch one page and record either the successful content or the error."""
 
     url = client.page_url(page.title)
@@ -364,9 +455,11 @@ def fetch_and_store_page(
         upsert_page(conn, page, url, source_category, status, data, html, first_paragraph or None)
         if status == "empty":
             LOGGER.debug("empty entry %s", page.title)
+        return True
     except Exception as exc:  # noqa: BLE001 - keep crawling and record failures.
-        upsert_page(conn, page, url, source_category, "error", error=repr(exc))
+        record_page_failure(conn, page, url, source_category, repr(exc))
         LOGGER.error("error fetching %s: %r", page.title, exc)
+        return False
 
 
 def fetch_and_store_redirects(
@@ -374,31 +467,45 @@ def fetch_and_store_redirects(
     client: MediaWikiClient,
     pages: list[CrawlTarget],
     config: CrawlConfig,
-) -> None:
+) -> RedirectStats:
     """Fetch wiki redirects and keep only aliases that target selected pages."""
 
     if not config.include_redirects:
-        return
+        return RedirectStats()
     target_titles = {page.title.casefold(): page.title for page in pages}
     if not target_titles:
         LOGGER.info("redirects: skipped because no crawl targets were found")
-        return
-    if not config.max_redirects:
-        conn.execute("DELETE FROM redirects")
-        conn.commit()
+        return RedirectStats()
+
+    try:
+        redirects = client.redirects(config.category_batch_size, config.max_redirects, config.delay)
+    except Exception as exc:  # noqa: BLE001 - preserve the previous complete redirect set.
+        LOGGER.error("redirect import failed; retained previous redirects: %r", exc)
+        return RedirectStats(errors=1, complete=False)
 
     ok_count = ignored_count = error_count = 0
-    for redirect in client.redirects(config.category_batch_size, config.max_redirects, config.delay):
-        status = redirect_status(redirect, target_titles)
-        target_title = target_titles.get((redirect.target_title or "").casefold(), redirect.target_title)
-        upsert_redirect(conn, redirect.source_title, target_title, client.page_url(redirect.source_title), status)
-        if status == "ok":
-            ok_count += 1
-        elif status == "ignored":
-            ignored_count += 1
-        else:
-            error_count += 1
+    with conn:
+        if not config.max_redirects:
+            conn.execute("DELETE FROM redirects")
+        for redirect in redirects:
+            status = redirect_status(redirect, target_titles)
+            target_title = target_titles.get((redirect.target_title or "").casefold(), redirect.target_title)
+            upsert_redirect(
+                conn,
+                redirect.source_title,
+                target_title,
+                client.page_url(redirect.source_title),
+                status,
+                commit=False,
+            )
+            if status == "ok":
+                ok_count += 1
+            elif status == "ignored":
+                ignored_count += 1
+            else:
+                error_count += 1
     LOGGER.info("redirects: %s ok, %s ignored, %s error", ok_count, ignored_count, error_count)
+    return RedirectStats(ok_count, ignored_count, error_count)
 
 
 def redirect_status(redirect: RedirectRef, target_titles: dict[str, str]) -> str:
@@ -414,15 +521,19 @@ def redirect_status(redirect: RedirectRef, target_titles: dict[str, str]) -> str
 def print_crawl_summary(conn: sqlite3.Connection, output: Path) -> None:
     """Print final counts for successful and failed page fetches."""
 
-    ok_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'ok'").fetchone()[0]
-    empty_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'empty'").fetchone()[0]
-    error_count = conn.execute("SELECT COUNT(*) FROM pages WHERE status = 'error'").fetchone()[0]
+    ok_count = conn.execute("SELECT COUNT(*) FROM pages WHERE in_scope = 1 AND status = 'ok'").fetchone()[0]
+    empty_count = conn.execute("SELECT COUNT(*) FROM pages WHERE in_scope = 1 AND status = 'empty'").fetchone()[0]
+    error_count = conn.execute("SELECT COUNT(*) FROM pages WHERE in_scope = 1 AND status = 'error'").fetchone()[0]
+    retained_error_count = conn.execute(
+        "SELECT COUNT(*) FROM pages WHERE in_scope = 1 AND COALESCE(last_attempt_error, '') != ''"
+    ).fetchone()[0]
     redirect_count = conn.execute("SELECT COUNT(*) FROM redirects WHERE status = 'ok'").fetchone()[0]
     LOGGER.info(
-        "done: %s ok, %s empty, %s error, %s redirects; wrote %s",
+        "done: %s ok, %s empty, %s error, %s retained after failed refresh, %s redirects; wrote %s",
         ok_count,
         empty_count,
         error_count,
+        retained_error_count,
         redirect_count,
         output,
     )
@@ -492,7 +603,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     output = output_from_args(args)
     configure_logging(output)
-    project_config = load_project_config(args.config)
+    project_config = load_config_for_command(args.config, output)
+    if project_config is None:
+        output.close()
+        return 1
     args.fandom = args.fandom or project_config.fandom
     args.categories = args.categories or list(project_config.categories)
     args.output = args.output or project_config.database_path
@@ -524,12 +638,26 @@ def main(argv: list[str] | None = None) -> int:
 
         client = MediaWikiClient(args.fandom, request_config_from_args(args))
         crawl_config = crawl_config_from_args(args)
-        pages = load_category_members(client, crawl_config)
+        failed_categories: list[str] = []
+        pages = load_category_members(client, crawl_config, failed_categories)
         LOGGER.info("found %s pages across %s", len(pages), ", ".join(args.categories))
-        crawl_pages(conn, client, pages, crawl_config)
-        fetch_and_store_redirects(conn, client, pages, crawl_config)
+        if not pages:
+            LOGGER.error("crawl found no pages; existing database content was left unchanged")
+            output.path(args.output)
+            return 1
+        sync_scope_membership(conn, pages, replace_scope=not failed_categories)
+        crawl_stats = crawl_pages(conn, client, pages, crawl_config)
+        redirect_stats = fetch_and_store_redirects(conn, client, pages, crawl_config)
         print_crawl_summary(conn, args.output)
         output.path(args.output)
+        if failed_categories:
+            LOGGER.error("crawl incomplete; failed categories: %s", ", ".join(failed_categories))
+        if crawl_stats.errors:
+            LOGGER.error("crawl incomplete; %s page fetch(es) failed", crawl_stats.errors)
+        if not redirect_stats.complete:
+            LOGGER.error("crawl incomplete; redirect import failed")
+        if failed_categories or crawl_stats.errors or not redirect_stats.complete:
+            return 1
     finally:
         conn.close()
         output.close()

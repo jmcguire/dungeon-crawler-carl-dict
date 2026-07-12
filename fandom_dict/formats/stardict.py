@@ -16,6 +16,7 @@ from typing import Iterable
 
 from fandom_dict.entries import (
     Entry,
+    LookupReport,
     build_lookup_report,
     link_definition_references,
     sanitize_inline_html,
@@ -241,6 +242,7 @@ def build_stardict(
     strip_parenthetical_disambiguation: bool = True,
     title_component_ignore_words: tuple[str, ...] = (),
     sidebar_alias_labels: tuple[str, ...] = ("Aliases",),
+    lookup_report: LookupReport | None = None,
 ) -> StarDictBuildResult:
     """Generate a StarDict 2.4.2 bundle from normalized entries."""
 
@@ -255,7 +257,7 @@ def build_stardict(
         lookup_options["title_suffix_aliases"] = title_suffix_aliases
     if title_prefix_aliases is not None:
         lookup_options["title_prefix_aliases"] = title_prefix_aliases
-    lookup_report = build_lookup_report(entries, **lookup_options)
+    lookup_report = lookup_report or build_lookup_report(entries, **lookup_options)
     aliases = lookup_report.aliases
     entries_by_title = {entry.title: entry for entry in entries}
     if len(entries_by_title) != len(entries):
