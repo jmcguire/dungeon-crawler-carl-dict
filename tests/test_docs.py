@@ -6,6 +6,7 @@ from urllib.parse import unquote, urlsplit
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS_ROOT = REPO_ROOT / "docs"
+PAGES_BASE_PATH = "/dungeon-crawler-carl-dict/"
 
 
 class AssetParser(HTMLParser):
@@ -31,7 +32,11 @@ class DocsTests(unittest.TestCase):
                 parsed = urlsplit(reference)
                 if parsed.scheme or parsed.netloc or reference.startswith("#"):
                     continue
-                target = (page.parent / unquote(parsed.path)).resolve()
+                path = unquote(parsed.path)
+                if path.startswith(PAGES_BASE_PATH):
+                    target = (DOCS_ROOT / path.removeprefix(PAGES_BASE_PATH)).resolve()
+                else:
+                    target = (page.parent / path).resolve()
                 if target.is_dir():
                     target = target / "index.html"
                 if not target.exists():
