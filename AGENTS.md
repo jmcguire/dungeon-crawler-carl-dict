@@ -11,8 +11,6 @@ These instructions are for AI agents working in this repository. Follow them unl
 
 ## Working Style
 
-- When the user asks for an implementation, do the work end to end: inspect, edit, test, and report.
-- Before large or ambiguous changes, provide a short plan and ask only the questions that materially affect the result.
 - Keep changes scoped to one concern at a time. The user prefers a clean git history with separate commits for separate concerns.
 - Commit only when the user explicitly asks for a commit. When committing, use one concise commit message unless the user requests otherwise.
 - Do not create badge-only commits unless the user explicitly asks. Badge updates should travel with the feature, release, or documentation change that made them stale.
@@ -23,21 +21,17 @@ These instructions are for AI agents working in this repository. Follow them unl
 ## Dependencies
 
 - Prefer Python standard-library solutions.
-- Avoid adding third-party runtime dependencies. If one seems genuinely useful, explain the tradeoff and ask before adding it.
-- Test-only or development dependencies also require user approval. The low-dependency setup is an intentional project feature.
+- Avoid third-party runtime, test, and development dependencies unless the user approves a clearly worthwhile exception. The low-dependency setup is intentional.
 
 ## Architecture
 
-- Keep crawler/network behavior separate from extraction, normalized entry handling, and output rendering.
-- Keep format-specific rendering isolated from shared entry logic. Kindle and StarDict should not depend on each other's file formats.
-- Do not move major responsibilities between modules without a clear reason. The architecture may change as support for other fandoms and formats grows.
-- Future e-reader formats are likely, so avoid hard-coding Kindle assumptions into shared data structures.
+- Keep crawler/network behavior, extraction, shared normalized entries, and format-specific rendering separate. Formats must not depend on one another's file structures.
+- Avoid major reshuffles or Kindle-specific shared assumptions without a concrete new use case. More fandoms and e-reader formats are likely.
 - Preserve CLI compatibility unless the user approves a breaking change.
 
 ## Data And Content
 
-- The SQLite database is source material for builds and releases. Do not delete crawled page data just because an entry is omitted from one output format.
-- Dictionary quality filters should skip bad generated entries at render/build time while retaining raw crawled data for later improvement.
+- SQLite is source material for builds and releases. Retain raw crawled data even when output-quality filters omit an entry.
 - Preserve useful inline formatting such as bold and italics where supported by the target format.
 - Treat wiki text as CC BY-SA content. Keep `ATTRIBUTION.md`, source links, and attribution behavior intact.
 
@@ -64,20 +58,16 @@ python3 -m unittest discover -s tests
 
 ## Badges
 
-- Coverage, Python, license, and output badges are tracked Shields endpoint JSON files in `badges/`.
-- The Release badge comes from GitHub Releases and should not have a tracked `badges/release.json`.
-- When changing tests, release packaging, dictionary output, supported formats, licenses, output counts, or release version examples, run:
+- Coverage, Python, license, and output badges are tracked Shields endpoint JSON files in `badges/`; the Release badge comes from GitHub Releases.
+- When changing tests, release packaging, dictionary output, formats, licenses, output counts, or release-version examples, run:
 
 ```sh
 ./bin/badges --input data/dungeon-crawler-carl.sqlite
 ```
 
-- Include any changed badge JSON files in the same commit as the related work.
-- Do not add a GitHub Actions workflow just to update badges. The current strategy intentionally avoids automatic badge-only commits.
+- Include changed badge JSON in the related commit. Do not add automation that creates badge-only commits.
 
 ## Git Hygiene
 
-- Never revert user changes unless the user asks.
-- Do not use destructive git commands such as `git reset --hard` or `git checkout --` unless explicitly requested.
-- Keep generated release artifacts out of commits unless they are intentionally tracked project files.
-- Before committing, check `git status` and make sure the staged changes match the requested concern.
+- Preserve user changes and do not use destructive Git commands without explicit direction.
+- Keep generated release artifacts out of commits unless intentionally tracked, and confirm the staged scope before committing.
