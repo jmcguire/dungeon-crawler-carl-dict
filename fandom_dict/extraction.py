@@ -71,6 +71,8 @@ class FirstParagraphParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self._skip_until: list[str] = []
         self._heading_depth = 0
+        self._heading_level = 0
+        self._ai_section_level: int | None = None
         self._current_section = "intro"
         self._paragraph_depth = 0
         self._chunks: list[str] = []
@@ -78,6 +80,7 @@ class FirstParagraphParser(HTMLParser):
         self._inline_stack: list[str] = []
         self.intro_blocks: list[str] = []
         self.later_blocks: list[str] = []
+        self.ai_blocks: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         # Fandom pages can contain malformed or loosely nested generated HTML.
@@ -87,6 +90,8 @@ class FirstParagraphParser(HTMLParser):
         if self._skip_until:
             if self._heading_depth and tag == "span" and attrs_dict.get("id"):
                 self._current_section = attrs_dict["id"].replace("_", " ").lower()
+                if self._current_section == "ai description" and self._ai_section_level is None:
+                    self._ai_section_level = self._heading_level
             if tag == self._skip_until[-1] and tag not in self.VOID_TAGS:
                 self._skip_until.append(tag)
             return
@@ -94,10 +99,16 @@ class FirstParagraphParser(HTMLParser):
         classes = attrs_dict.get("class", "")
         if not self._paragraph_depth and tag not in self.INLINE_TAGS:
             self._finalize_loose_text()
-        if tag in {"h2", "h3"}:
+        if tag in {"h2", "h3", "h4", "h5", "h6"}:
             self._heading_depth += 1
+            self._heading_level = int(tag[1])
+            if self._ai_section_level is not None and self._heading_level <= self._ai_section_level:
+                self._ai_section_level = None
+            self._current_section = attrs_dict.get("id", "").replace("_", " ").lower()
+            if self._current_section == "ai description":
+                self._ai_section_level = self._heading_level
         if (
-            tag in self.SKIP_TAGS
+            (tag in self.SKIP_TAGS and not (tag == "blockquote" and self._ai_section_level is not None))
             or "mw-empty-elt" in classes
             or any(name in classes for name in self.SKIP_CLASSES)
         ):
@@ -121,7 +132,7 @@ class FirstParagraphParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if self._skip_until:
             if tag == self._skip_until[-1]:
-                if tag in {"h2", "h3"} and self._heading_depth:
+                if tag in {"h2", "h3", "h4", "h5", "h6"} and self._heading_depth:
                     self._heading_depth -= 1
                 self._skip_until.pop()
             return
@@ -190,6 +201,9 @@ class FirstParagraphParser(HTMLParser):
     def _append_block(self, text: str) -> None:
         """Store a useful block, preferring intro/description ordering."""
 
+        if self._ai_section_level is not None:
+            self.ai_blocks.append(text)
+            return
         target = self.intro_blocks if self._current_section in self.SUMMARY_SECTIONS else self.later_blocks
         target.append(text)
 
@@ -351,27 +365,67 @@ def is_stub_like_description(title: str, description: str) -> bool:
     return plain_description == f"{plain_title} is" or plain_description == f"{plain_title} was" or plain_description == f"{plain_title} are"
 
 
-def ai_description_paragraph_from_html(html: str) -> str:
-    """Extract the first paragraph from an ``AI Description`` section, if present."""
+def ai_description_paragraph_from_html(html: str, title: str = "") -> str:
+    """Extract a useful AI paragraph, respecting section and spoiler boundaries."""
 
-    heading = re.search(r"<h2[^>]*>\s*<span[^>]*id=\"AI_Description\"[^>]*>AI Description</span>\s*</h2>", html, re.I)
-    if not heading:
-        return ""
-    section_start = heading.end()
-    next_heading = re.search(r"<h2\b", html[section_start:], re.I)
-    section_end = section_start + next_heading.start() if next_heading else len(html)
-    section_html = re.sub(r"</?blockquote[^>]*>", "", html[section_start:section_end], flags=re.I)
-    for match in re.finditer(r"<p\b[^>]*>.*?</p>", section_html, re.I | re.S):
-        paragraph = first_paragraph_from_html(match.group(0))
-        if not paragraph:
-            continue
+    parser = FirstParagraphParser()
+    parser.feed(html)
+    parser.close()
+    return select_ai_description(parser.ai_blocks, title)
+
+
+def select_ai_description(blocks: list[str], title: str = "") -> str:
+    """Prefer prose to AI headers, retaining identifying headers as a fallback."""
+
+    identity = ""
+    type_line = ""
+    plain_title = normalize_text(title).casefold().rstrip(".!?:")
+    for paragraph in blocks:
         plain_text = text_from_inline_html(paragraph)
+        if is_ai_description_label(plain_text) or plain_text.casefold().rstrip(".!?:") == plain_title:
+            continue
+        if plain_title and re.match(r"^type\s*:", plain_text, re.I):
+            type_line = type_line or paragraph
         if is_ai_statline_paragraph(plain_text):
             continue
-        if re.fullmatch(r"<b>[^<]+</b>", paragraph):
+        # Emphasis inside a bold header does not turn it into prose.
+        without_italics = re.sub(r"</?i>", "", paragraph)
+        if re.fullmatch(r"<b>[^<]+</b>", without_italics):
+            if plain_title:
+                match = re.match(re.escape(plain_title) + r"\s*[.\-–—]\s*(\w.*)", plain_text.casefold())
+                if match and not re.fullmatch(r"level\s+\d+[.!?]?", match[1]):
+                    identity = identity or paragraph
             continue
+        if identity and is_small_description(paragraph):
+            return join_ai_identity(identity, paragraph)
         return paragraph
-    return ""
+    return join_ai_identity(identity, type_line) if identity else ""
+
+
+def join_ai_identity(identity: str, description: str) -> str:
+    """Separate a retained identity header from its description as sentences."""
+
+    if description and not re.search(r"[.!?]$", text_from_inline_html(identity)):
+        identity += "."
+    return normalize_inline_html(f"{identity} {description}")
+
+
+def is_ai_description_label(text: str) -> bool:
+    """Reject quote introductions, delivery notes, and isolated labels."""
+
+    return bool(
+        not re.search(r"\w+\W+\w", text)
+        or text.endswith(":")
+        or re.match(
+            r"^(?:new achievement\b|see also\s*:|"
+            r"(?:section of )?(?:ai )?description (?:of|for)\b|"
+            r"from (?:the )?(?:ai )?description\b|"
+            r"(?:as )?part of (?:the )?.*\bdescription\b|"
+            r"the description is (?:presented|read)\b|the ai reads (?:the|this) description\b)",
+            text,
+            re.I,
+        )
+    )
 
 
 def is_ai_statline_paragraph(text: str) -> bool:
@@ -379,7 +433,8 @@ def is_ai_statline_paragraph(text: str) -> bool:
 
     lowered = normalize_text(text).lower()
     return bool(
-        re.fullmatch(r"(cost|target|duration|range|cooldown|type|source)\s*:.*", lowered)
+        re.fullmatch(r"(cost|target|duration|range|cooldown|type|source|effect|status|warning|loot|reward)\s*:.*", lowered)
+        or re.match(r"level\s+\d+\b", lowered)
         or lowered.startswith("environmental factors")
     )
 
@@ -525,10 +580,13 @@ def summary_from_infobox(title: str, html: str) -> str:
 def summary_from_html(title: str, html: str, max_summary_length: int | None = None) -> str:
     """Extract a page summary, falling back to infobox fields when needed."""
 
-    blocks = summary_blocks_from_html(html)
+    parser = FirstParagraphParser()
+    parser.feed(html)
+    parser.close()
+    blocks = parser.intro_blocks
     later_blocks = [
         block
-        for block in later_summary_blocks_from_html(html)
+        for block in parser.later_blocks
         if not is_later_story_statline(text_from_inline_html(block))
     ]
     summary = blocks[0] if blocks else ""
@@ -539,9 +597,10 @@ def summary_from_html(title: str, html: str, max_summary_length: int | None = No
             or is_generic_small_description(title, summary)
             or is_truncated_description(summary)
         ):
-            ai_summary = ai_description_paragraph_from_html(html)
+            ai_summary = select_ai_description(parser.ai_blocks, title)
         summary = ai_summary or expand_small_description(summary, blocks)
-        summary = replace_broken_summary_with_later_block(title, summary, later_blocks)
+        if not ai_summary:
+            summary = replace_broken_summary_with_later_block(title, summary, later_blocks)
         summary = expand_summary_with_later_blocks(summary, later_blocks)
     if not summary:
         summary = summary_from_infobox(title, html)

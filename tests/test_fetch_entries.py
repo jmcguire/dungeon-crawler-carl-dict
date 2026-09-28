@@ -168,7 +168,9 @@ class FetchCharacterExtractionTests(unittest.TestCase):
             "Not much is known about <b>Chirag Ali</b>. They appear once on the <i>Leaderboard</i>.",
         )
 
-    def test_is_small_description_uses_under_100_character_threshold(self) -> None:
+    def test_is_small_description_uses_under_140_character_threshold(self) -> None:
+        self.assertTrue(is_small_description("<b>" + "a" * 139 + "</b>"))
+        self.assertFalse(is_small_description("<b>" + "a" * 140 + "</b>"))
         self.assertTrue(is_small_description("A group of crawlers."))
         self.assertFalse(
             is_small_description(
