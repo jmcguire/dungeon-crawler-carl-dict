@@ -10,7 +10,8 @@
     "Achievements",
     "Races",
     "Items",
-    "Mob_Types"
+    "Mob_Types",
+    "Skills"
   ],
   "database_path": "data/dungeon-crawler-carl.sqlite",
   "build_dir": "build/dungeon-crawler-carl",

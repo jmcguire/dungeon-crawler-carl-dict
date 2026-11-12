@@ -921,7 +921,7 @@ class FetchCharacterExtractionTests(unittest.TestCase):
         self.assertEqual(args.max_redirects, 0)
         self.assertEqual(
             DEFAULT_CATEGORIES,
-            ("Characters", "Groups", "Spells", "Achievements", "Races", "Items", "Mob_Types"),
+            ("Characters", "Groups", "Spells", "Achievements", "Races", "Items", "Mob_Types", "Skills"),
         )
 
     def test_parse_args_can_disable_and_bound_redirects(self) -> None:
