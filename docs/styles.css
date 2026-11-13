@@ -92,6 +92,10 @@ button:focus-visible {
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  max-width: 100%;
   font-weight: 800;
   color: var(--yellow);
   text-decoration: none;
@@ -542,4 +546,45 @@ pre code {
   html {
     scroll-behavior: auto;
   }
+}
+
+/* Shared cat mark and artwork alongside the original homepage heading. */
+.brand-logo {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  border-radius: 50%;
+  border: 1px solid #b696c6;
+}
+.hero-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: center;
+  gap: 2rem;
+}
+.hero-copy { min-width: 0; }
+.hero-layout h1 { font-size: clamp(2rem, 3.6vw, 3rem); }
+.hero-art {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1.93;
+  border-radius: 0.65rem;
+}
+/* Frame the illustration, trimming the lettering already covered by the heading. */
+.hero-art img {
+  position: absolute;
+  width: 133.333%;
+  max-width: none;
+  height: auto;
+  left: -13.333%;
+  top: -17%;
+}
+@media (max-width: 800px) {
+  .hero-layout { grid-template-columns: 1fr; gap: 1.25rem; }
+  .hero-art { width: min(100%, 480px); }
+}
+@media (max-width: 520px) {
+  .brand { font-size: 0.85rem; letter-spacing: 0.02em; }
+  .brand-logo { width: 44px; height: 44px; flex-basis: 44px; }
+  .hero-layout h1 { font-size: 2rem; }
 }
